@@ -43,7 +43,7 @@ class UploadBatch(models.Model):
 
     def __str__(self):
         if self.period_type == 'weekly' and self.week_start_date:
-            return f"Week of {self.week_start_date.strftime('%-d %b %Y')} ({self.get_month_display()} {self.year})"
+            return f"Week of {self.week_start_date.strftime('%d %b %Y').lstrip('0')} ({self.get_month_display()} {self.year})"
         return f"{self.get_month_display()} {self.year} – Monthly"
 
     @property
@@ -186,7 +186,7 @@ class SupervisionRecord(models.Model):
 
     # Assessment
     has_essential_medicines = models.BooleanField(null=True, blank=True)
-    medicines_lacking       = models.TextField(blank=True, default='')
+    medicines_lacking       = models.TextField(blank=True, default="")
     assessment_score        = models.FloatField(null=True, blank=True)
     assessment_denominator  = models.IntegerField(default=0)
     has_all_tools           = models.BooleanField(null=True, blank=True)
@@ -210,3 +210,57 @@ class SupervisionRecord(models.Model):
 
     def __str__(self):
         return f"{self.chv_name} supervised {self.visit_date} [{self.batch}]"
+
+
+class SyncUploadBatch(models.Model):
+    """
+    One batch = one sync report file upload for a specific period.
+    Completely separate from the CHW/Supervision UploadBatch.
+    """
+    uploaded_by     = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    uploaded_at     = models.DateTimeField(auto_now_add=True)
+    period_type     = models.CharField(max_length=10, choices=PERIOD_TYPE_CHOICES)
+    year            = models.PositiveSmallIntegerField()
+    month           = models.PositiveSmallIntegerField(choices=MONTH_CHOICES)
+    week_start_date = models.DateField(null=True, blank=True)
+    sync_file       = models.FileField(upload_to='uploads/sync/')
+    notes           = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-year', '-month', '-week_start_date']
+        verbose_name = 'Sync Upload Batch'
+        verbose_name_plural = 'Sync Upload Batches'
+
+    def __str__(self):
+        if self.period_type == 'weekly' and self.week_start_date:
+            return f"Sync – Week of {self.week_start_date.strftime('%d %b %Y').lstrip('0')} ({self.get_month_display()} {self.year})"
+        return f"Sync – {self.get_month_display()} {self.year} – Monthly"
+
+    @property
+    def label(self):
+        return str(self)
+
+
+class CHPSyncRecord(models.Model):
+    """
+    One row from the Sync Report file, linked to a SyncUploadBatch.
+    """
+    batch                 = models.ForeignKey(SyncUploadBatch, on_delete=models.CASCADE, related_name='sync_records')
+    county                = models.CharField(max_length=100)
+    sub_county            = models.CharField(max_length=100)
+    community_health_unit = models.CharField(max_length=200)
+    chp_name              = models.CharField(max_length=200)
+    username              = models.CharField(max_length=100, blank=True)
+    days_synced           = models.IntegerField(default=0)
+    reports_synced        = models.IntegerField(default=0)
+    last_sync_date        = models.DateField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['batch', 'county'],                                          name='sync_batch_county_idx'),
+            models.Index(fields=['batch', 'county', 'sub_county'],                            name='sync_batch_sc_idx'),
+            models.Index(fields=['batch', 'county', 'sub_county', 'community_health_unit'],   name='sync_batch_chu_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.chp_name} – {self.community_health_unit} [{self.batch}]"
