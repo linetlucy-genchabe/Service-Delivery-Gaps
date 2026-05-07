@@ -16,4 +16,11 @@ urlpatterns = [
     path('download/low-performers/',   views.download_low_performers,  name='download_low_performers'),
     path('download/same-day-flags/',   views.download_same_day_flags,  name='download_same_day_flags'),
     path('download/anc-gap/',          views.download_anc_gap,         name='download_anc_gap'),
+    # Sync dashboard
+    path('sync/',                          views.sync_dashboard_view,    name='sync_dashboard'),
+    path('sync/upload/',                   views.sync_upload_view,       name='sync_upload'),
+    path('sync/upload/delete/<int:pk>/',   views.sync_delete_batch_view, name='sync_delete_batch'),
+    path('api/never-synced/',              views.api_never_synced,       name='api_never_synced'),
+    path('download/never-synced/',         views.download_never_synced,  name='download_never_synced'),
+    path('download/chu-sync/',             views.download_chu_sync,      name='download_chu_sync'),
 ]
