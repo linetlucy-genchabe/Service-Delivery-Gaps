@@ -1,0 +1,153 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Upload Sync Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Upload CHP Sync Report</h1>
+    <p class="page-subtitle">Upload the weekly or monthly CHP sync report file for any county or region.</p>
+  </div>
+  <a href="{% url 'sync_dashboard' %}" class="btn btn-outline">← Back to Sync Dashboard</a>
+</div>
+
+<div class="upload-grid">
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">New Sync Upload</h2>
+      <p class="card-subtitle">Upload one sync report file per reporting period.</p>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="sync-upload-form">
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label class="form-label">Period Type</label>
+          <div class="radio-group">
+            {% for radio in form.period_type %}
+              <label class="radio-label">{{ radio.tag }} <span>{{ radio.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Month</label>
+            <select name="month" class="form-input">
+              {% for val, label in form.fields.month.choices %}
+                <option value="{{ val }}" {% if form.month.value == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Year</label>
+            <select name="year" class="form-input">
+              {% for val, label in form.fields.year.choices %}
+                <option value="{{ val }}" {% if form.year.value == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" id="week-date-group" style="display:none;">
+          <label class="form-label">
+            Week Start Date
+            <span class="label-hint">e.g. 2026-04-16 shows as "Week of 16 Apr 2026"</span>
+          </label>
+          {{ form.week_start_date }}
+          {% if form.week_start_date.errors %}
+            <div class="field-error">{{ form.week_start_date.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="file-upload-slot" style="margin-bottom:16px;">
+          <div class="file-slot-header">
+            <span class="file-slot-icon">📱</span>
+            <div>
+              <div class="file-slot-title">CHP Sync Report File</div>
+              <div class="file-slot-desc">Weekly or monthly sync data for all CHPs (.xlsx)</div>
+            </div>
+          </div>
+          <label class="file-drop-zone">
+            <input type="file" name="sync_file" accept=".xlsx" required id="sync-file-input">
+            <span class="file-drop-text" id="sync-label">Click to select or drag & drop</span>
+          </label>
+          {% if form.sync_file.errors %}
+            <div class="field-error">{{ form.sync_file.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notes (optional)</label>
+          {{ form.notes }}
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="sync-upload-btn">Upload Sync Report</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Previous Sync Uploads</h2>
+      <p class="card-subtitle">All uploaded sync report batches</p>
+    </div>
+    <div class="card-body no-pad">
+      {% if batches %}
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Type</th>
+              <th>Uploaded By</th>
+              <th>CHP Rows</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for batch in batches %}
+            <tr>
+              <td><strong>{{ batch.label }}</strong></td>
+              <td><span class="badge badge-{{ batch.period_type }}">{{ batch.get_period_type_display }}</span></td>
+              <td>{{ batch.uploaded_by.get_full_name|default:batch.uploaded_by.username|default:"—" }}</td>
+              <td>{{ batch.sync_records.count }}</td>
+              <td>
+                <a href="{% url 'sync_dashboard' %}?batch={{ batch.pk }}" class="btn btn-xs btn-outline">View</a>
+                {% if user.is_superuser %}
+                <form method="post" action="{% url 'sync_delete_batch' batch.pk %}" style="display:inline;"
+                      onsubmit="return confirm('Delete this sync batch and all its data?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty-state">No sync reports uploaded yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('input[name="period_type"]').forEach(r => {
+  r.addEventListener('change', function() {
+    document.getElementById('week-date-group').style.display = this.value === 'weekly' ? 'block' : 'none';
+  });
+});
+const checked = document.querySelector('input[name="period_type"]:checked');
+if (checked && checked.value === 'weekly') document.getElementById('week-date-group').style.display = 'block';
+
+document.getElementById('sync-file-input').addEventListener('change', function() {
+  document.getElementById('sync-label').textContent = this.files[0] ? this.files[0].name : 'Click to select or drag & drop';
+});
+document.getElementById('sync-upload-form').addEventListener('submit', function() {
+  document.getElementById('sync-upload-btn').textContent = 'Uploading…';
+  document.getElementById('sync-upload-btn').disabled = true;
+});
+</script>
+{% endblock %}
