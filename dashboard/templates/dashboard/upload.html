@@ -1,0 +1,201 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Upload Data{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Upload Reporting Data</h1>
+    <p class="page-subtitle">Upload paired CHW Detail and Supervision files for a specific reporting period.</p>
+  </div>
+  <a href="{% url 'dashboard' %}" class="btn btn-outline">← Back to Dashboard</a>
+</div>
+
+<div class="upload-grid">
+
+  <!-- Upload Form -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">New Upload</h2>
+      <p class="card-subtitle">Both files must be uploaded together for accurate analytics.</p>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="upload-form">
+        {% csrf_token %}
+
+        <!-- Period Type -->
+        <div class="form-group">
+          <label class="form-label">Reporting Period Type</label>
+          <div class="radio-group">
+            {% for radio in form.period_type %}
+              <label class="radio-label">
+                {{ radio.tag }}
+                <span>{{ radio.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Month + Year -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Month</label>
+            <select name="month" class="form-input">
+              {% for val, label in form.fields.month.choices %}
+                <option value="{{ val }}" {% if form.month.value == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.month.errors %}<div class="field-error">{{ form.month.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label">Year</label>
+            <select name="year" class="form-input">
+              {% for val, label in form.fields.year.choices %}
+                <option value="{{ val }}" {% if form.year.value == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <!-- Week start date (shown only for weekly) -->
+        <div class="form-group" id="week-date-group" style="display:none;">
+          <label class="form-label">
+            Week Start Date
+            <span class="label-hint">The first day of the reporting week (e.g. 2026-04-06 shows as "Week of 6 Apr 2026")</span>
+          </label>
+          {{ form.week_start_date }}
+          {% if form.week_start_date.errors %}
+            <div class="field-error">{{ form.week_start_date.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <!-- File uploads -->
+        <div class="file-upload-grid">
+          <div class="file-upload-slot">
+            <div class="file-slot-header">
+              <span class="file-slot-icon">📋</span>
+              <div>
+                <div class="file-slot-title">CHW Detail File</div>
+                <div class="file-slot-desc">Monthly or weekly CHP performance data (.xlsx)</div>
+              </div>
+            </div>
+            <label class="file-drop-zone" id="chw-drop">
+              <input type="file" name="chw_file" accept=".xlsx" required id="chw-file-input">
+              <span class="file-drop-text" id="chw-label">Click to select or drag & drop</span>
+            </label>
+            {% if form.chw_file.errors %}
+              <div class="field-error">{{ form.chw_file.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="file-upload-slot">
+            <div class="file-slot-header">
+              <span class="file-slot-icon">🔍</span>
+              <div>
+                <div class="file-slot-title">Supervision File</div>
+                <div class="file-slot-desc">CHP supervision visit records (.xlsx)</div>
+              </div>
+            </div>
+            <label class="file-drop-zone" id="sup-drop">
+              <input type="file" name="supervision_file" accept=".xlsx" required id="sup-file-input">
+              <span class="file-drop-text" id="sup-label">Click to select or drag & drop</span>
+            </label>
+            {% if form.supervision_file.errors %}
+              <div class="field-error">{{ form.supervision_file.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-group">
+          <label class="form-label">Notes (optional)</label>
+          {{ form.notes }}
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="upload-btn">
+          Upload Both Files
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Previous batches -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Previous Uploads</h2>
+      <p class="card-subtitle">Stored reporting periods (last 3 months shown)</p>
+    </div>
+    <div class="card-body no-pad">
+      {% if batches %}
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Type</th>
+              <th>Uploaded By</th>
+              <th>CHW Rows</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for batch in batches %}
+            <tr>
+              <td>
+                <strong>{{ batch.label }}</strong>
+              </td>
+              <td>
+                <span class="badge badge-{{ batch.period_type }}">{{ batch.get_period_type_display }}</span>
+              </td>
+              <td>{{ batch.uploaded_by.get_full_name|default:batch.uploaded_by.username|default:"—" }}</td>
+              <td>{{ batch.chw_records.count }}</td>
+              <td>
+                <a href="{% url 'dashboard' %}?batch={{ batch.pk }}" class="btn btn-xs btn-outline">View</a>
+                {% if user.is_superuser %}
+                <form method="post" action="{% url 'delete_batch' batch.pk %}" style="display:inline;" onsubmit="return confirm('Delete this batch and all its data?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty-state">No uploads yet. Upload your first data set above.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Toggle week date field
+document.querySelectorAll('input[name="period_type"]').forEach(r => {
+  r.addEventListener('change', function() {
+    document.getElementById('week-date-group').style.display =
+      this.value === 'weekly' ? 'block' : 'none';
+  });
+});
+// Restore on page load if weekly
+const checked = document.querySelector('input[name="period_type"]:checked');
+if (checked && checked.value === 'weekly') {
+  document.getElementById('week-date-group').style.display = 'block';
+}
+
+// File input label updates
+function attachFileLabel(inputId, labelId) {
+  document.getElementById(inputId).addEventListener('change', function() {
+    const name = this.files[0] ? this.files[0].name : 'Click to select or drag & drop';
+    document.getElementById(labelId).textContent = name;
+  });
+}
+attachFileLabel('chw-file-input', 'chw-label');
+attachFileLabel('sup-file-input', 'sup-label');
+
+// Upload button state
+document.getElementById('upload-form').addEventListener('submit', function() {
+  document.getElementById('upload-btn').textContent = 'Uploading & Processing…';
+  document.getElementById('upload-btn').disabled = true;
+});
+</script>
+{% endblock %}
