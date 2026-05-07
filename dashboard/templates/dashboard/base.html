@@ -23,7 +23,8 @@
   </div>
   <div class="nav-actions">
     {% if user.is_authenticated %}
-      <span class="nav-user">{{ user.get_full_name|default:user.username }}</span>
+      <a href="{% url 'dashboard' %}" class="btn btn-ghost-sm">Gaps Dashboard</a>
+      <a href="{% url 'sync_dashboard' %}" class="btn btn-ghost-sm">Sync Dashboard</a>
       {% if is_uploader %}
         <a href="{% url 'upload' %}" class="btn btn-outline-sm">Upload Data</a>
       {% endif %}
