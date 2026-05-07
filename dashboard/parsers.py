@@ -357,3 +357,191 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'hh_visits_total': agg['hh_visits_total'] or 0,
         'days_synced_total': agg['days_synced_total'] or 0,
     }
+
+
+# ---------------------------------------------------------------------------
+# Sync Report parser
+# ---------------------------------------------------------------------------
+
+def parse_sync_file(batch, file_obj):
+    """
+    Parse the CHP Sync Report Excel file and bulk-create CHPSyncRecord rows.
+    Returns (rows_created, list_of_errors).
+    """
+    from .models import CHPSyncRecord
+    try:
+        df = pd.read_excel(file_obj, engine='openpyxl')
+    except Exception as e:
+        return 0, [f"Could not read Sync file: {e}"]
+
+    required = ['CHP Name', 'County', 'Sub-County', 'Community Unit']
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        return 0, [f"Sync file missing columns: {missing}"]
+
+    records = []
+    errors  = []
+
+    for i, row in df.iterrows():
+        try:
+            raw_date = row.get('Last Sync Date')
+            last_sync = None
+            if raw_date and not (isinstance(raw_date, float) and np.isnan(raw_date)):
+                raw_str = str(raw_date).strip()
+                if raw_str.lower() != 'never' and raw_str != '':
+                    try:
+                        if isinstance(raw_date, str):
+                            last_sync = datetime.strptime(raw_str, '%Y-%m-%d').date()
+                        elif hasattr(raw_date, 'date'):
+                            last_sync = raw_date.date()
+                    except ValueError:
+                        last_sync = None  # bad date format — skip gracefully
+
+            records.append(CHPSyncRecord(
+                batch=batch,
+                county=_str(row.get('County')),
+                sub_county=_str(row.get('Sub-County')),
+                community_health_unit=_str(row.get('Community Unit')),
+                chp_name=_str(row.get('CHP Name')),
+                username=_str(row.get('Username')),
+                days_synced=_int(row.get('Days Synced', 0)),
+                reports_synced=_int(row.get('Reports Synced', 0)),
+                last_sync_date=last_sync,
+            ))
+        except Exception as e:
+            errors.append(f"Row {i+2}: {e}")
+
+    CHPSyncRecord.objects.bulk_create(records, batch_size=500)
+    return len(records), errors
+
+
+# ---------------------------------------------------------------------------
+# Sync indicator computation
+# ---------------------------------------------------------------------------
+
+def compute_sync_indicators(qs):
+    """
+    Compute all sync dashboard indicators from a CHPSyncRecord queryset.
+    Includes county, sub-county and CHU rankings with avg-days thresholds.
+    """
+    from django.db.models import Sum, Count, Avg, Q
+
+    total = qs.count()
+    if total == 0:
+        return None
+
+    agg = qs.aggregate(
+        synced_count=Count('id', filter=Q(days_synced__gte=1)),
+        never_synced=Count('id', filter=Q(days_synced=0)),
+        avg_days=Avg('days_synced'),
+        avg_reports=Avg('reports_synced'),
+    )
+
+    synced      = agg['synced_count'] or 0
+    never       = agg['never_synced'] or 0
+    sync_rate   = round(synced / total * 100, 1) if total else 0
+    avg_days    = round(agg['avg_days'] or 0, 2)
+    avg_reports = round(agg['avg_reports'] or 0, 1)
+
+    def days_level(d):
+        if d >= 2.0:   return 'high'
+        if d >= 1.5:   return 'good'
+        if d >= 1.0:   return 'moderate'
+        return 'low'
+
+    def enrich(row_dict, total_key='total', synced_key='synced'):
+        t = row_dict[total_key] or 1
+        s = row_dict[synced_key]
+        row_dict['sync_rate'] = round(s / t * 100, 1)
+        row_dict['avg_days']  = round(row_dict.get('avg_days') or 0, 2)
+        row_dict['avg_reports'] = round(row_dict.get('avg_reports') or 0, 1)
+        row_dict['days_level'] = days_level(row_dict['avg_days'])
+        return row_dict
+
+    # ── County rankings ──────────────────────────────────────────────────────
+    county_qs = (
+        qs.values('county')
+        .annotate(
+            total=Count('id'),
+            synced=Count('id', filter=Q(days_synced__gte=1)),
+            never=Count('id', filter=Q(days_synced=0)),
+            avg_days=Avg('days_synced'),
+            avg_reports=Avg('reports_synced'),
+        )
+    )
+    counties = sorted(
+        [enrich(dict(r)) for r in county_qs],
+        key=lambda x: x['sync_rate'], reverse=True
+    )
+    for i, c in enumerate(counties):
+        c['rank'] = i + 1
+
+    # ── Sub-county rankings ──────────────────────────────────────────────────
+    sc_qs = (
+        qs.values('county', 'sub_county')
+        .annotate(
+            total=Count('id'),
+            synced=Count('id', filter=Q(days_synced__gte=1)),
+            never=Count('id', filter=Q(days_synced=0)),
+            avg_days=Avg('days_synced'),
+            avg_reports=Avg('reports_synced'),
+        )
+    )
+    sub_counties_raw = sorted(
+        [enrich(dict(r)) for r in sc_qs],
+        key=lambda x: x['sync_rate'], reverse=True
+    )
+    # Overall rank across all sub-counties
+    for i, sc in enumerate(sub_counties_raw):
+        sc['rank'] = i + 1
+    # Per-county rank
+    from itertools import groupby
+    county_grouped = {}
+    for sc in sub_counties_raw:
+        county_grouped.setdefault(sc['county'], []).append(sc)
+    for county, scs in county_grouped.items():
+        scs_sorted = sorted(scs, key=lambda x: x['sync_rate'], reverse=True)
+        for i, sc in enumerate(scs_sorted):
+            sc['county_rank'] = i + 1
+    sub_counties = sub_counties_raw  # already globally ranked
+
+    # ── CHU rankings ─────────────────────────────────────────────────────────
+    chu_qs = (
+        qs.values('county', 'sub_county', 'community_health_unit')
+        .annotate(
+            total=Count('id'),
+            synced=Count('id', filter=Q(days_synced__gte=1)),
+            never=Count('id', filter=Q(days_synced=0)),
+            avg_days=Avg('days_synced'),
+            avg_reports=Avg('reports_synced'),
+        )
+    )
+    chus_all = [enrich(dict(r)) for r in chu_qs]
+    # Per-sub-county rank
+    sc_chu_groups = {}
+    for chu in chus_all:
+        key = (chu['county'], chu['sub_county'])
+        sc_chu_groups.setdefault(key, []).append(chu)
+    for key, chus in sc_chu_groups.items():
+        chus_sorted = sorted(chus, key=lambda x: x['sync_rate'], reverse=True)
+        for i, chu in enumerate(chus_sorted):
+            chu['sc_rank'] = i + 1
+
+    # Global sort best to worst
+    chus_sorted = sorted(chus_all, key=lambda x: x['sync_rate'], reverse=True)
+    for i, chu in enumerate(chus_sorted):
+        chu['rank'] = i + 1
+
+    return {
+        'total':        total,
+        'synced':       synced,
+        'never_synced': never,
+        'sync_rate':    sync_rate,
+        'avg_days':     avg_days,
+        'avg_reports':  avg_reports,
+        'days_level':   days_level(avg_days),
+        'counties':     counties,
+        'sub_counties': sub_counties,
+        'chus_sorted':  chus_sorted,
+        'chus_all':     chus_all,
+    }
