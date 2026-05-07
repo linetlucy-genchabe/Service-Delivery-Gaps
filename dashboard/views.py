@@ -8,7 +8,13 @@ import csv
 import io
 from datetime import date
 
-from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponse
+
+def healthz(request):
+    return HttpResponse("ok", status=200)
+
+
+
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -75,7 +81,7 @@ def upload_view(request):
             messages.error(request, "Please correct the errors below.")
 
     batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
-    return render(request, 'dashboard/upload.html', {'form': form, 'batches': batches, 'is_uploader': True})
+    return render(request, 'dashboard/upload.html', {'form': form, 'batches': batches})
 
 
 @login_required
