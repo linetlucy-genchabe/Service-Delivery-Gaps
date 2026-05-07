@@ -1,0 +1,57 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Service Delivery Gaps Dashboard{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'dashboard/css/styles.css' %}">
+  <link rel="icon" type="image/png" href="{% static 'dashboard/lg_logo.png' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand">
+    <img src="{% static 'dashboard/lg_logo.png' %}" alt="Living Goods" class="nav-logo-img">
+    <div class="nav-title-wrap">
+      <span class="nav-title">Service Delivery Gaps Dashboard</span>
+      <span class="nav-subtitle">Living Goods · Kenya Community Health</span>
+    </div>
+  </div>
+  <div class="nav-actions">
+    {% if user.is_authenticated %}
+      <span class="nav-user">{{ user.get_full_name|default:user.username }}</span>
+      {% if is_uploader %}
+        <a href="{% url 'upload' %}" class="btn btn-outline-sm">Upload Data</a>
+      {% endif %}
+      <a href="{% url 'logout' %}" class="btn btn-ghost-sm">Sign Out</a>
+    {% endif %}
+  </div>
+</nav>
+
+<main class="main-content">
+  {% if messages %}
+    <div class="messages-container">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+          <span>{{ message }}</span>
+          <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  <span>Service Delivery Gaps Dashboard · Living Goods Kenya</span>
+  <span>© 2026 Linetlucy Genchabe · Internal use only</span>
+</footer>
+
+<script src="{% static 'dashboard/js/dashboard.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

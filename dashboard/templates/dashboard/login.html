@@ -1,0 +1,48 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In – Service Delivery Gaps Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'dashboard/css/styles.css' %}">
+  <link rel="icon" type="image/png" href="{% static 'dashboard/lg_logo.png' %}">
+</head>
+<body class="login-page">
+
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <img src="{% static 'dashboard/lg_logo.png' %}" alt="Living Goods" class="login-logo-img">
+      <h1>Service Delivery Gaps Dashboard</h1>
+      <p>Living Goods · Kenya Community Health</p>
+    </div>
+
+    <form method="post" class="login-form">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="form-group">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+    </form>
+
+    <p class="login-footer">
+      Contact your administrator to request access.
+    </p>
+  </div>
+</div>
+
+</body>
+</html>
