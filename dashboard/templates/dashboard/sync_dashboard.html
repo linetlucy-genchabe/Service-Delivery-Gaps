@@ -1,0 +1,418 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}CHP Sync Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">CHP Sync Dashboard</h1>
+    {% if selected_batch %}
+      <p class="page-subtitle period-badge">📅 {{ selected_batch.label }}
+        {% if selected_county %} › {{ selected_county }}{% endif %}
+        {% if selected_subcounty %} › {{ selected_subcounty }}{% endif %}
+        {% if selected_chu %} › {{ selected_chu }}{% endif %}
+      </p>
+    {% else %}
+      <p class="page-subtitle">Select a reporting period to view CHP sync analytics.</p>
+    {% endif %}
+  </div>
+  {% if is_uploader %}
+    <a href="{% url 'sync_upload' %}" class="btn btn-primary">Upload Sync Report</a>
+  {% endif %}
+</div>
+
+<!-- FILTERS -->
+<div class="filter-bar">
+  <form method="get" id="filter-form" class="filter-form">
+    <div class="filter-group">
+      <label class="filter-label">Reporting Period</label>
+      <select name="batch" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Select period —</option>
+        {% for batch in batches %}
+          <option value="{{ batch.pk }}" {% if selected_batch_id == batch.pk|stringformat:"s" %}selected{% endif %}>{{ batch.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if selected_batch %}
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for county in filter_options.counties %}
+          <option value="{{ county }}" {% if selected_county == county %}selected{% endif %}>{{ county }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if selected_county %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in filter_options.sub_counties %}
+          <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if selected_subcounty %}
+    <div class="filter-group">
+      <label class="filter-label">Community Health Unit</label>
+      <select name="chu" class="filter-select" onchange="this.form.submit()">
+        <option value="">All CHUs</option>
+        {% for chu in filter_options.chus %}
+          <option value="{{ chu }}" {% if selected_chu == chu %}selected{% endif %}>{{ chu }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if selected_county %}
+      <a href="?batch={{ selected_batch_id }}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+    {% endif %}
+  </form>
+</div>
+
+{% if not selected_batch %}
+<div class="empty-dashboard">
+  <div class="empty-icon">📱</div>
+  <h2>No Sync Period Selected</h2>
+  <p>Choose a reporting period above to view CHP sync analytics.</p>
+  {% if is_uploader and not batches %}<a href="{% url 'sync_upload' %}" class="btn btn-primary">Upload First Sync Report</a>{% endif %}
+</div>
+
+{% elif not indicators %}
+<div class="empty-dashboard"><div class="empty-icon">📭</div><h2>No Data Found</h2></div>
+
+{% else %}
+
+<!-- SUMMARY CARDS -->
+<div class="section-label">📱 Sync Summary</div>
+<div class="cards-grid">
+
+  <div class="stat-card navy">
+    <div class="stat-value">{{ indicators.total }}</div>
+    <div class="stat-label">Total CHPs</div>
+    <div class="stat-sub">CHPs in this reporting period</div>
+    <button class="definition-btn" data-def="Total CHPs: The total number of Community Health Promoters included in this sync report for the selected filters.">View definition</button>
+  </div>
+
+  <div class="stat-card {% if indicators.sync_rate >= 80 %}green{% elif indicators.sync_rate >= 50 %}yellow{% else %}red{% endif %}">
+    <div class="stat-value">{{ indicators.sync_rate }}%</div>
+    <div class="stat-label">Sync Rate</div>
+    <div class="stat-sub">{{ indicators.synced }} synced · {{ indicators.never_synced }} never synced · target ≥80%</div>
+    <button class="definition-btn" data-def="Sync Rate: The percentage of CHPs who synced their phone to eCHIS at least once this period. Calculated as CHPs with Days Synced ≥ 1 ÷ Total CHPs × 100. CHPs who never sync have no data visible in the system regardless of how much work they do on the ground.">View definition</button>
+  </div>
+
+  <div class="stat-card {% if indicators.never_synced == 0 %}green{% elif indicators.never_synced < 50 %}yellow{% else %}red{% endif %}">
+    <div class="stat-value">{{ indicators.never_synced }}</div>
+    <div class="stat-label">Never Synced</div>
+    <div class="stat-sub">CHPs with 0 days synced — data completely absent from eCHIS</div>
+    <button class="definition-btn" data-def="Never Synced: CHPs who did not sync even once this period. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
+  </div>
+
+  <div class="stat-card {% if indicators.days_level == 'high' %}green{% elif indicators.days_level == 'good' %}cyan{% elif indicators.days_level == 'moderate' %}yellow{% else %}red{% endif %}">
+    <div class="stat-value">{{ indicators.avg_days }}</div>
+    <div class="stat-label">Avg Days Synced</div>
+    <div class="stat-sub">
+      {% if indicators.days_level == 'high' %}🟢 High ≥2.0 days{% elif indicators.days_level == 'good' %}🔵 Good 1.5–1.99 days{% elif indicators.days_level == 'moderate' %}🟡 Moderate 1.0–1.49 days{% else %}🔴 Low &lt;1.0 days{% endif %}
+      · max 7 for weekly
+    </div>
+    <button class="definition-btn" data-def="Average Days Synced: The average number of days CHPs synced data to eCHIS. For weekly data the max is 7. Thresholds — High: ≥2.0 days, Good: 1.5–1.99, Moderate: 1.0–1.49, Low: below 1.0 day. Syncing on more days means data is more current and complete.">View definition</button>
+  </div>
+
+  <div class="stat-card navy">
+    <div class="stat-value">{{ indicators.avg_reports }}</div>
+    <div class="stat-label">Avg Reports Synced</div>
+    <div class="stat-sub">Average form submissions uploaded per CHP</div>
+    <button class="definition-btn" data-def="Average Reports Synced: The average number of individual form submissions — household visits, pregnancy follow-ups, iCCM assessments — synced per CHP. Higher means more activity is captured in eCHIS.">View definition</button>
+  </div>
+
+</div>
+
+<!-- ===== COUNTY VIEW — no county selected ===== -->
+{% if show_county_table %}
+<div class="section-label">🌍 County Rankings — Select a county to drill down</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">All Counties Ranked by Sync Rate</h3><p class="card-subtitle">Click a county in the filter above to see its sub-county breakdown</p></div>
+  </div>
+  <div class="card-body no-pad">
+    <table class="data-table">
+      <thead><tr>
+        <th>Rank</th><th>County</th>
+        <th class="num">Total CHPs</th><th class="num">Synced</th><th class="num">Never Synced</th>
+        <th class="num">Sync Rate</th><th class="num">Avg Days</th><th>Performance</th>
+      </tr></thead>
+      <tbody>
+        {% for c in indicators.counties %}
+        <tr>
+          <td class="rank-num">#{{ c.rank }}</td>
+          <td><strong>{{ c.county }}</strong></td>
+          <td class="num">{{ c.total }}</td>
+          <td class="num good">{{ c.synced }}</td>
+          <td class="num {% if c.never > 0 %}bad{% else %}zero{% endif %}">{{ c.never }}</td>
+          <td class="num"><span class="sync-rate-pill {% if c.sync_rate >= 80 %}pill-green{% elif c.sync_rate >= 50 %}pill-yellow{% else %}pill-red{% endif %}">{{ c.sync_rate }}%</span></td>
+          <td class="num">{{ c.avg_days }}</td>
+          <td><span class="days-pill days-{{ c.days_level }}">{% if c.days_level == 'high' %}🟢 High{% elif c.days_level == 'good' %}🔵 Good{% elif c.days_level == 'moderate' %}🟡 Moderate{% else %}🔴 Low{% endif %}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===== SUB-COUNTY VIEW — county selected, no sub-county ===== -->
+{% if show_sc_table %}
+<div class="section-label">📊 {{ selected_county }} — Sub-County Rankings</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">{{ selected_county }} Sub-Counties Ranked by Sync Rate</h3><p class="card-subtitle">Select a sub-county above to see its CHU breakdown</p></div>
+  </div>
+  <div class="card-body no-pad">
+    <table class="data-table">
+      <thead><tr>
+        <th>Rank</th><th>Sub-County</th>
+        <th class="num">Total CHPs</th><th class="num">Synced</th><th class="num">Never Synced</th>
+        <th class="num">Sync Rate</th><th class="num">Avg Days</th><th>Performance</th>
+      </tr></thead>
+      <tbody>
+        {% for sc in indicators.sub_counties %}
+        <tr>
+          <td class="rank-num">#{{ sc.county_rank }}</td>
+          <td><strong>{{ sc.sub_county }}</strong></td>
+          <td class="num">{{ sc.total }}</td>
+          <td class="num good">{{ sc.synced }}</td>
+          <td class="num {% if sc.never > 0 %}bad{% else %}zero{% endif %}">{{ sc.never }}</td>
+          <td class="num"><span class="sync-rate-pill {% if sc.sync_rate >= 80 %}pill-green{% elif sc.sync_rate >= 50 %}pill-yellow{% else %}pill-red{% endif %}">{{ sc.sync_rate }}%</span></td>
+          <td class="num">{{ sc.avg_days }}</td>
+          <td><span class="days-pill days-{{ sc.days_level }}">{% if sc.days_level == 'high' %}🟢 High{% elif sc.days_level == 'good' %}🔵 Good{% elif sc.days_level == 'moderate' %}🟡 Moderate{% else %}🔴 Low{% endif %}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ===== CHU VIEW — sub-county selected ===== -->
+{% if show_chu_chart %}
+<div class="section-label">📈 {{ selected_subcounty }} — CHU Sync Rate Best to Worst</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">{{ selected_subcounty }} — Community Health Units Ranked</h3><p class="card-subtitle">🟢 ≥80% · 🟡 50–79% · 🔴 &lt;50% · Ranked best to worst</p></div>
+    <a href="{% url 'download_chu_sync' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body">
+    <div class="chu-chart-grid">
+      <div class="chu-chart-col">
+        <div class="chu-col-label">🏆 Top Performers</div>
+        <div class="chu-chart-wrap" id="wrap-left"><canvas id="chu-bar-chart-left"></canvas></div>
+      </div>
+      <div class="chu-chart-col">
+        <div class="chu-col-label">⚠️ Bottom Performers</div>
+        <div class="chu-chart-wrap" id="wrap-right"><canvas id="chu-bar-chart-right"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:0;">
+  <div class="card-header">
+    <div><h3 class="card-title">CHU Detail Table</h3><p class="card-subtitle">All Community Health Units in {{ selected_subcounty }} ranked best to worst</p></div>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr>
+          <th>Rank</th><th>Community Health Unit</th>
+          <th class="num">Total</th><th class="num">Synced</th><th class="num">Never</th>
+          <th class="num">Sync Rate</th><th class="num">Avg Days</th><th>Performance</th><th class="num">Avg Reports</th>
+        </tr></thead>
+        <tbody>
+          {% for chu in indicators.chus_sorted %}
+          <tr>
+            <td class="rank-num">#{{ chu.sc_rank }}</td>
+            <td><strong>{{ chu.community_health_unit }}</strong></td>
+            <td class="num">{{ chu.total }}</td>
+            <td class="num good">{{ chu.synced }}</td>
+            <td class="num {% if chu.never > 0 %}bad{% else %}zero{% endif %}">{{ chu.never }}</td>
+            <td class="num"><span class="sync-rate-pill {% if chu.sync_rate >= 80 %}pill-green{% elif chu.sync_rate >= 50 %}pill-yellow{% else %}pill-red{% endif %}">{{ chu.sync_rate }}%</span></td>
+            <td class="num">{{ chu.avg_days }}</td>
+            <td><span class="days-pill days-{{ chu.days_level }}">{% if chu.days_level == 'high' %}🟢 High{% elif chu.days_level == 'good' %}🔵 Good{% elif chu.days_level == 'moderate' %}🟡 Moderate{% else %}🔴 Low{% endif %}</span></td>
+            <td class="num">{{ chu.avg_reports }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- NEVER SYNCED — always shown -->
+<div class="section-label">🔴 Never-Synced CHPs — {{ indicators.never_synced }} CHPs with 0 sync days</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">CHPs Who Never Synced</h3><p class="card-subtitle">Data completely absent from eCHIS — requires immediate follow-up</p></div>
+    <a href="{% url 'download_never_synced' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      <div id="never-synced-container"><div class="table-loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+<div class="modal-overlay" id="def-modal" style="display:none;">
+  <div class="modal">
+    <div class="modal-header"><h3>Indicator Definition</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-body" id="def-modal-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const BATCH_ID   = "{{ selected_batch_id }}";
+const COUNTY     = "{{ selected_county }}";
+const SUB_COUNTY = "{{ selected_subcounty }}";
+const CHU        = "{{ selected_chu }}";
+const HAS_DATA   = {% if indicators %}true{% else %}false{% endif %};
+const SHOW_CHART = {% if show_chu_chart %}true{% else %}false{% endif %};
+const CHU_DATA   = {{ chu_data_json|safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (HAS_DATA) {
+  if (SHOW_CHART && CHU_DATA.length > 0) buildChart();
+    loadNeverSynced();
+  }
+  initDefinitionModal();
+});
+
+function buildChart() {
+  if (!CHU_DATA.length) return;
+  const mid = Math.ceil(CHU_DATA.length / 2);
+  const leftData  = CHU_DATA.slice(0, mid);
+  const rightData = CHU_DATA.slice(mid);
+
+  function makeChart(canvasId, wrapperId, data) {
+    const canvas = document.getElementById(canvasId);
+    const wrap   = document.getElementById(wrapperId);
+    if (!canvas || !wrap) return;
+
+    const rowH = 32;
+    const chartH = Math.max(180, data.length * rowH);
+    wrap.style.height = chartH + 'px';
+
+    const labels = data.map(d =>
+      d.community_health_unit
+        .replace(/ Community Health Unit$/i, '')
+        .replace(/ Community health unit$/i, '')
+        .trim()
+    );
+    const rates  = data.map(d => d.sync_rate);
+    const colors = rates.map(r => r >= 80 ? '#059669' : r >= 50 ? '#D97706' : '#DC2626');
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data: rates, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const d = data[ctx.dataIndex];
+                return [
+                  ` Sync Rate: ${d.sync_rate}%`,
+                  ` Synced: ${d.synced} / ${d.total}`,
+                  ` Never Synced: ${d.never}`,
+                  ` Avg Days: ${d.avg_days}`,
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            min: 0, max: 100,
+            ticks: { callback: v => v + '%', font: { size: 10 } },
+            grid: { color: '#E5E7EB' }
+          },
+          y: {
+            ticks: { font: { size: 10 }, maxTicksLimit: data.length },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  makeChart('chu-bar-chart-left',  'wrap-left',  leftData);
+  makeChart('chu-bar-chart-right', 'wrap-right', rightData);
+}
+
+function loadNeverSynced() {
+  const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
+  fetch('/api/never-synced/?' + params)
+    .then(r => r.json())
+    .then(data => {
+      const c = document.getElementById('never-synced-container');
+      if (!data.results || data.results.length === 0) {
+        c.innerHTML = '<div class="table-empty">✅ All CHPs synced at least once!</div>';
+        return;
+      }
+      let h = `<table class="data-table"><thead><tr>
+        <th>#</th><th>Sub-County</th><th>Community Health Unit</th>
+        <th>CHP Name</th><th>Username</th>
+        <th class="num">Reports Synced</th><th>Last Sync Date</th>
+      </tr></thead><tbody>`;
+      data.results.forEach((r, i) => {
+        h += `<tr>
+          <td class="zero">${i+1}</td>
+          <td>${esc(r.sub_county)}</td>
+          <td><strong>${esc(r.community_health_unit)}</strong></td>
+          <td>${esc(r.chp_name)}</td>
+          <td class="zero">${esc(r.username)}</td>
+          <td class="num ${r.reports_synced===0?'bad':''}">${r.reports_synced}</td>
+          <td class="${r.last_sync_date==='Never'?'bad':'zero'}">${esc(r.last_sync_date)}</td>
+        </tr>`;
+      });
+      h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${data.count} CHP(s) with 0 sync days</div>`;
+      c.innerHTML = h;
+    })
+    .catch(() => {
+      document.getElementById('never-synced-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
+    });
+}
+
+function initDefinitionModal() {
+  document.querySelectorAll('.definition-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.getElementById('def-modal-body').textContent = this.dataset.def;
+      document.getElementById('def-modal').style.display = 'flex';
+    });
+  });
+  document.getElementById('def-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+}
+
+function closeModal() { document.getElementById('def-modal').style.display = 'none'; }
+
+function esc(str) {
+  if (str == null) return '—';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}
