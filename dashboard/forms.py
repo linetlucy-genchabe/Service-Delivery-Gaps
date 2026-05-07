@@ -1,0 +1,57 @@
+from django import forms
+from django.contrib.auth.forms import AuthenticationForm
+from .models import UploadBatch, PERIOD_TYPE_CHOICES, MONTH_CHOICES
+import datetime
+
+
+CURRENT_YEAR = datetime.date.today().year
+YEAR_CHOICES = [(y, y) for y in range(CURRENT_YEAR - 1, CURRENT_YEAR + 2)]
+
+
+class LoginForm(AuthenticationForm):
+    username = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Username'})
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Password'})
+    )
+
+
+class UploadBatchForm(forms.ModelForm):
+    year = forms.ChoiceField(choices=YEAR_CHOICES, initial=CURRENT_YEAR)
+    month = forms.ChoiceField(choices=MONTH_CHOICES)
+    period_type = forms.ChoiceField(
+        choices=PERIOD_TYPE_CHOICES,
+        label='Period Type',
+        widget=forms.RadioSelect(attrs={'class': 'radio-input'}),
+    )
+    week_start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+        label='Week Start Date (for weekly uploads only)',
+        help_text='Select the Monday/start date of the week being uploaded (e.g. 2026-04-06 for "Week of 9 Apr")',
+    )
+    chw_file = forms.FileField(
+        label='CHW Detail File (.xlsx)',
+        widget=forms.FileInput(attrs={'class': 'file-input', 'accept': '.xlsx'}),
+    )
+    supervision_file = forms.FileField(
+        label='Supervision File (.xlsx)',
+        widget=forms.FileInput(attrs={'class': 'file-input', 'accept': '.xlsx'}),
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-input', 'rows': 2, 'placeholder': 'Optional notes about this upload'}),
+    )
+
+    class Meta:
+        model = UploadBatch
+        fields = ['period_type', 'year', 'month', 'week_start_date', 'chw_file', 'supervision_file', 'notes']
+
+    def clean(self):
+        cleaned = super().clean()
+        period_type = cleaned.get('period_type')
+        week_start  = cleaned.get('week_start_date')
+        if period_type == 'weekly' and not week_start:
+            self.add_error('week_start_date', 'Week start date is required for weekly uploads.')
+        return cleaned
