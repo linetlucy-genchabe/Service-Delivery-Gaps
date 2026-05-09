@@ -483,3 +483,225 @@ body {
 }
 .dd-cat-panel { display: none; padding-top: 4px; }
 .dd-cat-panel.active { display: block; }
+
+/* ============================================================
+   RESPONSIVE — Mobile First
+   ============================================================ */
+
+/* ── Hamburger button ──────────────────────────────────────── */
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.nav-hamburger span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--white);
+  border-radius: 2px;
+  transition: all .25s;
+}
+.nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-hamburger.open span:nth-child(2) { opacity: 0; }
+.nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── Overlay ───────────────────────────────────────────────── */
+.nav-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 98;
+}
+.nav-overlay.show { display: block; }
+
+/* ── TABLET (≤900px) ───────────────────────────────────────── */
+@media (max-width: 900px) {
+  .upload-grid       { grid-template-columns: 1fr; }
+  .file-upload-grid  { grid-template-columns: 1fr; }
+  .chu-chart-grid    { grid-template-columns: 1fr; }
+  .form-row          { grid-template-columns: 1fr; }
+}
+
+/* ── MOBILE (≤768px) ───────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Navbar */
+  .navbar {
+    padding: 0 16px;
+    height: 56px;
+  }
+  .nav-title      { font-size: 13px; }
+  .nav-subtitle   { display: none; }
+  .nav-logo-img   { width: 30px; height: 30px; }
+  .nav-brand      { gap: 8px; }
+
+  /* Show hamburger */
+  .nav-hamburger  { display: flex; }
+
+  /* Mobile nav drawer */
+  .nav-actions {
+    position: fixed;
+    top: 0; right: -280px;
+    width: 260px;
+    height: 100vh;
+    background: var(--navy-dark);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 72px 16px 24px;
+    z-index: 99;
+    transition: right .28s ease;
+    overflow-y: auto;
+  }
+  .nav-actions.open { right: 0; }
+
+  .nav-actions .btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .nav-actions .btn-ghost-sm {
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.05);
+  }
+  .nav-actions .btn-ghost-sm:hover { background: rgba(255,255,255,0.12); }
+  .nav-actions .btn-outline-sm {
+    color: var(--white);
+    border-color: var(--orange);
+    background: rgba(232,67,26,0.15);
+  }
+
+  /* Main content */
+  .main-content  { padding: 12px; }
+
+  /* Page header */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+  }
+  .page-title  { font-size: 18px; }
+  .page-subtitle { font-size: 12px; }
+
+  /* Filter bar */
+  .filter-bar  { padding: 10px 12px; margin-bottom: 14px; }
+  .filter-form { flex-direction: column; gap: 8px; }
+  .filter-group { min-width: unset; width: 100%; }
+  .filter-select { width: 100%; }
+  .filter-reset { width: 100%; text-align: center; }
+
+  /* Category nav */
+  .category-nav {
+    gap: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-bottom: 14px;
+  }
+  .category-nav::-webkit-scrollbar { display: none; }
+  .cat-btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  /* Cards */
+  .cards-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card  { padding: 14px 14px 10px; }
+  .stat-value { font-size: 24px; }
+  .stat-label { font-size: 12px; }
+  .stat-sub   { font-size: 10px; min-height: unset; }
+
+  /* Section label */
+  .section-label { font-size: 11px; margin: 16px 0 8px; }
+
+  /* Tab bar */
+  .tab-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn { font-size: 12px; padding: 8px 12px; flex-shrink: 0; }
+
+  /* Drill-down cat nav */
+  .drilldown-cat-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .drilldown-cat-nav::-webkit-scrollbar { display: none; }
+  .dd-cat-btn { font-size: 12px; padding: 8px 12px; flex-shrink: 0; }
+
+  /* Cards header */
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .card-body { padding: 12px; }
+
+  /* Data table */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table { font-size: 12px; }
+  .data-table th, .data-table td { padding: 8px 10px; }
+
+  /* Footer */
+  .footer {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+    font-size: 11px;
+    padding: 10px 16px;
+  }
+
+  /* Upload grid */
+  .upload-grid      { grid-template-columns: 1fr; gap: 14px; }
+  .file-upload-grid { grid-template-columns: 1fr; }
+
+  /* Modal */
+  .modal { width: 95%; margin: 0 auto; }
+  .modal-body { font-size: 13px; }
+
+  /* Login */
+  .login-card { padding: 28px 20px; }
+
+  /* Sync chart grid */
+  .chu-chart-grid { grid-template-columns: 1fr; }
+
+  /* Rank num */
+  .rank-num { font-size: 12px; }
+}
+
+/* ── SMALL MOBILE (≤480px) ─────────────────────────────────── */
+@media (max-width: 480px) {
+  .cards-grid   { grid-template-columns: 1fr; }
+  .nav-title    { font-size: 12px; max-width: 180px;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-value   { font-size: 28px; }
+  .page-title   { font-size: 16px; }
+  .category-nav { padding: 8px 10px; }
+  .cat-btn      { padding: 6px 10px; font-size: 11px; }
+  .tab-btn      { font-size: 11px; padding: 7px 10px; }
+}
