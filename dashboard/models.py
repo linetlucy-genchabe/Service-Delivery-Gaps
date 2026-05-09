@@ -93,6 +93,9 @@ class CHWRecord(models.Model):
     pnc_3_7d_ontime         = models.IntegerField(default=0)
 
     # iCCM (Under-5 case management)
+    registered_children_u5  = models.IntegerField(default=0)
+    registered_children_u2  = models.IntegerField(default=0)
+    num_u5_assessed         = models.IntegerField(default=0)
     iccm_assessments        = models.IntegerField(default=0)
     positive_diagnoses_u5   = models.IntegerField(default=0)
     treated_visits_u5       = models.IntegerField(default=0)
