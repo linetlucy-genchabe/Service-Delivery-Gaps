@@ -3,12 +3,28 @@
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', function () {
+  initCategoryNav();
   initTabs();
   initDefinitionModal();
   if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH) {
     loadTable('unsupervised');
   }
 });
+
+// ── Category nav ──────────────────────────────────────────────
+function initCategoryNav() {
+  const btns     = document.querySelectorAll('.cat-btn');
+  const sections = document.querySelectorAll('.cat-section');
+  btns.forEach(btn => {
+    btn.addEventListener('click', function () {
+      btns.forEach(b => b.classList.remove('active'));
+      sections.forEach(s => s.classList.remove('active'));
+      this.classList.add('active');
+      const sec = document.getElementById('section-' + this.dataset.section);
+      if (sec) sec.classList.add('active');
+    });
+  });
+}
 
 // ── Filter submission (keeps all values) ──────────────────────
 function submitFilters() {
