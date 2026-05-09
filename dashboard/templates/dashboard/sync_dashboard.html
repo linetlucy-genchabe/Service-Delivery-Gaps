@@ -131,6 +131,19 @@
 <!-- ===== COUNTY VIEW — no county selected ===== -->
 {% if show_county_table %}
 <div class="section-label">🌍 County Rankings — Select a county to drill down</div>
+
+<!-- County Sync Rate Bar Chart -->
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">County Sync Rate Comparison</h3><p class="card-subtitle">All counties ranked best to worst by sync rate</p></div>
+  </div>
+  <div class="card-body">
+    <div class="chu-chart-wrap" id="county-chart-wrap" style="height:{% if indicators.counties|length %}{{ indicators.counties|length|add:1 }}{% else %}3{% endif %}00px;">
+      <canvas id="county-bar-chart"></canvas>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">All Counties Ranked by Sync Rate</h3><p class="card-subtitle">Click a county in the filter above to see its sub-county breakdown</p></div>
@@ -164,6 +177,19 @@
 <!-- ===== SUB-COUNTY VIEW — county selected, no sub-county ===== -->
 {% if show_sc_table %}
 <div class="section-label">📊 {{ selected_county }} — Sub-County Rankings</div>
+
+<!-- Sub-county chart -->
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">{{ selected_county }} — Sub-County Sync Rate Comparison</h3><p class="card-subtitle">All sub-counties ranked best to worst</p></div>
+  </div>
+  <div class="card-body">
+    <div class="chu-chart-wrap" id="sc-chart-wrap" style="height:300px;">
+      <canvas id="sc-bar-chart"></canvas>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">{{ selected_county }} Sub-Counties Ranked by Sync Rate</h3><p class="card-subtitle">Select a sub-county above to see its CHU breakdown</p></div>
@@ -277,91 +303,104 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
-const BATCH_ID   = "{{ selected_batch_id }}";
-const COUNTY     = "{{ selected_county }}";
-const SUB_COUNTY = "{{ selected_subcounty }}";
-const CHU        = "{{ selected_chu }}";
-const HAS_DATA   = {% if indicators %}true{% else %}false{% endif %};
-const SHOW_CHART = {% if show_chu_chart %}true{% else %}false{% endif %};
-const CHU_DATA   = {{ chu_data_json|safe }};
+const BATCH_ID          = "{{ selected_batch_id }}";
+const COUNTY            = "{{ selected_county }}";
+const SUB_COUNTY        = "{{ selected_subcounty }}";
+const CHU               = "{{ selected_chu }}";
+const HAS_DATA          = {% if indicators %}true{% else %}false{% endif %};
+const SHOW_CHART        = {% if show_chu_chart %}true{% else %}false{% endif %};
+const SHOW_COUNTY_CHART = {% if show_county_table %}true{% else %}false{% endif %};
+const SHOW_SC_CHART     = {% if show_sc_table %}true{% else %}false{% endif %};
+const CHU_DATA          = {{ chu_data_json|safe }};
+const COUNTY_DATA       = {{ county_data_json|safe }};
+const SC_DATA           = {{ sc_data_json|safe }};
 
 document.addEventListener('DOMContentLoaded', function() {
   if (HAS_DATA) {
-  if (SHOW_CHART && CHU_DATA.length > 0) buildChart();
+    if (SHOW_CHART && CHU_DATA.length > 0) buildCHUChart();
+    if (SHOW_COUNTY_CHART && COUNTY_DATA.length > 0) buildSimpleChart('county-bar-chart', 'county-chart-wrap', COUNTY_DATA, 'county');
+    if (SHOW_SC_CHART && SC_DATA.length > 0) buildSimpleChart('sc-bar-chart', 'sc-chart-wrap', SC_DATA, 'sub_county');
     loadNeverSynced();
   }
   initDefinitionModal();
 });
 
-function buildChart() {
-  if (!CHU_DATA.length) return;
-  const mid = Math.ceil(CHU_DATA.length / 2);
-  const leftData  = CHU_DATA.slice(0, mid);
-  const rightData = CHU_DATA.slice(mid);
-
-  function makeChart(canvasId, wrapperId, data) {
-    const canvas = document.getElementById(canvasId);
-    const wrap   = document.getElementById(wrapperId);
-    if (!canvas || !wrap) return;
-
-    const rowH = 32;
-    const chartH = Math.max(180, data.length * rowH);
-    wrap.style.height = chartH + 'px';
-
-    const labels = data.map(d =>
-      d.community_health_unit
-        .replace(/ Community Health Unit$/i, '')
-        .replace(/ Community health unit$/i, '')
-        .trim()
-    );
-    const rates  = data.map(d => d.sync_rate);
-    const colors = rates.map(r => r >= 80 ? '#059669' : r >= 50 ? '#D97706' : '#DC2626');
-
-    new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ data: rates, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label(ctx) {
-                const d = data[ctx.dataIndex];
-                return [
-                  ` Sync Rate: ${d.sync_rate}%`,
-                  ` Synced: ${d.synced} / ${d.total}`,
-                  ` Never Synced: ${d.never}`,
-                  ` Avg Days: ${d.avg_days}`,
-                ];
-              }
+// ── Simple horizontal bar chart (county or sub-county) ────────
+function buildSimpleChart(canvasId, wrapId, data, labelKey) {
+  const canvas = document.getElementById(canvasId);
+  const wrap   = document.getElementById(wrapId);
+  if (!canvas || !wrap) return;
+  const sorted = [...data].sort((a, b) => b.sync_rate - a.sync_rate);
+  const rowH   = 36;
+  wrap.style.height = Math.max(200, sorted.length * rowH) + 'px';
+  const labels = sorted.map(d => d[labelKey]);
+  const rates  = sorted.map(d => d.sync_rate);
+  const colors = rates.map(r => r >= 80 ? '#059669' : r >= 50 ? '#D97706' : '#DC2626');
+  new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: rates, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const d = sorted[ctx.dataIndex];
+              return [` Sync Rate: ${d.sync_rate}%`, ` Synced: ${d.synced} of ${d.total}`, ` Never Synced: ${d.never}`];
             }
           }
-        },
-        scales: {
-          x: {
-            min: 0, max: 100,
-            ticks: { callback: v => v + '%', font: { size: 10 } },
-            grid: { color: '#E5E7EB' }
-          },
-          y: {
-            ticks: { font: { size: 10 }, maxTicksLimit: data.length },
-            grid: { display: false }
-          }
         }
+      },
+      scales: {
+        x: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 11 } }, grid: { color: '#E5E7EB' } },
+        y: { ticks: { font: { size: 11 } }, grid: { display: false } }
       }
-    });
-  }
-
-  makeChart('chu-bar-chart-left',  'wrap-left',  leftData);
-  makeChart('chu-bar-chart-right', 'wrap-right', rightData);
+    }
+  });
 }
 
+// ── CHU two-column chart ───────────────────────────────────────
+function buildCHUChart() {
+  if (!CHU_DATA.length) return;
+  const mid = Math.ceil(CHU_DATA.length / 2);
+  buildCHUHalf('chu-bar-chart-left', 'wrap-left', CHU_DATA.slice(0, mid));
+  buildCHUHalf('chu-bar-chart-right', 'wrap-right', CHU_DATA.slice(mid));
+}
+
+function buildCHUHalf(canvasId, wrapId, data) {
+  const canvas = document.getElementById(canvasId);
+  const wrap   = document.getElementById(wrapId);
+  if (!canvas || !wrap) return;
+  wrap.style.height = Math.max(180, data.length * 32) + 'px';
+  const labels = data.map(d => d.community_health_unit.replace(/ Community Health Unit$/i,'').replace(/ Community health unit$/i,'').trim());
+  const rates  = data.map(d => d.sync_rate);
+  const colors = rates.map(r => r >= 80 ? '#059669' : r >= 50 ? '#D97706' : '#DC2626');
+  new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: rates, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const d = data[ctx.dataIndex];
+              return [` Sync Rate: ${d.sync_rate}%`, ` Synced: ${d.synced} / ${d.total}`, ` Never Synced: ${d.never}`, ` Avg Days: ${d.avg_days}`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } }, grid: { color: '#E5E7EB' } },
+        y: { ticks: { font: { size: 10 }, maxTicksLimit: data.length }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ── Never-synced table ────────────────────────────────────────
 function loadNeverSynced() {
   const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
   fetch('/api/never-synced/?' + params)
@@ -378,15 +417,11 @@ function loadNeverSynced() {
         <th class="num">Reports Synced</th><th>Last Sync Date</th>
       </tr></thead><tbody>`;
       data.results.forEach((r, i) => {
-        h += `<tr>
-          <td class="zero">${i+1}</td>
-          <td>${esc(r.sub_county)}</td>
+        h += `<tr><td class="zero">${i+1}</td><td>${esc(r.sub_county)}</td>
           <td><strong>${esc(r.community_health_unit)}</strong></td>
-          <td>${esc(r.chp_name)}</td>
-          <td class="zero">${esc(r.username)}</td>
+          <td>${esc(r.chp_name)}</td><td class="zero">${esc(r.username)}</td>
           <td class="num ${r.reports_synced===0?'bad':''}">${r.reports_synced}</td>
-          <td class="${r.last_sync_date==='Never'?'bad':'zero'}">${esc(r.last_sync_date)}</td>
-        </tr>`;
+          <td class="${r.last_sync_date==='Never'?'bad':'zero'}">${esc(r.last_sync_date)}</td></tr>`;
       });
       h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${data.count} CHP(s) with 0 sync days</div>`;
       c.innerHTML = h;
@@ -407,9 +442,7 @@ function initDefinitionModal() {
     if (e.target === this) closeModal();
   });
 }
-
 function closeModal() { document.getElementById('def-modal').style.display = 'none'; }
-
 function esc(str) {
   if (str == null) return '—';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
