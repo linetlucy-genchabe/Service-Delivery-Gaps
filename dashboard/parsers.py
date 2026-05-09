@@ -63,9 +63,14 @@ def parse_chw_file(batch, file_obj):
         return 0, [f"CHW file missing columns: {missing}"]
 
     records = []
-    errors = []
+    errors  = []
+    skipped = 0
 
     for i, row in df.iterrows():
+        # Skip CHPs with no county attached
+        if not _str(row.get('County')):
+            skipped += 1
+            continue
         try:
             record = CHWRecord(
                 batch=batch,
@@ -93,6 +98,9 @@ def parse_chw_file(batch, file_obj):
                 facility_deliveries=_int(row.get('Facility Deliveries', 0)),
                 pnc_48hr_ontime=_int(row.get('PNC 48hr On-time', 0)),
                 pnc_3_7d_ontime=_int(row.get('PNC 3-7d On-time', 0)),
+                registered_children_u5=_int(row.get('Registered Children (U5)', 0)),
+                registered_children_u2=_int(row.get('Registered Children (U2)', 0)),
+                num_u5_assessed=_int(row.get('Number of U5 Children Assessed', 0)),
                 iccm_assessments=_int(row.get('iCCM Assessments', 0)),
                 positive_diagnoses_u5=_int(row.get('Positive Diagnoses (U5)', 0)),
                 treated_visits_u5=_int(row.get('Treated Visits (U5)', 0)),
@@ -151,6 +159,8 @@ def parse_chw_file(batch, file_obj):
             errors.append(f"Row {i+2}: {e}")
 
     CHWRecord.objects.bulk_create(records, batch_size=500)
+    if skipped:
+        errors.insert(0, f"Skipped {skipped} row(s) with no county — excluded from analysis.")
     return len(records), errors
 
 
@@ -234,9 +244,10 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     total_inactive = chw_qs.filter(is_active=False).count()
 
     # Supervision
-    supervised_count   = active_qs.filter(supervised=True).count()
-    unsupervised_count = active_qs.filter(supervised=False).count()
-    supervision_rate   = round(supervised_count / total_active * 100, 1) if total_active else 0
+    supervised_count      = active_qs.filter(supervised=True).count()
+    unsupervised_count    = active_qs.filter(supervised=False).count()
+    supervision_rate      = round(supervised_count / total_active * 100, 1) if total_active else 0
+    supervised_3plus_count = active_qs.filter(supervision_visits__gte=3).count()
 
     # Low performers — split into two groups
     low_performers_unsupervised = active_qs.filter(
@@ -247,8 +258,22 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     ).count()
     low_performer_count = low_performers_unsupervised + low_performers_supervised
 
-    # ANC gap — CHPs with active pregnancies who didn't visit all of them
-    # A CHP has a gap if active_pregnancies > pregnancies_visited
+    # U5 Assessment gaps (exclude CHPs with 0 registered U5 or 0 registered HHs)
+    # Gap 1: HH ≥70% but U5 assessment <40%
+    # Gap 2: U5 ≥80% with ≥10 children assessed but zero positive diagnoses
+    u5_base_qs = active_qs.filter(registered_hhs__gt=0, registered_children_u5__gt=0)
+    high_hh_low_u5_count = 0
+    high_u5_low_pos_count = 0
+    for chp in u5_base_qs.values('hh_visits', 'registered_hhs', 'num_u5_assessed',
+                                  'registered_children_u5', 'positive_diagnoses_u5'):
+        hh_rate = chp['hh_visits'] / chp['registered_hhs'] if chp['registered_hhs'] else 0
+        u5_rate = chp['num_u5_assessed'] / chp['registered_children_u5'] if chp['registered_children_u5'] else 0
+        if hh_rate >= 0.7 and u5_rate < 0.4:
+            high_hh_low_u5_count += 1
+        if u5_rate >= 0.8 and chp['num_u5_assessed'] >= 10 and chp['positive_diagnoses_u5'] == 0:
+            high_u5_low_pos_count += 1
+
+    # ANC gap
     anc_gap_chps = active_qs.filter(
         active_pregnancies__gt=F('pregnancies_visited')
     ).exclude(active_pregnancies=0).count()
@@ -322,12 +347,16 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'supervised_count': supervised_count,
         'unsupervised_count': unsupervised_count,
         'supervision_rate': supervision_rate,
+        'supervised_3plus_count': supervised_3plus_count,
         'same_day_flags': list(same_day_flags),
         'same_day_flags_count': same_day_flags.count(),
         'low_performer_count': low_performer_count,
         'low_performers_unsupervised': low_performers_unsupervised,
         'low_performers_supervised': low_performers_supervised,
         'low_hh_threshold': LOW_HH_THRESHOLD,
+        # U5 assessment gaps
+        'high_hh_low_u5_count': high_hh_low_u5_count,
+        'high_u5_low_pos_count': high_u5_low_pos_count,
         # ANC
         'anc_gap_chps': anc_gap_chps,
         'active_pregnancies': active_preg,
@@ -341,6 +370,7 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'facility_deliveries': agg['facility_del'] or 0,
         'facility_delivery_rate': round((agg['facility_del'] or 0) / (agg['total_del'] or 1) * 100, 1),
         'pnc_48hr': agg['pnc_48'] or 0,
+        'pnc_48hr_rate': round((agg['pnc_48'] or 0) / (agg['total_del'] or 1) * 100, 1),
         'iccm_assessments': agg['iccm'] or 0,
         'iz_assessed': iz_assessed,
         'iz_immunized': iz_immunized,
@@ -381,8 +411,13 @@ def parse_sync_file(batch, file_obj):
 
     records = []
     errors  = []
+    skipped = 0
 
     for i, row in df.iterrows():
+        # Skip CHPs missing county, sub-county or community unit
+        if not _str(row.get("County")) or not _str(row.get("Sub-County")) or not _str(row.get("Community Unit")):
+            skipped += 1
+            continue
         try:
             raw_date = row.get('Last Sync Date')
             last_sync = None
@@ -412,6 +447,8 @@ def parse_sync_file(batch, file_obj):
             errors.append(f"Row {i+2}: {e}")
 
     CHPSyncRecord.objects.bulk_create(records, batch_size=500)
+    if skipped:
+        errors.insert(0, f"Skipped {skipped} row(s) with no county — excluded from analysis.")
     return len(records), errors
 
 
