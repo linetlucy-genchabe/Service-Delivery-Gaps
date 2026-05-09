@@ -266,6 +266,74 @@ def api_anc_gap(request):
 
 @login_required
 @require_GET
+def api_supervised_3plus(request):
+    """CHPs who received 3 or more supervision visits — data quality flag."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, supervision_visits__gte=3)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'hh_visits', 'supervision_visits'
+    ).order_by('-supervision_visits', 'community_health_unit'))
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+@require_GET
+def api_u5_gap(request):
+    """U5 assessment gap drill-downs."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    gap_type   = request.GET.get('type', 'high_hh_low_u5')  # or 'high_u5_low_pos'
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(
+        batch_id=batch_id, is_active=True,
+        registered_hhs__gt=0, registered_children_u5__gt=0
+    )
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    rows = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'registered_hhs', 'hh_visits',
+        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5'
+    ))
+
+    results = []
+    for r in rows:
+        hh_rate  = r['hh_visits'] / r['registered_hhs'] if r['registered_hhs'] else 0
+        u5_rate  = r['num_u5_assessed'] / r['registered_children_u5'] if r['registered_children_u5'] else 0
+        r['hh_rate_pct']  = round(hh_rate * 100, 1)
+        r['u5_rate_pct']  = round(u5_rate * 100, 1)
+
+        if gap_type == 'high_hh_low_u5' and hh_rate >= 0.7 and u5_rate < 0.4:
+            results.append(r)
+        elif gap_type == 'high_u5_low_pos' and u5_rate >= 0.8 and r['num_u5_assessed'] >= 10 and r['positive_diagnoses_u5'] == 0:
+            results.append(r)
+
+    results.sort(key=lambda x: x['u5_rate_pct'])
+    return JsonResponse({'results': results, 'count': len(results)})
+
+
+@login_required
+@require_GET
 def api_same_day_flags(request):
     batch_id    = request.GET.get('batch')
     county      = request.GET.get('county', '')
@@ -521,7 +589,8 @@ def sync_dashboard_view(request):
 
     if selected_batch_id:
         selected_batch = get_object_or_404(SyncUploadBatch, pk=selected_batch_id)
-        qs = CHPSyncRecord.objects.filter(batch=selected_batch)
+        qs = CHPSyncRecord.objects.filter(batch=selected_batch).exclude(
+            county='').exclude(sub_county='').exclude(community_health_unit='')
 
         filter_options['counties'] = qs.values_list('county', flat=True).distinct().order_by('county')
 
@@ -539,7 +608,9 @@ def sync_dashboard_view(request):
         indicators = compute_sync_indicators(qs)
 
     import json
-    chu_data_json = json.dumps(indicators['chus_sorted'] if indicators else [])
+    chu_data_json    = json.dumps(indicators['chus_sorted'] if indicators else [])
+    county_data_json = json.dumps(indicators['counties']    if indicators else [])
+    sc_data_json     = json.dumps(indicators['sub_counties'] if indicators else [])
 
     return render(request, 'dashboard/sync_dashboard.html', {
         'batches':            batches,
@@ -551,6 +622,8 @@ def sync_dashboard_view(request):
         'filter_options':     filter_options,
         'indicators':         indicators,
         'chu_data_json':      chu_data_json,
+        'county_data_json':   county_data_json,
+        'sc_data_json':       sc_data_json,
         'show_county_table':  not selected_county,
         'show_sc_table':      bool(selected_county and not selected_subcounty),
         'show_chu_chart':     bool(selected_subcounty),
@@ -568,7 +641,8 @@ def api_never_synced(request):
     if not batch_id:
         return JsonResponse({'error': 'batch required'}, status=400)
 
-    qs = CHPSyncRecord.objects.filter(batch_id=batch_id, days_synced=0)
+    qs = CHPSyncRecord.objects.filter(batch_id=batch_id, days_synced=0).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
     if county:     qs = qs.filter(county=county)
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
@@ -592,7 +666,8 @@ def download_never_synced(request):
     chu         = request.GET.get('chu', '')
 
     batch = get_object_or_404(SyncUploadBatch, pk=batch_id)
-    qs = CHPSyncRecord.objects.filter(batch=batch, days_synced=0)
+    qs = CHPSyncRecord.objects.filter(batch=batch, days_synced=0).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
     if county:     qs = qs.filter(county=county)
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
