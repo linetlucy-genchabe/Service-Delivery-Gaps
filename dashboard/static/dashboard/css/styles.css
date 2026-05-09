@@ -425,3 +425,41 @@ body {
 @media(max-width: 768px) {
   .chu-chart-grid { grid-template-columns: 1fr; }
 }
+
+/* ======================== CATEGORY NAV ======================== */
+.category-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.cat-btn {
+  padding: 8px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 99px;
+  background: var(--white);
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.cat-btn:hover {
+  border-color: var(--navy);
+  color: var(--navy);
+  background: var(--navy-light);
+}
+.cat-btn.active {
+  background: var(--navy);
+  color: var(--white);
+  border-color: var(--navy);
+  font-weight: 700;
+}
+.cat-section { display: none; }
+.cat-section.active { display: block; }
