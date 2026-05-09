@@ -9,6 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'dashboard/css/styles.css' %}">
   <link rel="icon" type="image/png" href="{% static 'dashboard/lg_logo.png' %}">
+  <link rel="manifest" href="{% static 'dashboard/manifest.json' %}">
+  <meta name="theme-color" content="#1B3A6B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SD Gaps">
+  <link rel="apple-touch-icon" href="{% static 'dashboard/icons/icon-152.png' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -21,7 +27,14 @@
       <span class="nav-subtitle">Living Goods · Kenya Community Health</span>
     </div>
   </div>
-  <div class="nav-actions">
+
+  <!-- Hamburger button (mobile only) -->
+  <button class="nav-hamburger" id="nav-hamburger" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </button>
+
+  <!-- Nav links -->
+  <div class="nav-actions" id="nav-actions">
     {% if user.is_authenticated %}
       <a href="{% url 'dashboard' %}" class="btn btn-ghost-sm">Gaps Dashboard</a>
       <a href="{% url 'sync_dashboard' %}" class="btn btn-ghost-sm">Sync Dashboard</a>
@@ -32,6 +45,9 @@
     {% endif %}
   </div>
 </nav>
+
+<!-- Mobile nav overlay -->
+<div class="nav-overlay" id="nav-overlay"></div>
 
 <main class="main-content">
   {% if messages %}
@@ -54,5 +70,31 @@
 
 <script src="{% static 'dashboard/js/dashboard.js' %}"></script>
 {% block extra_js %}{% endblock %}
+
+<script>
+// Mobile nav toggle
+const hamburger = document.getElementById('nav-hamburger');
+const navActions = document.getElementById('nav-actions');
+const overlay    = document.getElementById('nav-overlay');
+
+function toggleNav(open) {
+  navActions.classList.toggle('open', open);
+  hamburger.classList.toggle('open', open);
+  overlay.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+
+hamburger.addEventListener('click', () => toggleNav(!navActions.classList.contains('open')));
+overlay.addEventListener('click', () => toggleNav(false));
+navActions.querySelectorAll('a').forEach(a => a.addEventListener('click', () => toggleNav(false)));
+
+// Register Service Worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+}
+</script>
 </body>
 </html>
