@@ -14,10 +14,9 @@
   {% if is_uploader %}<a href="{% url 'upload' %}" class="btn btn-primary">Upload New Data</a>{% endif %}
 </div>
 
-<!-- ===================== FILTERS ===================== -->
+<!-- FILTERS -->
 <div class="filter-bar">
   <form method="get" id="filter-form" class="filter-form">
-
     <div class="filter-group">
       <label class="filter-label">Reporting Period</label>
       <select name="batch" class="filter-select" onchange="submitFilters()">
@@ -27,7 +26,6 @@
         {% endfor %}
       </select>
     </div>
-
     {% if selected_batch %}
     <div class="filter-group">
       <label class="filter-label">County</label>
@@ -38,8 +36,7 @@
         {% endfor %}
       </select>
     </div>
-
-    <div class="filter-group" id="subcounty-group" {% if not selected_county %}style="display:none"{% endif %}>
+    <div class="filter-group" {% if not selected_county %}style="display:none"{% endif %}>
       <label class="filter-label">Sub-County</label>
       <select name="sub_county" class="filter-select" onchange="submitFilters()">
         <option value="">All Sub-Counties</option>
@@ -48,8 +45,8 @@
         {% endfor %}
       </select>
     </div>
-
-    <div class="filter-group" id="chu-group" {% if not selected_subcounty %}style="display:none"{% endif %}>
+    {% if selected_subcounty %}
+    <div class="filter-group">
       <label class="filter-label">Community Health Unit</label>
       <select name="chu" class="filter-select" onchange="submitFilters()">
         <option value="">All CHUs</option>
@@ -58,12 +55,11 @@
         {% endfor %}
       </select>
     </div>
-
+    {% endif %}
     {% if selected_county %}
       <a href="?batch={{ selected_batch_id }}" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
     {% endif %}
-
   </form>
 </div>
 
@@ -77,213 +73,229 @@
 
 {% else %}
 
-<!-- ===================== WORKFORCE ===================== -->
-<div class="section-label">👥 Workforce Overview</div>
-<div class="cards-grid">
-  <div class="stat-card navy">
-    <div class="stat-value">{{ indicators.total_active }}</div>
-    <div class="stat-label">Active CHPs</div>
-    <div class="stat-sub">{{ indicators.total_inactive }} inactive · {{ indicators.total_chps }} total in dataset</div>
-    <button class="definition-btn" data-def="Active Community Health Promoters (CHPs) are those whose status in eCHIS is marked as 'Active'. These are the CHPs expected to conduct household visits and community health activities in this reporting period.">View definition</button>
-  </div>
-  <div class="stat-card cyan">
-    <div class="stat-value">{{ indicators.hh_visits_total }}</div>
-    <div class="stat-label">Total HH Visits</div>
-    <div class="stat-sub">Household visits by all active CHPs this period</div>
-    <button class="definition-btn" data-def="Household (HH) Visits: The total number of homes visited by active CHPs during this reporting period. A visit is recorded when a CHP visits a registered household and syncs the data to eCHIS.">View definition</button>
-  </div>
-  <div class="stat-card navy">
-    <div class="stat-value">{{ indicators.days_synced_total }}</div>
-    <div class="stat-label">Total Days Synced</div>
-    <div class="stat-sub">Days on which CHPs synced phone data to eCHIS</div>
-    <button class="definition-btn" data-def="Days Synced: The number of days a CHP successfully synced data from their phone to eCHIS. A CHP who never syncs has 0 days synced — their work is not captured in the system even if they visited households.">View definition</button>
+<!-- ===== CATEGORY NAV ===== -->
+<div class="category-nav">
+  <button class="cat-btn active" data-section="workforce">👥 Workforce</button>
+  <button class="cat-btn" data-section="supervision">🔍 Supervision</button>
+  <button class="cat-btn" data-section="performance">⚠️ Performance</button>
+  <button class="cat-btn" data-section="maternal">🤱 Maternal Health</button>
+  <button class="cat-btn" data-section="fp-nutrition">💊 FP & Nutrition</button>
+  <button class="cat-btn" data-section="immunisation">💉 Immunisation</button>
+</div>
+
+<!-- ===== WORKFORCE ===== -->
+<div class="cat-section active" id="section-workforce">
+  <div class="section-label">👥 Workforce Overview</div>
+  <div class="cards-grid">
+    <div class="stat-card navy">
+      <div class="stat-value">{{ indicators.total_active }}</div>
+      <div class="stat-label">Active CHPs</div>
+      <div class="stat-sub">{{ indicators.total_inactive }} inactive · {{ indicators.total_chps }} total in dataset</div>
+      <button class="definition-btn" data-def="Active Community Health Promoters (CHPs) are those whose status in eCHIS is marked as 'Active'. These are the CHPs expected to conduct household visits and community health activities in this reporting period.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ indicators.hh_visits_total }}</div>
+      <div class="stat-label">Total HH Visits</div>
+      <div class="stat-sub">Household visits by all active CHPs this period</div>
+      <button class="definition-btn" data-def="Household (HH) Visits: The total number of homes visited by active CHPs during this reporting period. A visit is recorded when a CHP visits a registered household and syncs the data to eCHIS.">View definition</button>
+    </div>
+    <div class="stat-card navy">
+      <div class="stat-value">{{ indicators.days_synced_total }}</div>
+      <div class="stat-label">Total Days Synced</div>
+      <div class="stat-sub">Days on which CHPs synced phone data to eCHIS</div>
+      <button class="definition-btn" data-def="Days Synced: The number of days a CHP successfully synced data from their phone to eCHIS. A CHP who never syncs has 0 days synced — their work is not captured in the system even if they visited households.">View definition</button>
+    </div>
   </div>
 </div>
 
-<!-- ===================== SUPERVISION ===================== -->
-<div class="section-label">🔍 Supervision Gaps</div>
-<div class="cards-grid">
-  <div class="stat-card {% if indicators.supervision_rate >= 80 %}green{% elif indicators.supervision_rate >= 50 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.supervision_rate }}%</div>
-    <div class="stat-label">Supervision Rate</div>
-    <div class="stat-sub">{{ indicators.supervised_count }} of {{ indicators.total_active }} active CHPs supervised · target ≥80%</div>
-    <button class="definition-btn" data-def="Supervision Rate: The percentage of active CHPs who received at least one supervision visit this period. A supervision visit is when a Community Health Assistant (CHA) visits a CHP at their area to review their work and provide support. Target is ≥80%.">View definition</button>
-  </div>
-  <div class="stat-card {% if indicators.unsupervised_count == 0 %}green{% elif indicators.unsupervised_count < 20 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.unsupervised_count }}</div>
-    <div class="stat-label">CHPs Not Supervised</div>
-    <div class="stat-sub">Active CHPs with zero supervision visits this period</div>
-    <button class="definition-btn" data-def="Unsupervised CHPs: Active CHPs who did not receive any supervision visit during this reporting period. These CHPs may be working without quality checks or support. See the drill-down table below for the full list.">View definition</button>
-  </div>
-  <div class="stat-card {% if indicators.same_day_flags_count == 0 %}green{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.same_day_flags_count }}</div>
-    <div class="stat-label">Same-Day Supervision Flags</div>
-    <div class="stat-sub">CHUs where 5+ CHPs were supervised on the same date — data quality flag</div>
-    <button class="definition-btn" data-def="Same-Day Supervision Flag: Raised when 5 or more CHPs in the same CHU were recorded as supervised on the same calendar date. This is a data quality concern — it may indicate bulk data entry rather than actual individual visits, which typically cannot cover 5+ CHPs in one day at one CHU.">View definition</button>
-  </div>
-</div>
-
-<!-- ===================== PERFORMANCE GAPS ===================== -->
-<div class="section-label">⚠️ Performance Gaps</div>
-<div class="cards-grid">
-  <div class="stat-card {% if indicators.low_performers_unsupervised == 0 %}green{% elif indicators.low_performers_unsupervised < 20 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.low_performers_unsupervised }}</div>
-    <div class="stat-label">Low Performers — Not Supervised</div>
-    <div class="stat-sub">Active CHPs with &lt;{{ indicators.low_hh_threshold }} HH visits AND no supervision — highest risk group</div>
-    <button class="definition-btn" data-def="Low Performers Not Supervised: Active CHPs who conducted fewer than {{ indicators.low_hh_threshold }} household visits AND received no supervision visit this period. This is the highest-risk group — they are underperforming and have had no support or quality check from their supervisor.">View definition</button>
-  </div>
-  <div class="stat-card {% if indicators.low_performers_supervised == 0 %}green{% elif indicators.low_performers_supervised < 20 %}yellow{% else %}orange{% endif %}">
-    <div class="stat-value">{{ indicators.low_performers_supervised }}</div>
-    <div class="stat-label">Low Performers — Supervised</div>
-    <div class="stat-sub">Active CHPs with &lt;{{ indicators.low_hh_threshold }} HH visits but were supervised — needs follow-up</div>
-    <button class="definition-btn" data-def="Low Performers Who Were Supervised: Active CHPs who conducted fewer than {{ indicators.low_hh_threshold }} household visits but DID receive a supervision visit. They were checked on but are still underperforming. This group needs targeted follow-up to understand why performance remains low despite supervision.">View definition</button>
+<!-- ===== SUPERVISION ===== -->
+<div class="cat-section" id="section-supervision">
+  <div class="section-label">🔍 Supervision Gaps</div>
+  <div class="cards-grid">
+    <div class="stat-card {% if indicators.supervision_rate >= 80 %}green{% elif indicators.supervision_rate >= 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.supervision_rate }}%</div>
+      <div class="stat-label">Supervision Rate</div>
+      <div class="stat-sub">{{ indicators.supervised_count }} of {{ indicators.total_active }} active CHPs supervised · target ≥80%</div>
+      <button class="definition-btn" data-def="Supervision Rate: The percentage of active CHPs who received at least one supervision visit this period. A supervision visit is when a CHA visits a CHP at their area to review their work and provide support. Target is ≥80%.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.unsupervised_count == 0 %}green{% elif indicators.unsupervised_count < 20 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.unsupervised_count }}</div>
+      <div class="stat-label">CHPs Not Supervised</div>
+      <div class="stat-sub">Active CHPs with zero supervision visits this period</div>
+      <button class="definition-btn" data-def="Unsupervised CHPs: Active CHPs who did not receive any supervision visit during this reporting period. These CHPs may be working without quality checks or support.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.same_day_flags_count == 0 %}green{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.same_day_flags_count }}</div>
+      <div class="stat-label">Same-Day Supervision Flags</div>
+      <div class="stat-sub">CHUs where 5+ CHPs were supervised on the same date — data quality flag</div>
+      <button class="definition-btn" data-def="Same-Day Supervision Flag: Raised when 5 or more CHPs in the same CHU were recorded as supervised on the same calendar date. This may indicate bulk data entry rather than actual individual visits.">View definition</button>
+    </div>
   </div>
 </div>
 
-<!-- ===================== ANC & MATERNAL ===================== -->
-<div class="section-label">🤱 Maternal Health Gaps</div>
-<div class="cards-grid">
-  <div class="stat-card {% if indicators.anc_gap_chps == 0 %}green{% elif indicators.anc_gap_chps < 100 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.anc_gap_chps }}</div>
-    <div class="stat-label">CHPs with ANC Gap</div>
-    <div class="stat-sub">CHPs who have active pregnancies but did not visit all of them · {{ indicators.total_anc_gap }} total unvisited pregnancies ({{ indicators.anc_gap_pct }}%)</div>
-    <button class="definition-btn" data-def="ANC Gap — CHPs with Unvisited Pregnancies: The number of active CHPs who have registered pregnant women in their area but have not visited all of them during this period. The expectation is that every active pregnancy should be visited. The sub-text shows the total count of pregnancies that were not visited across all CHPs.">View definition</button>
-  </div>
-  <div class="stat-card cyan">
-    <div class="stat-value">{{ indicators.anc_4plus_rate }}%</div>
-    <div class="stat-label">ANC 4+ Coverage</div>
-    <div class="stat-sub">Deliveries where mother attended 4+ antenatal visits</div>
-    <button class="definition-btn" data-def="ANC 4+ Coverage: The percentage of deliveries (among women with ANC data recorded) where the mother attended 4 or more antenatal care visits during pregnancy. WHO recommends a minimum of 4 ANC visits for a safe pregnancy outcome.">View definition</button>
-  </div>
-  <div class="stat-card navy">
-    <div class="stat-value">{{ indicators.facility_delivery_rate }}%</div>
-    <div class="stat-label">Facility Delivery Rate</div>
-    <div class="stat-sub">{{ indicators.facility_deliveries }} of {{ indicators.total_deliveries }} deliveries in a health facility</div>
-    <button class="definition-btn" data-def="Facility Delivery Rate: The percentage of deliveries recorded by CHPs that occurred in a health facility. Facility deliveries are attended by skilled health personnel, reducing risk of maternal and neonatal mortality.">View definition</button>
-  </div>
-  <div class="stat-card cyan">
-    <div class="stat-value">{{ indicators.first_trimester }}</div>
-    <div class="stat-label">1st Trimester Registrations</div>
-    <div class="stat-sub">Pregnancies registered before 12 weeks — early detection</div>
-    <button class="definition-btn" data-def="First Trimester Registrations: Pregnant women registered in eCHIS before completing their first trimester (within 12 weeks). Early registration enables timely ANC and nutrition support.">View definition</button>
-  </div>
-  <div class="stat-card navy">
-    <div class="stat-value">{{ indicators.pnc_48hr }}</div>
-    <div class="stat-label">PNC 48hr On-time</div>
-    <div class="stat-sub">Newborns/mothers receiving postnatal check within 48 hours</div>
-    <button class="definition-btn" data-def="PNC 48hr On-time: The number of newborns or mothers who received their first postnatal care visit within 48 hours of delivery. This critical visit catches early complications and is a core CHP responsibility.">View definition</button>
+<!-- ===== PERFORMANCE ===== -->
+<div class="cat-section" id="section-performance">
+  <div class="section-label">⚠️ Performance Gaps</div>
+  <div class="cards-grid">
+    <div class="stat-card {% if indicators.low_performers_unsupervised == 0 %}green{% elif indicators.low_performers_unsupervised < 20 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.low_performers_unsupervised }}</div>
+      <div class="stat-label">Low Performers — Not Supervised</div>
+      <div class="stat-sub">Active CHPs with &lt;{{ indicators.low_hh_threshold }} HH visits AND no supervision — highest risk group</div>
+      <button class="definition-btn" data-def="Low Performers Not Supervised: Active CHPs who conducted fewer than {{ indicators.low_hh_threshold }} household visits AND received no supervision this period. Highest-risk group — underperforming and unsupported.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.low_performers_supervised == 0 %}green{% elif indicators.low_performers_supervised < 20 %}yellow{% else %}orange{% endif %}">
+      <div class="stat-value">{{ indicators.low_performers_supervised }}</div>
+      <div class="stat-label">Low Performers — Supervised</div>
+      <div class="stat-sub">Active CHPs with &lt;{{ indicators.low_hh_threshold }} HH visits but were supervised — needs follow-up</div>
+      <button class="definition-btn" data-def="Low Performers Who Were Supervised: Active CHPs who conducted fewer than {{ indicators.low_hh_threshold }} household visits but DID receive a supervision visit. They were checked on but are still underperforming — targeted coaching needed.">View definition</button>
+    </div>
   </div>
 </div>
 
-<!-- ===================== FP & NUTRITION ===================== -->
-<div class="section-label">💊 Family Planning & Nutrition Gaps</div>
-<div class="cards-grid">
-  <div class="stat-card {% if indicators.fp_gap_pct < 20 %}green{% elif indicators.fp_gap_pct < 50 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.fp_gap }}</div>
-    <div class="stat-label">FP Refill Gap</div>
-    <div class="stat-sub">{{ indicators.fp_needing_refill }} needed refill · {{ indicators.fp_refilled }} received · {{ indicators.fp_gap_pct }}% gap</div>
-    <button class="definition-btn" data-def="Family Planning (FP) Refill Gap: The number of current family planning users who needed a contraceptive refill but did not receive one. A high gap risks contraceptive discontinuation and unintended pregnancies. Calculated as: FP Needing Refill minus FP Refilled.">View definition</button>
-  </div>
-  <div class="stat-card {% if indicators.mam_referral_rate >= 80 %}green{% elif indicators.mam_referral_rate >= 50 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.mam_referral_rate }}%</div>
-    <div class="stat-label">MAM/SAM Referral Rate</div>
-    <div class="stat-sub">{{ indicators.mam_sam_referred }} of {{ indicators.mam_sam_total }} malnourished children referred</div>
-    <button class="definition-btn" data-def="MAM/SAM Referral Rate: The percentage of children identified with Moderate (MAM) or Severe (SAM) Acute Malnutrition who were referred to a health facility for therapeutic feeding. A low rate means malnourished children are not getting treatment.">View definition</button>
-  </div>
-  <div class="stat-card cyan">
-    <div class="stat-value">{{ indicators.muac_screened }}</div>
-    <div class="stat-label">MUAC Screened</div>
-    <div class="stat-sub">Children screened for malnutrition using arm circumference</div>
-    <button class="definition-btn" data-def="MUAC Screened: The number of children screened using Mid-Upper Arm Circumference (MUAC) — the standard tool for detecting acute malnutrition. CHPs measure children under 5 and categorise them as well-nourished, at risk (MAM), or severely malnourished (SAM).">View definition</button>
-  </div>
-</div>
-
-<!-- ===================== IMMUNISATION ===================== -->
-<div class="section-label">💉 Immunisation</div>
-<div class="cards-grid">
-  <div class="stat-card {% if indicators.iz_rate >= 80 %}green{% elif indicators.iz_rate >= 50 %}yellow{% else %}red{% endif %}">
-    <div class="stat-value">{{ indicators.iz_rate }}%</div>
-    <div class="stat-label">Fully Immunized Rate (9–23mo)</div>
-    <div class="stat-sub">{{ indicators.iz_immunized }} of {{ indicators.iz_assessed }} children 9–23mo are fully immunized</div>
-    <button class="definition-btn" data-def="Immunisation Fully Immunized Rate: The percentage of children aged 9–23 months who are fully immunized out of those assessed. 'Fully immunized' means the child has received all recommended vaccines up to their age.">View definition</button>
-  </div>
-  <div class="stat-card {% if indicators.iz_defaulters == 0 %}green{% else %}orange{% endif %}">
-    <div class="stat-value">{{ indicators.iz_defaulters }}</div>
-    <div class="stat-label">IZ Defaulters</div>
-    <div class="stat-sub">Children who missed doses · {{ indicators.iz_def_followup_rate }}% followed up</div>
-    <button class="definition-btn" data-def="Immunisation Defaulters: Children who missed one or more scheduled vaccine doses. CHPs are expected to identify and follow up defaulters to bring them back for vaccination. The follow-up rate shows how many were successfully traced.">View definition</button>
+<!-- ===== MATERNAL HEALTH ===== -->
+<div class="cat-section" id="section-maternal">
+  <div class="section-label">🤱 Maternal Health Gaps</div>
+  <div class="cards-grid">
+    <div class="stat-card {% if indicators.anc_gap_chps == 0 %}green{% elif indicators.anc_gap_chps < 100 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.anc_gap_chps }}</div>
+      <div class="stat-label">CHPs with ANC Gap</div>
+      <div class="stat-sub">CHPs with active pregnancies not fully visited · {{ indicators.total_anc_gap }} total unvisited ({{ indicators.anc_gap_pct }}%)</div>
+      <button class="definition-btn" data-def="ANC Gap — CHPs with Unvisited Pregnancies: Active CHPs who have registered pregnant women in their area but have not visited all of them. Every active pregnancy should be visited each period.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ indicators.anc_4plus_rate }}%</div>
+      <div class="stat-label">ANC 4+ Coverage</div>
+      <div class="stat-sub">Deliveries where mother attended 4+ antenatal visits</div>
+      <button class="definition-btn" data-def="ANC 4+ Coverage: The percentage of deliveries where the mother attended 4 or more antenatal care visits during pregnancy. WHO recommends a minimum of 4 ANC visits for a safe pregnancy outcome.">View definition</button>
+    </div>
+    <div class="stat-card navy">
+      <div class="stat-value">{{ indicators.facility_delivery_rate }}%</div>
+      <div class="stat-label">Facility Delivery Rate</div>
+      <div class="stat-sub">{{ indicators.facility_deliveries }} of {{ indicators.total_deliveries }} deliveries in a health facility</div>
+      <button class="definition-btn" data-def="Facility Delivery Rate: The percentage of deliveries that occurred in a health facility. Facility deliveries are attended by skilled health personnel, reducing risk of maternal and neonatal mortality.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ indicators.first_trimester }}</div>
+      <div class="stat-label">1st Trimester Registrations</div>
+      <div class="stat-sub">Pregnancies registered before 12 weeks — early detection</div>
+      <button class="definition-btn" data-def="First Trimester Registrations: Pregnant women registered in eCHIS within the first 12 weeks. Early registration enables timely ANC and nutrition support.">View definition</button>
+    </div>
+    <div class="stat-card navy">
+      <div class="stat-value">{{ indicators.pnc_48hr }}</div>
+      <div class="stat-label">PNC 48hr On-time</div>
+      <div class="stat-sub">Newborns/mothers receiving postnatal check within 48 hours</div>
+      <button class="definition-btn" data-def="PNC 48hr On-time: Newborns or mothers who received their first postnatal care visit within 48 hours of delivery. This critical visit catches early complications.">View definition</button>
+    </div>
   </div>
 </div>
 
-<!-- ===================== DRILL-DOWN TABLES ===================== -->
+<!-- ===== FP & NUTRITION ===== -->
+<div class="cat-section" id="section-fp-nutrition">
+  <div class="section-label">💊 Family Planning & Nutrition Gaps</div>
+  <div class="cards-grid">
+    <div class="stat-card {% if indicators.fp_gap_pct < 20 %}green{% elif indicators.fp_gap_pct < 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.fp_gap }}</div>
+      <div class="stat-label">FP Refill Gap</div>
+      <div class="stat-sub">{{ indicators.fp_needing_refill }} needed refill · {{ indicators.fp_refilled }} received · {{ indicators.fp_gap_pct }}% gap</div>
+      <button class="definition-btn" data-def="Family Planning (FP) Refill Gap: The number of current FP users who needed a contraceptive refill but did not receive one. A high gap risks contraceptive discontinuation. Calculated as FP Needing Refill minus FP Refilled.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.mam_referral_rate >= 80 %}green{% elif indicators.mam_referral_rate >= 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.mam_referral_rate }}%</div>
+      <div class="stat-label">MAM/SAM Referral Rate</div>
+      <div class="stat-sub">{{ indicators.mam_sam_referred }} of {{ indicators.mam_sam_total }} malnourished children referred</div>
+      <button class="definition-btn" data-def="MAM/SAM Referral Rate: The percentage of children identified with Moderate (MAM) or Severe (SAM) Acute Malnutrition who were referred to a health facility for therapeutic feeding.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ indicators.muac_screened }}</div>
+      <div class="stat-label">MUAC Screened</div>
+      <div class="stat-sub">Children screened for malnutrition using arm circumference</div>
+      <button class="definition-btn" data-def="MUAC Screened: Children screened using Mid-Upper Arm Circumference — the standard tool for detecting acute malnutrition. CHPs categorise children as well-nourished, at risk (MAM), or severely malnourished (SAM).">View definition</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== IMMUNISATION ===== -->
+<div class="cat-section" id="section-immunisation">
+  <div class="section-label">💉 Immunisation</div>
+  <div class="cards-grid">
+    <div class="stat-card {% if indicators.iz_rate >= 80 %}green{% elif indicators.iz_rate >= 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.iz_rate }}%</div>
+      <div class="stat-label">Fully Immunized Rate (9–23mo)</div>
+      <div class="stat-sub">{{ indicators.iz_immunized }} of {{ indicators.iz_assessed }} children 9–23mo are fully immunized</div>
+      <button class="definition-btn" data-def="Immunisation Fully Immunized Rate: The percentage of children aged 9–23 months who are fully immunized out of those assessed. 'Fully immunized' means the child has received all recommended vaccines up to their age.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.iz_defaulters == 0 %}green{% else %}orange{% endif %}">
+      <div class="stat-value">{{ indicators.iz_defaulters }}</div>
+      <div class="stat-label">IZ Defaulters</div>
+      <div class="stat-sub">Children who missed doses · {{ indicators.iz_def_followup_rate }}% followed up</div>
+      <button class="definition-btn" data-def="Immunisation Defaulters: Children who missed one or more scheduled vaccine doses. CHPs are expected to identify and follow up defaulters to bring them back for vaccination.">View definition</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DRILL-DOWN — always visible below cards ===== -->
 <div class="section-label">📋 Drill-Down Details</div>
-
 <div class="tab-bar">
-  <button class="tab-btn active" data-tab="unsupervised">Not Supervised <span class="tab-count">{{ indicators.unsupervised_count }}</span></button>
-  <button class="tab-btn" data-tab="lp-not-supervised">Low Perf. Not Supervised <span class="tab-count">{{ indicators.low_performers_unsupervised }}</span></button>
-  <button class="tab-btn" data-tab="lp-supervised">Low Perf. Supervised <span class="tab-count">{{ indicators.low_performers_supervised }}</span></button>
-  <button class="tab-btn" data-tab="anc-gap">ANC Gap <span class="tab-count">{{ indicators.anc_gap_chps }}</span></button>
-  <button class="tab-btn" data-tab="same-day">Same-Day Flags <span class="tab-count">{{ indicators.same_day_flags_count }}</span></button>
-</div>
-
-<!-- Unsupervised -->
-<div class="tab-panel active" id="tab-unsupervised">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Active CHPs With No Supervision Visit</h3><p class="card-subtitle">These active CHPs received zero supervision visits this period.</p></div>
-      <a href="{% url 'download_unsupervised' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-    </div>
-    <div class="card-body no-pad"><div class="table-scroll"><div id="unsupervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
+    <button class="tab-btn active" data-tab="unsupervised">Not Supervised <span class="tab-count">{{ indicators.unsupervised_count }}</span></button>
+    <button class="tab-btn" data-tab="lp-not-supervised">Low Perf. Not Supervised <span class="tab-count">{{ indicators.low_performers_unsupervised }}</span></button>
+    <button class="tab-btn" data-tab="lp-supervised">Low Perf. Supervised <span class="tab-count">{{ indicators.low_performers_supervised }}</span></button>
+    <button class="tab-btn" data-tab="anc-gap">ANC Gap <span class="tab-count">{{ indicators.anc_gap_chps }}</span></button>
+    <button class="tab-btn" data-tab="same-day">Same-Day Flags <span class="tab-count">{{ indicators.same_day_flags_count }}</span></button>
   </div>
-</div>
 
-<!-- Low performers NOT supervised -->
-<div class="tab-panel" id="tab-lp-not-supervised">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Low Performers — Not Supervised (&lt;{{ indicators.low_hh_threshold }} HH visits, 0 supervision)</h3><p class="card-subtitle">Highest risk group: underperforming AND unsupported. Needs urgent follow-up.</p></div>
-      <a href="{% url 'download_low_performers' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&group=unsupervised" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  <div class="tab-panel active" id="tab-unsupervised">
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="card-title">Active CHPs With No Supervision Visit</h3><p class="card-subtitle">These active CHPs received zero supervision visits this period.</p></div>
+        <a href="{% url 'download_unsupervised' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
+      <div class="card-body no-pad"><div class="table-scroll"><div id="unsupervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
     </div>
-    <div class="card-body no-pad"><div class="table-scroll"><div id="lp-not-supervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
   </div>
-</div>
 
-<!-- Low performers supervised -->
-<div class="tab-panel" id="tab-lp-supervised">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Low Performers — Supervised (&lt;{{ indicators.low_hh_threshold }} HH visits, but received supervision)</h3><p class="card-subtitle">These CHPs were checked on but are still underperforming — targeted coaching needed.</p></div>
-      <a href="{% url 'download_low_performers' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&group=supervised" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  <div class="tab-panel" id="tab-lp-not-supervised">
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="card-title">Low Performers — Not Supervised (&lt;{{ indicators.low_hh_threshold }} HH visits, 0 supervision)</h3><p class="card-subtitle">Highest risk group: underperforming AND unsupported.</p></div>
+        <a href="{% url 'download_low_performers' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&group=unsupervised" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
+      <div class="card-body no-pad"><div class="table-scroll"><div id="lp-not-supervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
     </div>
-    <div class="card-body no-pad"><div class="table-scroll"><div id="lp-supervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
   </div>
-</div>
 
-<!-- ANC Gap -->
-<div class="tab-panel" id="tab-anc-gap">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">CHPs With Unvisited Active Pregnancies</h3><p class="card-subtitle">These CHPs have active pregnancies registered but did not visit all of them. Every active pregnancy should be visited.</p></div>
-      <a href="{% url 'download_anc_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  <div class="tab-panel" id="tab-lp-supervised">
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="card-title">Low Performers — Supervised (&lt;{{ indicators.low_hh_threshold }} HH visits, but received supervision)</h3><p class="card-subtitle">Supervised but still underperforming — targeted coaching needed.</p></div>
+        <a href="{% url 'download_low_performers' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&group=supervised" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
+      <div class="card-body no-pad"><div class="table-scroll"><div id="lp-supervised-table-container"><div class="table-loading">Loading…</div></div></div></div>
     </div>
-    <div class="card-body no-pad"><div class="table-scroll"><div id="anc-gap-table-container"><div class="table-loading">Loading…</div></div></div></div>
   </div>
-</div>
 
-<!-- Same-Day Flags -->
-<div class="tab-panel" id="tab-same-day">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Same-Day Supervision Flags</h3><p class="card-subtitle">CHUs where 5 or more CHPs were supervised on the same date — possible data quality issue.</p></div>
-      <a href="{% url 'download_same_day_flags' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  <div class="tab-panel" id="tab-anc-gap">
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="card-title">CHPs With Unvisited Active Pregnancies</h3><p class="card-subtitle">Every active pregnancy should be visited each period.</p></div>
+        <a href="{% url 'download_anc_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
+      <div class="card-body no-pad"><div class="table-scroll"><div id="anc-gap-table-container"><div class="table-loading">Loading…</div></div></div></div>
     </div>
-    <div class="card-body no-pad"><div class="table-scroll"><div id="same-day-table-container"><div class="table-loading">Loading…</div></div></div></div>
+  </div>
+
+  <div class="tab-panel" id="tab-same-day">
+    <div class="card">
+      <div class="card-header">
+        <div><h3 class="card-title">Same-Day Supervision Flags</h3><p class="card-subtitle">CHUs where 5+ CHPs were supervised on the same date — possible data quality issue.</p></div>
+        <a href="{% url 'download_same_day_flags' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
+      <div class="card-body no-pad"><div class="table-scroll"><div id="same-day-table-container"><div class="table-loading">Loading…</div></div></div></div>
+    </div>
   </div>
 </div>
 
 {% endif %}
 
-<!-- Definition Modal -->
 <div class="modal-overlay" id="def-modal" style="display:none;">
   <div class="modal">
     <div class="modal-header"><h3>Indicator Definition</h3><button class="modal-close" onclick="closeModal()">×</button></div>
