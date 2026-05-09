@@ -463,3 +463,23 @@ body {
 }
 .cat-section { display: none; }
 .cat-section.active { display: block; }
+
+/* ======================== DRILL-DOWN CATEGORY NAV ======================== */
+.drilldown-cat-nav {
+  display: flex; gap: 6px; margin-bottom: 0;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+.dd-cat-btn {
+  padding: 9px 18px; border: none; border-bottom: 3px solid transparent;
+  background: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: -2px; transition: all .15s;
+  white-space: nowrap;
+}
+.dd-cat-btn:hover { color: var(--navy); }
+.dd-cat-btn.active {
+  color: var(--navy); border-bottom-color: var(--orange);
+  background: var(--navy-light); border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.dd-cat-panel { display: none; padding-top: 4px; }
+.dd-cat-panel.active { display: block; }
