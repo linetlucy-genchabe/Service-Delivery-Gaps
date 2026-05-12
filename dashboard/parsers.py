@@ -273,10 +273,11 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         if u5_rate >= 0.8 and chp['num_u5_assessed'] >= 10 and chp['positive_diagnoses_u5'] == 0:
             high_u5_low_pos_count += 1
 
-    # ANC gap
+    # ANC gap — CHPs who have active pregnancies but visited none of them
     anc_gap_chps = active_qs.filter(
-        active_pregnancies__gt=F('pregnancies_visited')
-    ).exclude(active_pregnancies=0).count()
+        active_pregnancies__gt=0,
+        pregnancies_visited=0
+    ).count()
 
     agg = active_qs.aggregate(
         preg_reg=Sum('pregnancies_registered'),
