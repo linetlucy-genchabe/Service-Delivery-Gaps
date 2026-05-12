@@ -380,6 +380,58 @@ def download_zero_pregnancies(request):
 
 @login_required
 @require_GET
+def api_low_iccm(request):
+    """Active CHPs with fewer than 5 iCCM assessments."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, iccm_assessments__lt=5)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'hh_visits', 'iccm_assessments',
+        'registered_children_u5', 'num_u5_assessed'
+    ).order_by('iccm_assessments', 'community_health_unit'))
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_low_iccm(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, iccm_assessments__lt=5)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="low_iccm_assessments_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area',
+                     'CHP Name', 'HH Visits', 'iCCM Assessments',
+                     'Registered U5', 'U5 Assessed'])
+    for r in qs.order_by('iccm_assessments', 'community_health_unit'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
+                         r.chw_name, r.hh_visits, r.iccm_assessments,
+                         r.registered_children_u5, r.num_u5_assessed])
+    return response
+
+
+@login_required
+@require_GET
 def api_same_day_flags(request):
     batch_id    = request.GET.get('batch')
     county      = request.GET.get('county', '')
