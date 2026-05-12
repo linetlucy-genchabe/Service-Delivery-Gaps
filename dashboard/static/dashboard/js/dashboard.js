@@ -87,6 +87,7 @@ function loadTable(tab) {
     'lp-supervised':      '/api/low-performers/?group=supervised&',
     'supervised-3plus':   '/api/supervised-3plus/',
     'anc-gap':            '/api/anc-gap/',
+    'zero-pregnancies':   '/api/zero-pregnancies/',
     'u5-high-hh':         '/api/u5-gap/?type=high_hh_low_u5&',
     'u5-high-u5':         '/api/u5-gap/?type=high_u5_low_pos&',
     'same-day':           '/api/same-day-flags/',
@@ -111,6 +112,7 @@ function getContainer(tab) {
     'lp-supervised':     'lp-supervised-table-container',
     'supervised-3plus':  'supervised-3plus-container',
     'anc-gap':           'anc-gap-table-container',
+    'zero-pregnancies':  'zero-pregnancies-container',
     'u5-high-hh':        'u5-high-hh-container',
     'u5-high-u5':        'u5-high-u5-container',
     'same-day':          'same-day-table-container',
@@ -130,6 +132,7 @@ function renderTable(tab, data) {
   else if (tab === 'lp-supervised')     renderLowPerfTable(c, data.results, data.threshold, true);
   else if (tab === 'supervised-3plus')  renderSup3PlusTable(c, data.results);
   else if (tab === 'anc-gap')           renderAncGapTable(c, data.results);
+  else if (tab === 'zero-pregnancies')  renderZeroPregnanciesTable(c, data.results);
   else if (tab === 'u5-high-hh')        renderU5HighHHTable(c, data.results);
   else if (tab === 'u5-high-u5')        renderU5HighU5Table(c, data.results);
   else if (tab === 'same-day')          renderSameDayTable(c, data.results);
@@ -191,6 +194,25 @@ function renderSup3PlusTable(c, rows) {
       <td class="num warn">${sv}</td></tr>`;
   });
   h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with 3+ supervision visits</div>`;
+  c.innerHTML = h;
+}
+
+// ── Zero Active Pregnancies ───────────────────────────────────
+function renderZeroPregnanciesTable(c, rows) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">HH Visits</th><th class="num">Pregnancies Registered</th><th class="num">Active Pregnancies</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.hh_visits||0}</td>
+      <td class="num">${r.pregnancies_registered||0}</td>
+      <td class="num bad">0</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with zero active pregnancies</div>`;
   c.innerHTML = h;
 }
 
