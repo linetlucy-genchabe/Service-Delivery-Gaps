@@ -258,6 +258,8 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     ).count()
     low_performer_count = low_performers_unsupervised + low_performers_supervised
 
+    low_iccm_count = active_qs.filter(iccm_assessments__lt=5).count()
+
     # U5 Assessment gaps (exclude CHPs with 0 registered U5 or 0 registered HHs)
     # Gap 1: HH ≥70% but U5 assessment <40%
     # Gap 2: U5 ≥80% with ≥10 children assessed but zero positive diagnoses
@@ -361,6 +363,7 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         # U5 assessment gaps
         'high_hh_low_u5_count': high_hh_low_u5_count,
         'high_u5_low_pos_count': high_u5_low_pos_count,
+        'low_iccm_count': low_iccm_count,
         # ANC
         'anc_gap_chps': anc_gap_chps,
         'active_pregnancies': active_preg,
