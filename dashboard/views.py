@@ -247,19 +247,16 @@ def api_anc_gap(request):
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
 
-    # CHPs where active_pregnancies > pregnancies_visited AND active_pregnancies > 0
-    qs = qs.exclude(active_pregnancies=0).filter(
-        active_pregnancies__gt=DjangoF('pregnancies_visited')
-    )
+    # CHPs with active pregnancies but zero visits
+    qs = qs.filter(active_pregnancies__gt=0, pregnancies_visited=0)
 
     data = list(qs.values(
         'county', 'sub_county', 'community_health_unit', 'chp_area',
-        'chw_name', 'chw_id', 'active_pregnancies', 'pregnancies_visited'
+        'chw_name', 'active_pregnancies', 'pregnancies_visited'
     ).order_by('community_health_unit', 'chw_name'))
 
-    # Add gap per CHP
     for row in data:
-        row['gap'] = row['active_pregnancies'] - row['pregnancies_visited']
+        row['gap'] = row['active_pregnancies']  # all unvisited since visited=0
 
     return JsonResponse({'results': data, 'count': len(data)})
 
@@ -493,20 +490,18 @@ def download_anc_gap(request):
     if county:     qs = qs.filter(county=county)
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
-    qs = qs.exclude(active_pregnancies=0).filter(
-        active_pregnancies__gt=DjangoF('pregnancies_visited')
+    qs = qs.filter(active_pregnancies__gt=0, pregnancies_visited=0
     ).order_by('community_health_unit', 'chw_name')
 
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="anc_gap_{batch.label}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="anc_gap_zero_visits_{batch.label}.csv"'
 
     writer = csv.writer(response)
     writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area',
-                     'CHP Name', 'CHP ID', 'Active Pregnancies', 'Pregnancies Visited', 'Gap'])
+                     'CHP Name', 'Active Pregnancies', 'Pregnancies Visited'])
     for r in qs:
         writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
-                         r.chw_name, r.chw_id, r.active_pregnancies,
-                         r.pregnancies_visited, r.active_pregnancies - r.pregnancies_visited])
+                         r.chw_name, r.active_pregnancies, r.pregnancies_visited])
     return response
 
 
