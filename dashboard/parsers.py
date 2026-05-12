@@ -309,6 +309,9 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     total_anc_gap = max(active_preg - preg_vis, 0)
     anc_gap_pct   = round(total_anc_gap / active_preg * 100, 1) if active_preg else 0
 
+    # CHPs with zero active pregnancies registered
+    zero_pregnancies_count = active_qs.filter(active_pregnancies=0).count()
+
     anc_4plus      = agg['anc_4plus'] or 0
     anc_with_data  = agg['anc_with_data'] or 0
     anc_4plus_rate = round(anc_4plus / anc_with_data * 100, 1) if anc_with_data else 0
@@ -363,6 +366,7 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'pregnancies_visited': preg_vis,
         'total_anc_gap': total_anc_gap,
         'anc_gap_pct': anc_gap_pct,
+        'zero_pregnancies_count': zero_pregnancies_count,
         'anc_4plus_rate': anc_4plus_rate,
         'first_trimester': agg['first_trim'] or 0,
         'iron_folate': agg['iron_folate'] or 0,
