@@ -492,6 +492,92 @@ def download_same_day_flags(request):
     return response
 
 
+@login_required
+def download_u5_gap(request):
+    from django.db.models import F as DjangoF
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    gap_type   = request.GET.get('type', 'high_hh_low_u5')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(
+        batch=batch, is_active=True,
+        registered_hhs__gt=0, registered_children_u5__gt=0
+    )
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    rows = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'registered_hhs', 'hh_visits',
+        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5'
+    ))
+
+    results = []
+    for r in rows:
+        hh_rate = r['hh_visits'] / r['registered_hhs'] if r['registered_hhs'] else 0
+        u5_rate = r['num_u5_assessed'] / r['registered_children_u5'] if r['registered_children_u5'] else 0
+        r['hh_rate_pct'] = round(hh_rate * 100, 1)
+        r['u5_rate_pct'] = round(u5_rate * 100, 1)
+        if gap_type == 'high_hh_low_u5' and hh_rate >= 0.7 and u5_rate < 0.4:
+            results.append(r)
+        elif gap_type == 'high_u5_low_pos' and u5_rate >= 0.8 and r['num_u5_assessed'] >= 10 and r['positive_diagnoses_u5'] == 0:
+            results.append(r)
+
+    if gap_type == 'high_hh_low_u5':
+        filename = f'good_hh_low_u5_assessment_{batch.label}.csv'
+        headers  = ['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
+                    'Registered HHs', 'HH Visits', 'HH Rate %',
+                    'Registered U5', 'U5 Assessed', 'U5 Assessment Rate %']
+    else:
+        filename = f'high_u5_zero_positive_diagnoses_{batch.label}.csv'
+        headers  = ['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
+                    'Registered U5', 'U5 Assessed', 'U5 Assessment Rate %', 'Positive Diagnoses']
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+    writer.writerow(headers)
+
+    for r in sorted(results, key=lambda x: x['u5_rate_pct']):
+        if gap_type == 'high_hh_low_u5':
+            writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
+                             r['chw_name'], r['registered_hhs'], r['hh_visits'], r['hh_rate_pct'],
+                             r['registered_children_u5'], r['num_u5_assessed'], r['u5_rate_pct']])
+        else:
+            writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
+                             r['chw_name'], r['registered_children_u5'], r['num_u5_assessed'],
+                             r['u5_rate_pct'], r['positive_diagnoses_u5']])
+    return response
+
+
+@login_required
+def download_supervised_3plus(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, supervision_visits__gte=3)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="supervised_3plus_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area',
+                     'CHP Name', 'HH Visits', 'Supervision Visits'])
+    for r in qs.order_by('-supervision_visits', 'community_health_unit'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
+                         r.chw_name, r.hh_visits, r.supervision_visits])
+    return response
+
+
 # ===========================================================================
 # SYNC DASHBOARD VIEWS
 # ===========================================================================
