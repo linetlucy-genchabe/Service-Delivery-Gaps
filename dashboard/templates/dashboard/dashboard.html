@@ -181,6 +181,12 @@
       <div class="stat-sub">CHPs with active pregnancies not fully visited · {{ indicators.total_anc_gap }} total unvisited ({{ indicators.anc_gap_pct }}%)</div>
       <button class="definition-btn" data-def="ANC Gap: Active CHPs who have registered pregnant women in their area but have not visited all of them during this period. Every active pregnancy should be visited. The sub-text shows total unvisited pregnancies across all CHPs.">View definition</button>
     </div>
+    <div class="stat-card {% if indicators.zero_pregnancies_count == 0 %}green{% elif indicators.zero_pregnancies_count < 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.zero_pregnancies_count }}</div>
+      <div class="stat-label">CHPs with Zero Active Pregnancies</div>
+      <div class="stat-sub">Active CHPs with no active pregnancies registered in their area</div>
+      <button class="definition-btn" data-def="Zero Active Pregnancies: Active CHPs who have no active pregnancies registered in their area. This may indicate the CHP is not identifying and registering pregnant women in their households, or that all registered pregnancies have delivered. CHPs should be registering every known pregnancy in their area.">View definition</button>
+    </div>
     <div class="stat-card cyan">
       <div class="stat-value">{{ indicators.anc_4plus_rate }}%</div>
       <div class="stat-label">ANC 4+ Coverage</div>
@@ -353,12 +359,19 @@
 <div class="dd-cat-panel" id="dd-maternal">
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="anc-gap">ANC Gap <span class="tab-count">{{ indicators.anc_gap_chps }}</span></button>
+    <button class="tab-btn" data-tab="zero-pregnancies">Zero Active Pregnancies <span class="tab-count">{{ indicators.zero_pregnancies_count }}</span></button>
   </div>
   <div class="tab-panel active" id="tab-anc-gap">
     <div class="card"><div class="card-header">
       <div><h3 class="card-title">CHPs With Unvisited Active Pregnancies</h3><p class="card-subtitle">Every active pregnancy should be visited each period.</p></div>
       <a href="{% url 'download_anc_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="anc-gap-table-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-zero-pregnancies">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">Active CHPs With Zero Active Pregnancies</h3><p class="card-subtitle">CHPs with no active pregnancies registered — may indicate missed registrations.</p></div>
+      <a href="{% url 'download_zero_pregnancies' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="zero-pregnancies-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
 
