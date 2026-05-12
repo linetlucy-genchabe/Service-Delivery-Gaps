@@ -334,6 +334,55 @@ def api_u5_gap(request):
 
 @login_required
 @require_GET
+def api_zero_pregnancies(request):
+    """Active CHPs with zero active pregnancies registered."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, active_pregnancies=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'hh_visits', 'pregnancies_registered', 'active_pregnancies'
+    ).order_by('community_health_unit', 'chw_name'))
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_zero_pregnancies(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, active_pregnancies=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="zero_active_pregnancies_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area',
+                     'CHP Name', 'HH Visits', 'Pregnancies Registered', 'Active Pregnancies'])
+    for r in qs.order_by('community_health_unit', 'chw_name'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
+                         r.chw_name, r.hh_visits, r.pregnancies_registered, r.active_pregnancies])
+    return response
+
+
+@login_required
+@require_GET
 def api_same_day_flags(request):
     batch_id    = request.GET.get('batch')
     county      = request.GET.get('county', '')
