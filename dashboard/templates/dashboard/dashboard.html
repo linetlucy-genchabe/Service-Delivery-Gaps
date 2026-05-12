@@ -178,8 +178,8 @@
     <div class="stat-card {% if indicators.anc_gap_chps == 0 %}green{% elif indicators.anc_gap_chps < 100 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.anc_gap_chps }}</div>
       <div class="stat-label">CHPs with ANC Gap</div>
-      <div class="stat-sub">CHPs with active pregnancies not fully visited · {{ indicators.total_anc_gap }} total unvisited ({{ indicators.anc_gap_pct }}%)</div>
-      <button class="definition-btn" data-def="ANC Gap: Active CHPs who have registered pregnant women in their area but have not visited all of them during this period. Every active pregnancy should be visited. The sub-text shows total unvisited pregnancies across all CHPs.">View definition</button>
+      <div class="stat-sub">Active CHPs with active pregnancies but zero pregnancy visits this period</div>
+      <button class="definition-btn" data-def="ANC Gap: Active CHPs who have active pregnancies registered in their area but made zero pregnancy visits this period. These CHPs are completely missing their pregnant women — the expectation is that every active pregnancy should be visited at least once.">View definition</button>
     </div>
     <div class="stat-card {% if indicators.zero_pregnancies_count == 0 %}green{% elif indicators.zero_pregnancies_count < 50 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.zero_pregnancies_count }}</div>
@@ -363,7 +363,7 @@
   </div>
   <div class="tab-panel active" id="tab-anc-gap">
     <div class="card"><div class="card-header">
-      <div><h3 class="card-title">CHPs With Unvisited Active Pregnancies</h3><p class="card-subtitle">Every active pregnancy should be visited each period.</p></div>
+      <div><h3 class="card-title">CHPs With Active Pregnancies but Zero Pregnancy Visits</h3><p class="card-subtitle">These CHPs have active pregnancies registered but made no pregnancy visits — completely missing their pregnant women.</p></div>
       <a href="{% url 'download_anc_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="anc-gap-table-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
