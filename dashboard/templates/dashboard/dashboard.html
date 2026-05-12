@@ -224,6 +224,18 @@
 <div class="cat-section" id="section-fp">
   <div class="section-label">💊 Family Planning</div>
   <div class="cards-grid">
+    <div class="stat-card {% if fp_active_chps_pct >= 80 %}green{% elif fp_active_chps_pct >= 50 %}yellow{% else %}red{% endif %}" style="border-top-color:var(--navy)">
+      <div class="stat-value" style="color:var(--navy)">{{ indicators.fp_active_chps }}</div>
+      <div class="stat-label">CHPs Active on FP</div>
+      <div class="stat-sub">Active CHPs who conducted at least one FP assessment this period · {{ indicators.total_active }} total active</div>
+      <button class="definition-btn" data-def="CHPs Active on Family Planning: The number of active CHPs who conducted at least one Family Planning (FP) assessment during this reporting period. An FP assessment involves evaluating a woman of reproductive age for family planning needs, current use, or refill requirements. CHPs not conducting any FP assessments may be missing women who need contraceptive support.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.fp_inactive_chps == 0 %}green{% elif indicators.fp_inactive_chps < 100 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.fp_inactive_chps }}</div>
+      <div class="stat-label">CHPs Not Active on FP</div>
+      <div class="stat-sub">Active CHPs with zero FP assessments this period</div>
+      <button class="definition-btn" data-def="CHPs Not Active on Family Planning: Active CHPs who conducted zero Family Planning assessments during this reporting period. These CHPs are not engaging women of reproductive age on family planning — missing opportunities to identify unmet need, support current users, or provide refills.">View definition</button>
+    </div>
     <div class="stat-card {% if indicators.fp_gap_pct < 20 %}green{% elif indicators.fp_gap_pct < 50 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.fp_gap }}</div>
       <div class="stat-label">FP Refill Gap</div>
