@@ -166,7 +166,13 @@
       <div class="stat-value">{{ indicators.high_u5_low_pos_count }}</div>
       <div class="stat-label">High U5 Assessment, Zero Positive Diagnoses</div>
       <div class="stat-sub">CHPs assessing ≥80% of U5 children (≥10 assessed) but recording zero positive diagnoses</div>
-      <button class="definition-btn" data-def="High U5 Assessment but Zero Positive Diagnoses: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded absolutely zero positive diagnoses (malaria, pneumonia, diarrhea). This is a data quality flag — it is statistically unusual to assess many children and find none sick. The CHP may need support in recognizing and documenting illness correctly. Excludes CHPs with fewer than 10 U5 assessments.">View definition</button>
+      <button class="definition-btn" data-def="High U5 Assessment but Zero Positive Diagnoses: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded absolutely zero positive diagnoses (malaria, pneumonia, diarrhea). This is a data quality flag — it is statistically unusual to assess many children and find none sick. The CHP may need support in recognizing and documenting illness correctly.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.low_iccm_count == 0 %}green{% elif indicators.low_iccm_count < 100 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.low_iccm_count }}</div>
+      <div class="stat-label">Low iCCM Assessments</div>
+      <div class="stat-sub">Active CHPs with fewer than 5 iCCM assessments this period</div>
+      <button class="definition-btn" data-def="Low iCCM Assessments: Active CHPs who conducted fewer than 5 Integrated Community Case Management (iCCM) assessments this period. iCCM assessments involve evaluating sick children under 5 for malaria, pneumonia and diarrhea. A low count may indicate the CHP is not identifying or assessing sick children during household visits.">View definition</button>
     </div>
   </div>
 </div>
@@ -340,6 +346,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="u5-high-hh">Good HH, Low U5 Assessment <span class="tab-count">{{ indicators.high_hh_low_u5_count }}</span></button>
     <button class="tab-btn" data-tab="u5-high-u5">High U5, Zero Diagnoses <span class="tab-count">{{ indicators.high_u5_low_pos_count }}</span></button>
+    <button class="tab-btn" data-tab="low-iccm">Low iCCM Assessments <span class="tab-count">{{ indicators.low_iccm_count }}</span></button>
   </div>
   <div class="tab-panel active" id="tab-u5-high-hh">
     <div class="card"><div class="card-header">
@@ -352,6 +359,12 @@
       <div><h3 class="card-title">High U5 Assessment (≥80%, ≥10 assessed) — Zero Positive Diagnoses</h3><p class="card-subtitle">CHPs assessing many children but recording no illness — data quality flag.</p></div>
       <a href="{% url 'download_u5_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&type=high_u5_low_pos" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="u5-high-u5-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-low-iccm">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">Active CHPs with Fewer than 5 iCCM Assessments</h3><p class="card-subtitle">CHPs not adequately assessing sick children under 5 — malaria, pneumonia, diarrhea.</p></div>
+      <a href="{% url 'download_low_iccm' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="low-iccm-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
 
