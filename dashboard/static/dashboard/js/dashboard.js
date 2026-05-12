@@ -90,6 +90,7 @@ function loadTable(tab) {
     'zero-pregnancies':   '/api/zero-pregnancies/',
     'u5-high-hh':         '/api/u5-gap/?type=high_hh_low_u5&',
     'u5-high-u5':         '/api/u5-gap/?type=high_u5_low_pos&',
+    'low-iccm':           '/api/low-iccm/',
     'same-day':           '/api/same-day-flags/',
   };
 
@@ -115,6 +116,7 @@ function getContainer(tab) {
     'zero-pregnancies':  'zero-pregnancies-container',
     'u5-high-hh':        'u5-high-hh-container',
     'u5-high-u5':        'u5-high-u5-container',
+    'low-iccm':          'low-iccm-container',
     'same-day':          'same-day-table-container',
   };
   return document.getElementById(map[tab]);
@@ -135,6 +137,7 @@ function renderTable(tab, data) {
   else if (tab === 'zero-pregnancies')  renderZeroPregnanciesTable(c, data.results);
   else if (tab === 'u5-high-hh')        renderU5HighHHTable(c, data.results);
   else if (tab === 'u5-high-u5')        renderU5HighU5Table(c, data.results);
+  else if (tab === 'low-iccm')          renderLowICCMTable(c, data.results);
   else if (tab === 'same-day')          renderSameDayTable(c, data.results);
 }
 
@@ -233,6 +236,28 @@ function renderAncGapTable(c, rows) {
       <td class="num ${gap>5?'bad':gap>2?'warn':''}">${gap}</td></tr>`;
   });
   h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with unvisited pregnancies</div>`;
+  c.innerHTML = h;
+}
+
+// ── Low iCCM Assessments ──────────────────────────────────────
+function renderLowICCMTable(c, rows) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">HH Visits</th><th class="num">iCCM Assessments</th>
+    <th class="num">Registered U5</th><th class="num">U5 Assessed</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const iccm = r.iccm_assessments || 0;
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.hh_visits||0}</td>
+      <td class="num ${iccm===0?'bad':'warn'}">${iccm}</td>
+      <td class="num">${r.registered_children_u5||0}</td>
+      <td class="num">${r.num_u5_assessed||0}</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with fewer than 5 iCCM assessments</div>`;
   c.innerHTML = h;
 }
 
