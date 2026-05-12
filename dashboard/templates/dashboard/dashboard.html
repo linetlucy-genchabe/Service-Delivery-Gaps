@@ -11,7 +11,7 @@
       <p class="page-subtitle">Select a reporting period to view gaps and performance data.</p>
     {% endif %}
   </div>
-  {% if is_uploader %}<a href="{% url 'upload' %}" class="btn btn-primary">Upload  Data</a>{% endif %}
+  {% if is_uploader %}<a href="{% url 'upload' %}" class="btn btn-primary">Upload New Data</a>{% endif %}
 </div>
 
 <!-- FILTERS -->
@@ -318,6 +318,7 @@
   <div class="tab-panel" id="tab-supervised-3plus">
     <div class="card"><div class="card-header">
       <div><h3 class="card-title">CHPs Supervised 3 or More Times</h3><p class="card-subtitle">High supervision frequency — verify these are genuine visits.</p></div>
+      <a href="{% url 'download_supervised_3plus' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="supervised-3plus-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
   <div class="tab-panel" id="tab-same-day">
@@ -337,11 +338,13 @@
   <div class="tab-panel active" id="tab-u5-high-hh">
     <div class="card"><div class="card-header">
       <div><h3 class="card-title">Good HH Visits (≥70%) but Low U5 Assessment (&lt;40%)</h3><p class="card-subtitle">CHPs visiting households but not assessing Under-5 children during visits.</p></div>
+      <a href="{% url 'download_u5_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&type=high_hh_low_u5" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="u5-high-hh-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
   <div class="tab-panel" id="tab-u5-high-u5">
     <div class="card"><div class="card-header">
       <div><h3 class="card-title">High U5 Assessment (≥80%, ≥10 assessed) — Zero Positive Diagnoses</h3><p class="card-subtitle">CHPs assessing many children but recording no illness — data quality flag.</p></div>
+      <a href="{% url 'download_u5_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&type=high_u5_low_pos" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="u5-high-u5-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
