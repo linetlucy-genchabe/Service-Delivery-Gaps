@@ -332,6 +332,10 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     fp_gap     = max(fp_need - fp_ref, 0)
     fp_gap_pct = round(fp_gap / fp_need * 100, 1) if fp_need else 0
 
+    # CHPs who did at least one FP assessment
+    fp_active_chps   = active_qs.filter(fp_assessments__gte=1).count()
+    fp_inactive_chps = active_qs.filter(fp_assessments=0).count()
+
     muac     = agg['muac'] or 0
     mam_sam  = agg['mam_sam'] or 0
     mam_ref  = agg['mam_referred'] or 0
@@ -385,6 +389,8 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'iz_rate': iz_rate,
         'iz_defaulters': iz_def,
         'iz_def_followup_rate': iz_def_rate,
+        'fp_active_chps':   fp_active_chps,
+        'fp_inactive_chps': fp_inactive_chps,
         'fp_needing_refill': fp_need,
         'fp_refilled': fp_ref,
         'fp_gap': fp_gap,
