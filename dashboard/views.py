@@ -1105,3 +1105,254 @@ def api_compare_download(request):
                          r['community_health_unit'], r['chp_name'], r['username'],
                          r['days_a'], r['last_a'], r['days_b'], r['last_b']])
     return response
+
+
+# ===========================================================================
+# WEEKLY PERFORMANCE SCORECARD
+# ===========================================================================
+
+# Hardcoded targets (universal across all counties/sub-counties/CHUs)
+SCORECARD_TARGETS = {
+    'active_chps_pct':     {'target': 100, 'unit': '%',  'label': 'Active CHPs',               'higher_is_better': True},
+    'hh_coverage_pct':     {'target': 85,  'unit': '%',  'label': 'HH Coverage',                'higher_is_better': True},
+    'avg_positive_diag':   {'target': 10,  'unit': '',   'label': 'Avg Positive Diagnoses/CHP', 'higher_is_better': True},
+    'pnc_ontime_pct':      {'target': 85,  'unit': '%',  'label': 'On Time PNC',                'higher_is_better': True},
+    'preg_registered_chp': {'target': 1,   'unit': '',   'label': 'Preg Registered/CHP',        'higher_is_better': True},
+    'sync_rate_pct':       {'target': 80,  'unit': '%',  'label': '% CHPs Syncing Weekly',      'higher_is_better': True},
+    'supervision_pct':     {'target': 65,  'unit': '%',  'label': '% CHPs Supervised',          'higher_is_better': True},
+}
+
+
+def compute_scorecard_metrics(chw_qs, sync_qs=None):
+    """Compute all scorecard metrics from a CHWRecord queryset."""
+    from django.db.models import Sum, Count, Avg, Q
+
+    active_qs   = chw_qs.filter(is_active=True)
+    total_active = active_qs.count()
+    total_all    = chw_qs.count()
+
+    if total_all == 0:
+        return None
+
+    # 1. Active CHPs %
+    active_pct = round(total_active / total_all * 100, 1) if total_all else 0
+
+    # 2. HH Coverage % — avg across CHPs with registered HHs
+    hh_qs = active_qs.filter(registered_hhs__gt=0)
+    hh_metrics = hh_qs.aggregate(
+        total_visits=Sum('hh_visits'),
+        total_registered=Sum('registered_hhs'),
+    )
+    hh_coverage = round(
+        (hh_metrics['total_visits'] or 0) / (hh_metrics['total_registered'] or 1) * 100, 1
+    )
+
+    # 3. Avg Positive Diagnoses per CHP
+    pos_agg = active_qs.aggregate(total_pos=Sum('positive_diagnoses_u5'))
+    avg_pos = round((pos_agg['total_pos'] or 0) / total_active, 2) if total_active else 0
+
+    # 4. On Time PNC % = sum(PNC 48hr) / sum(Total Deliveries)
+    pnc_agg = active_qs.filter(total_deliveries__gt=0).aggregate(
+        pnc=Sum('pnc_48hr_ontime'),
+        del_total=Sum('total_deliveries'),
+    )
+    pnc_pct = round(
+        (pnc_agg['pnc'] or 0) / (pnc_agg['del_total'] or 1) * 100, 1
+    )
+
+    # 5. Pregnancies Registered per CHP
+    preg_agg = active_qs.aggregate(total_preg=Sum('pregnancies_registered'))
+    preg_per_chp = round((preg_agg['total_preg'] or 0) / total_active, 2) if total_active else 0
+
+    # 6. % CHPs Supervised
+    supervised = active_qs.filter(supervised=True).count()
+    sup_pct = round(supervised / total_active * 100, 1) if total_active else 0
+
+    # 7. Sync rate — from sync queryset if provided
+    sync_pct = None
+    if sync_qs is not None:
+        total_sync = sync_qs.count()
+        synced     = sync_qs.filter(days_synced__gte=1).count()
+        sync_pct   = round(synced / total_sync * 100, 1) if total_sync else 0
+
+    return {
+        'active_chps':        total_active,
+        'total_chps':         total_all,
+        'active_chps_pct':    active_pct,
+        'hh_coverage_pct':    hh_coverage,
+        'avg_positive_diag':  avg_pos,
+        'pnc_ontime_pct':     pnc_pct,
+        'preg_registered_chp': preg_per_chp,
+        'supervision_pct':    sup_pct,
+        'sync_rate_pct':      sync_pct,
+    }
+
+
+def get_colour(value, target, higher_is_better=True):
+    """Return green/yellow/red based on % of target achieved."""
+    if value is None or target == 0:
+        return 'grey'
+    pct = value / target * 100 if higher_is_better else (2 * target - value) / target * 100
+    if pct >= 100:   return 'green'
+    if pct >= 50:    return 'yellow'
+    return 'red'
+
+
+def find_matching_sync_batch(chw_batch):
+    """Find sync batch closest in time to a CHW batch."""
+    if chw_batch is None:
+        return None
+    qs = SyncUploadBatch.objects.filter(
+        year=chw_batch.year, month=chw_batch.month,
+        period_type=chw_batch.period_type
+    )
+    if chw_batch.period_type == 'weekly' and chw_batch.week_start_date:
+        # Prefer exact week match, then closest
+        exact = qs.filter(week_start_date=chw_batch.week_start_date).first()
+        if exact:
+            return exact
+    return qs.first()
+
+
+def auto_detect_batches(county=None, sub_county=None, chu=None):
+    """
+    Auto-detect which CHW batches to use for each scorecard column.
+    Returns dict with keys: prev_month, prev_week, current_week
+    """
+    from datetime import date
+    import calendar
+
+    all_batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date', '-uploaded_at')
+
+    monthly  = list(all_batches.filter(period_type='monthly'))
+    weekly   = list(all_batches.filter(period_type='weekly'))
+
+    # Current week = most recent weekly batch
+    current_week = weekly[0] if weekly else None
+
+    # Previous week = second most recent weekly batch in same month
+    prev_week = None
+    if current_week:
+        same_month_weekly = [b for b in weekly if b.year == current_week.year and b.month == current_week.month and b.pk != current_week.pk]
+        prev_week = same_month_weekly[0] if same_month_weekly else None
+
+    # Previous month = most recent monthly batch from a different month
+    # OR most recent weekly batch from previous month
+    prev_month = None
+    if current_week:
+        prev_monthly = [b for b in monthly if (b.year, b.month) < (current_week.year, current_week.month)]
+        if prev_monthly:
+            prev_month = prev_monthly[0]
+        else:
+            prev_weekly_other_month = [b for b in weekly if (b.year, b.month) < (current_week.year, current_week.month)]
+            prev_month = prev_weekly_other_month[0] if prev_weekly_other_month else None
+
+    return {
+        'prev_month':   prev_month,
+        'prev_week':    prev_week,
+        'current_week': current_week,
+    }
+
+
+def scorecard_view(request):
+    """Weekly performance scorecard view."""
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    # Manual override batch selectors
+    override_prev_month   = request.GET.get('batch_prev_month', '')
+    override_prev_week    = request.GET.get('batch_prev_week', '')
+    override_current_week = request.GET.get('batch_current', '')
+
+    all_batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+
+    # Auto-detect
+    auto = auto_detect_batches()
+
+    # Apply overrides
+    def resolve_batch(override, auto_val):
+        if override:
+            return UploadBatch.objects.filter(pk=override).first()
+        return auto_val
+
+    batch_prev_month   = resolve_batch(override_prev_month,   auto['prev_month'])
+    batch_prev_week    = resolve_batch(override_prev_week,    auto['prev_week'])
+    batch_current_week = resolve_batch(override_current_week, auto['current_week'])
+
+    def get_chw_qs(batch):
+        if batch is None:
+            return None
+        qs = CHWRecord.objects.filter(batch=batch)
+        if county:     qs = qs.filter(county=county)
+        if sub_county: qs = qs.filter(sub_county=sub_county)
+        if chu:        qs = qs.filter(community_health_unit=chu)
+        return qs
+
+    def get_sync_qs(chw_batch):
+        sync_batch = find_matching_sync_batch(chw_batch)
+        if sync_batch is None:
+            return None
+        qs = CHPSyncRecord.objects.filter(batch=sync_batch).exclude(
+            county='').exclude(sub_county='').exclude(community_health_unit='')
+        if county:     qs = qs.filter(county=county)
+        if sub_county: qs = qs.filter(sub_county=sub_county)
+        if chu:        qs = qs.filter(community_health_unit=chu)
+        return qs
+
+    metrics_prev_month   = compute_scorecard_metrics(get_chw_qs(batch_prev_month),   get_sync_qs(batch_prev_month))   if batch_prev_month   else None
+    metrics_prev_week    = compute_scorecard_metrics(get_chw_qs(batch_prev_week),     get_sync_qs(batch_prev_week))    if batch_prev_week    else None
+    metrics_current_week = compute_scorecard_metrics(get_chw_qs(batch_current_week),  get_sync_qs(batch_current_week)) if batch_current_week else None
+
+    # Build scorecard rows
+    rows = []
+    for key, meta in SCORECARD_TARGETS.items():
+        target = meta['target']
+
+        def cell(metrics, key=key, target=target, hib=meta['higher_is_better']):
+            if metrics is None:
+                return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None}
+            val = metrics.get(key)
+            if val is None:
+                return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None}
+            unit = meta['unit']
+            display = f"{val}{unit}" if unit == '%' else str(val)
+            pct_target = round(val / target * 100, 1) if target else None
+            colour = get_colour(val, target, hib)
+            return {'value': val, 'display': display, 'colour': colour, 'pct_target': pct_target}
+
+        rows.append({
+            'key':    key,
+            'label':  meta['label'],
+            'target': f"{target}{meta['unit']}",
+            'prev_month':   cell(metrics_prev_month),
+            'prev_week':    cell(metrics_prev_week),
+            'current_week': cell(metrics_current_week),
+        })
+
+    # Filter options from the most data-rich batch
+    filter_batch = batch_current_week or batch_prev_week or batch_prev_month
+    filter_opts  = {}
+    if filter_batch:
+        fqs = CHWRecord.objects.filter(batch=filter_batch)
+        filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
+        if county:
+            filter_opts['sub_counties'] = fqs.filter(county=county).values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        if sub_county:
+            filter_opts['chus'] = fqs.filter(county=county, sub_county=sub_county).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+
+    return render(request, 'dashboard/scorecard.html', {
+        'rows':               rows,
+        'all_batches':        all_batches,
+        'batch_prev_month':   batch_prev_month,
+        'batch_prev_week':    batch_prev_week,
+        'batch_current_week': batch_current_week,
+        'override_prev_month':   override_prev_month,
+        'override_prev_week':    override_prev_week,
+        'override_current_week': override_current_week,
+        'filter_opts':        filter_opts,
+        'selected_county':    county,
+        'selected_subcounty': sub_county,
+        'selected_chu':       chu,
+        'is_uploader':        is_uploader(request.user) if request.user.is_authenticated else False,
+    })
