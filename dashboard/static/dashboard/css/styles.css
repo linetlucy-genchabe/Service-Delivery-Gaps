@@ -734,3 +734,86 @@ body {
 .dot-yellow { background: var(--yellow); }
 .dot-cyan   { background: var(--cyan); }
 .dot-red    { background: var(--red); }
+
+/* ======================== SCORECARD ======================== */
+.scorecard-period-labels {
+  display: flex; flex-wrap: wrap; gap: 16px;
+  margin-bottom: 14px; font-size: 13px; color: var(--gray-600);
+}
+.period-label-item { display: flex; align-items: center; gap: 6px; }
+.period-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gray-400); flex-shrink: 0; }
+
+.scorecard-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.scorecard-table thead tr {
+  background: var(--navy);
+}
+.scorecard-table thead th {
+  padding: 12px 14px; text-align: center; font-size: 12px;
+  font-weight: 700; color: var(--white); border-bottom: 3px solid var(--orange);
+  white-space: nowrap;
+}
+.scorecard-table thead th.sc-indicator { text-align: left; min-width: 180px; }
+.scorecard-table thead th.sc-target { min-width: 100px; }
+.scorecard-table thead th.sc-col { min-width: 130px; }
+.scorecard-table thead th.sc-current { border-left: 2px solid var(--orange); border-right: 2px solid var(--orange); }
+.scorecard-table thead th.sc-achieved { background: rgba(255,255,255,0.1); }
+
+.scorecard-table tbody tr { border-bottom: 1px solid var(--border); }
+.scorecard-table tbody tr:hover { background: var(--gray-50); }
+.scorecard-table tbody tr:last-child { border-bottom: none; }
+
+.sc-indicator-cell {
+  padding: 12px 14px; font-weight: 600; color: var(--navy);
+  text-align: left; background: var(--navy-light);
+}
+.sc-target-cell {
+  padding: 12px 14px; text-align: center; font-weight: 600;
+  color: var(--gray-600); background: var(--gray-50);
+}
+.sc-cell {
+  padding: 12px 14px; text-align: center; font-weight: 700;
+  font-size: 14px; transition: background .15s;
+}
+.sc-current {
+  border-left: 2px solid var(--orange);
+  border-right: 2px solid var(--orange);
+}
+.sc-achieved-cell { font-size: 13px; }
+
+/* Colour cells */
+.sc-green  { background: #DCFCE7; color: #166534; }
+.sc-yellow { background: #FEF9C3; color: #854D0E; }
+.sc-red    { background: #FEE2E2; color: #991B1B; }
+.sc-grey   { background: var(--gray-100); color: var(--text-muted); font-weight: 400; }
+
+/* Batch override panel */
+.batch-override-panel {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 16px;
+  margin-bottom: 16px; font-size: 13px;
+}
+.batch-override-toggle {
+  cursor: pointer; font-weight: 600; color: var(--navy);
+  list-style: none; user-select: none;
+}
+.batch-override-toggle::-webkit-details-marker { display: none; }
+.batch-override-form { margin-top: 12px; }
+
+/* Print styles */
+@media print {
+  .navbar, .filter-bar, .batch-override-panel,
+  .scorecard-period-labels, .page-header .btn,
+  .card-header .btn, .footer { display: none !important; }
+  .main-content { padding: 0; }
+  .card { box-shadow: none; border: none; }
+  .scorecard-table { font-size: 11px; }
+  .sc-cell { padding: 8px 10px; }
+}
+
+@media (max-width: 768px) {
+  .scorecard-table { font-size: 11px; }
+  .sc-cell, .sc-indicator-cell, .sc-target-cell { padding: 8px 8px; }
+  .scorecard-period-labels { flex-direction: column; gap: 6px; }
+}
