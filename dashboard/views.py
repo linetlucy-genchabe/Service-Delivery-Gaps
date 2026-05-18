@@ -1165,7 +1165,13 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
     preg_per_chp = round((preg_agg['total_preg'] or 0) / total_active, 2) if total_active else 0
 
     # 6. % CHPs Supervised
-    supervised = active_qs.filter(supervised=True).count()
+    # Use supervision_visits > 0 from CHW Detail (more reliable than supervised boolean
+    # which can be 100% in weekly extracts). Falls back to supervised boolean if no visits data.
+    supervised_via_visits = active_qs.filter(supervision_visits__gt=0).count()
+    supervised_via_bool   = active_qs.filter(supervised=True).count()
+    # Prefer supervision_visits count if it gives a more realistic result
+    # If supervised_via_visits == total_active it likely means field not populated — use bool
+    supervised = supervised_via_visits if supervised_via_visits < total_active else supervised_via_bool
     sup_pct = round(supervised / total_active * 100, 1) if total_active else 0
 
     # 7. Sync rate — from sync queryset if provided
