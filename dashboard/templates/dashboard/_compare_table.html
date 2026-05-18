@@ -1,0 +1,35 @@
+{% if rows %}
+<table class="data-table">
+  <thead><tr>
+    <th>#</th>
+    <th>County</th>
+    <th>Sub-County</th>
+    <th>Community Health Unit</th>
+    <th>CHP Name</th>
+    <th>Username</th>
+    <th class="num">Days Synced ({{ batch_a.label }})</th>
+    <th>Last Sync ({{ batch_a.label }})</th>
+    <th class="num">Days Synced ({{ batch_b.label }})</th>
+    <th>Last Sync ({{ batch_b.label }})</th>
+  </tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="zero">{{ forloop.counter }}</td>
+      <td>{{ r.county }}</td>
+      <td>{{ r.sub_county }}</td>
+      <td><strong>{{ r.community_health_unit }}</strong></td>
+      <td>{{ r.chp_name }}</td>
+      <td class="zero">{{ r.username }}</td>
+      <td class="num {% if r.days_synced_a == '—' %}zero{% elif r.days_synced_a == 0 %}bad{% endif %}">{{ r.days_synced_a }}</td>
+      <td class="{% if r.last_sync_a == 'Never' %}bad{% else %}zero{% endif %}">{{ r.last_sync_a }}</td>
+      <td class="num {% if r.days_synced_b == '—' %}zero{% elif r.days_synced_b == 0 %}bad{% endif %}">{{ r.days_synced_b }}</td>
+      <td class="{% if r.last_sync_b == 'Never' %}bad{% else %}zero{% endif %}">{{ r.last_sync_b }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">{{ rows|length }} CHP(s)</div>
+{% else %}
+<div class="table-empty">✅ No CHPs in this category.</div>
+{% endif %}

@@ -917,3 +917,191 @@ def download_chu_sync(request):
             round(c['avg_reports'] or 0, 1),
         ])
     return response
+
+
+# ===========================================================================
+# SYNC COMPARISON VIEW
+# ===========================================================================
+
+def sync_compare_view(request):
+    """Compare two sync batches to identify consistent non-syncers etc."""
+    batches    = SyncUploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    batch_a_id = request.GET.get('batch_a', '')
+    batch_b_id = request.GET.get('batch_b', '')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    comparison  = None
+    filter_opts = {}
+
+    if batch_a_id and batch_b_id and batch_a_id != batch_b_id:
+        batch_a = get_object_or_404(SyncUploadBatch, pk=batch_a_id)
+        batch_b = get_object_or_404(SyncUploadBatch, pk=batch_b_id)
+
+        def base_qs(batch):
+            qs = CHPSyncRecord.objects.filter(batch=batch).exclude(
+                county='').exclude(sub_county='').exclude(community_health_unit='')
+            if county:     qs = qs.filter(county=county)
+            if sub_county: qs = qs.filter(sub_county=sub_county)
+            if chu:        qs = qs.filter(community_health_unit=chu)
+            return qs
+
+        qs_a = base_qs(batch_a)
+        qs_b = base_qs(batch_b)
+
+        # Build lookup dicts keyed by username
+        def to_dict(qs):
+            return {
+                r['username']: r for r in qs.values(
+                    'username', 'chp_name', 'county', 'sub_county',
+                    'community_health_unit', 'days_synced', 'reports_synced', 'last_sync_date'
+                )
+            }
+
+        dict_a = to_dict(qs_a)
+        dict_b = to_dict(qs_b)
+
+        all_usernames = set(dict_a.keys()) | set(dict_b.keys())
+
+        synced_both       = []  # synced in both
+        synced_a_only     = []  # synced in A but not B
+        synced_b_only     = []  # synced in B but not A
+        never_synced_both = []  # never synced in either
+
+        for username in sorted(all_usernames):
+            a = dict_a.get(username)
+            b = dict_b.get(username)
+            in_a_synced = a and a['days_synced'] >= 1
+            in_b_synced = b and b['days_synced'] >= 1
+            in_a = bool(a)
+            in_b = bool(b)
+
+            row = {
+                'username':               username,
+                'chp_name':               (a or b)['chp_name'],
+                'county':                 (a or b)['county'],
+                'sub_county':             (a or b)['sub_county'],
+                'community_health_unit':  (a or b)['community_health_unit'],
+                'days_synced_a':          a['days_synced'] if a else '—',
+                'days_synced_b':          b['days_synced'] if b else '—',
+                'last_sync_a':            str(a['last_sync_date']) if a and a['last_sync_date'] else 'Never',
+                'last_sync_b':            str(b['last_sync_date']) if b and b['last_sync_date'] else 'Never',
+                'in_a': in_a, 'in_b': in_b,
+            }
+
+            if in_a_synced and in_b_synced:
+                synced_both.append(row)
+            elif in_a_synced and not in_b_synced:
+                synced_a_only.append(row)
+            elif in_b_synced and not in_a_synced:
+                synced_b_only.append(row)
+            else:
+                never_synced_both.append(row)
+
+        # Filter options from batch_a for cascading filters
+        filter_qs = CHPSyncRecord.objects.filter(batch=batch_a).exclude(
+            county='').exclude(sub_county='').exclude(community_health_unit='')
+        filter_opts['counties']    = filter_qs.values_list('county', flat=True).distinct().order_by('county')
+        if county:
+            filter_opts['sub_counties'] = filter_qs.filter(county=county).values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        if sub_county:
+            filter_opts['chus'] = filter_qs.filter(county=county, sub_county=sub_county).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+
+        comparison = {
+            'batch_a': batch_a,
+            'batch_b': batch_b,
+            'synced_both':       synced_both,
+            'synced_a_only':     synced_a_only,
+            'synced_b_only':     synced_b_only,
+            'never_synced_both': never_synced_both,
+            'total': len(all_usernames),
+            'count_both':   len(synced_both),
+            'count_a_only': len(synced_a_only),
+            'count_b_only': len(synced_b_only),
+            'count_never':  len(never_synced_both),
+        }
+
+    return render(request, 'dashboard/sync_compare.html', {
+        'batches':     batches,
+        'batch_a_id':  batch_a_id,
+        'batch_b_id':  batch_b_id,
+        'comparison':  comparison,
+        'filter_opts': filter_opts,
+        'selected_county':    county,
+        'selected_subcounty': sub_county,
+        'selected_chu':       chu,
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+    })
+
+
+@require_GET
+def api_compare_download(request):
+    """CSV download for any comparison category."""
+    batch_a_id = request.GET.get('batch_a')
+    batch_b_id = request.GET.get('batch_b')
+    category   = request.GET.get('category', 'never_synced_both')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch_a = get_object_or_404(SyncUploadBatch, pk=batch_a_id)
+    batch_b = get_object_or_404(SyncUploadBatch, pk=batch_b_id)
+
+    def base_qs(batch):
+        qs = CHPSyncRecord.objects.filter(batch=batch).exclude(
+            county='').exclude(sub_county='').exclude(community_health_unit='')
+        if county:     qs = qs.filter(county=county)
+        if sub_county: qs = qs.filter(sub_county=sub_county)
+        if chu:        qs = qs.filter(community_health_unit=chu)
+        return qs
+
+    dict_a = {r['username']: r for r in base_qs(batch_a).values(
+        'username', 'chp_name', 'county', 'sub_county',
+        'community_health_unit', 'days_synced', 'last_sync_date')}
+    dict_b = {r['username']: r for r in base_qs(batch_b).values(
+        'username', 'chp_name', 'county', 'sub_county',
+        'community_health_unit', 'days_synced', 'last_sync_date')}
+
+    all_usernames = set(dict_a.keys()) | set(dict_b.keys())
+    rows = []
+    for username in sorted(all_usernames):
+        a = dict_a.get(username)
+        b = dict_b.get(username)
+        in_a_synced = a and a['days_synced'] >= 1
+        in_b_synced = b and b['days_synced'] >= 1
+        row = {
+            'username': username,
+            'chp_name': (a or b)['chp_name'],
+            'county': (a or b)['county'],
+            'sub_county': (a or b)['sub_county'],
+            'community_health_unit': (a or b)['community_health_unit'],
+            'days_a': a['days_synced'] if a else '—',
+            'days_b': b['days_synced'] if b else '—',
+            'last_a': str(a['last_sync_date']) if a and a['last_sync_date'] else 'Never',
+            'last_b': str(b['last_sync_date']) if b and b['last_sync_date'] else 'Never',
+        }
+        if category == 'synced_both'       and in_a_synced and in_b_synced:         rows.append(row)
+        elif category == 'synced_a_only'   and in_a_synced and not in_b_synced:     rows.append(row)
+        elif category == 'synced_b_only'   and in_b_synced and not in_a_synced:     rows.append(row)
+        elif category == 'never_synced_both' and not in_a_synced and not in_b_synced: rows.append(row)
+
+    labels = {
+        'synced_both':       'Synced in Both Periods',
+        'synced_a_only':     f'Synced in {batch_a.label} Only',
+        'synced_b_only':     f'Synced in {batch_b.label} Only',
+        'never_synced_both': 'Never Synced in Either Period',
+    }
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="sync_comparison_{category}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Category', 'County', 'Sub-County', 'Community Health Unit',
+                     'CHP Name', 'Username',
+                     f'Days Synced ({batch_a.label})', f'Last Sync ({batch_a.label})',
+                     f'Days Synced ({batch_b.label})', f'Last Sync ({batch_b.label})'])
+    for r in rows:
+        writer.writerow([labels.get(category, category), r['county'], r['sub_county'],
+                         r['community_health_unit'], r['chp_name'], r['username'],
+                         r['days_a'], r['last_a'], r['days_b'], r['last_b']])
+    return response
