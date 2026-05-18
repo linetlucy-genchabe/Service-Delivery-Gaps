@@ -1,0 +1,208 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Weekly Performance Scorecard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Weekly Performance Scorecard</h1>
+    <p class="page-subtitle">
+      {% if batch_current_week %}
+        Auto-detected: {{ batch_current_week.label }}
+        {% if selected_county %} › {{ selected_county }}{% endif %}
+        {% if selected_subcounty %} › {{ selected_subcounty }}{% endif %}
+        {% if selected_chu %} › {{ selected_chu }}{% endif %}
+      {% else %}
+        Upload CHW data to generate the scorecard automatically.
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="filter-bar">
+  <form method="get" class="filter-form" id="scorecard-form">
+
+    <!-- Geography filters -->
+    {% if filter_opts.counties %}
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for c in filter_opts.counties %}
+          <option value="{{ c }}" {% if selected_county == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    {% if selected_county and filter_opts.sub_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in filter_opts.sub_counties %}
+          <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    {% if selected_subcounty and filter_opts.chus %}
+    <div class="filter-group">
+      <label class="filter-label">Community Health Unit</label>
+      <select name="chu" class="filter-select" onchange="this.form.submit()">
+        <option value="">All CHUs</option>
+        {% for chu in filter_opts.chus %}
+          <option value="{{ chu }}" {% if selected_chu == chu %}selected{% endif %}>{{ chu }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    {% if selected_county %}
+      <a href="{% url 'scorecard' %}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+
+    <!-- Keep hidden fields -->
+    {% if override_prev_month %}<input type="hidden" name="batch_prev_month" value="{{ override_prev_month }}">{% endif %}
+    {% if override_prev_week %}<input type="hidden" name="batch_prev_week" value="{{ override_prev_week }}">{% endif %}
+    {% if override_current_week %}<input type="hidden" name="batch_current" value="{{ override_current_week }}">{% endif %}
+    {% if selected_county %}<input type="hidden" name="county" value="{{ selected_county }}">{% endif %}
+    {% if selected_subcounty %}<input type="hidden" name="sub_county" value="{{ selected_subcounty }}">{% endif %}
+    {% if selected_chu %}<input type="hidden" name="chu" value="{{ selected_chu }}">{% endif %}
+  </form>
+</div>
+
+<!-- BATCH OVERRIDE (collapsible) -->
+<details class="batch-override-panel">
+  <summary class="batch-override-toggle">⚙️ Override Auto-detected Periods</summary>
+  <form method="get" class="batch-override-form">
+    {% if selected_county %}<input type="hidden" name="county" value="{{ selected_county }}">{% endif %}
+    {% if selected_subcounty %}<input type="hidden" name="sub_county" value="{{ selected_subcounty }}">{% endif %}
+    {% if selected_chu %}<input type="hidden" name="chu" value="{{ selected_chu }}">{% endif %}
+
+    <div class="filter-form" style="padding:12px 0 0;">
+      <div class="filter-group">
+        <label class="filter-label" style="color:var(--text-muted)">Previous Month Period</label>
+        <select name="batch_prev_month" class="form-input">
+          <option value="">Auto-detect</option>
+          {% for b in all_batches %}
+            <option value="{{ b.pk }}" {% if override_prev_month == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" style="color:var(--text-muted)">Previous Week Period</label>
+        <select name="batch_prev_week" class="form-input">
+          <option value="">Auto-detect</option>
+          {% for b in all_batches %}
+            <option value="{{ b.pk }}" {% if override_prev_week == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" style="color:var(--text-muted)">Current Week Period</label>
+        <select name="batch_current" class="form-input">
+          <option value="">Auto-detect</option>
+          {% for b in all_batches %}
+            <option value="{{ b.pk }}" {% if override_current_week == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <button type="submit" class="btn btn-primary">Apply</button>
+        <a href="{% url 'scorecard' %}{% if selected_county %}?county={{ selected_county }}{% endif %}{% if selected_subcounty %}&sub_county={{ selected_subcounty }}{% endif %}{% if selected_chu %}&chu={{ selected_chu }}{% endif %}" class="btn btn-outline">Reset to Auto</a>
+      </div>
+    </div>
+  </form>
+</details>
+
+{% if not rows %}
+<div class="empty-dashboard">
+  <div class="empty-icon">📋</div>
+  <h2>No Data Available</h2>
+  <p>Upload CHW Detail data to generate the performance scorecard.</p>
+</div>
+
+{% else %}
+
+<!-- COLUMN HEADERS INFO -->
+<div class="scorecard-period-labels">
+  <div class="period-label-item">
+    <span class="period-dot dot-grey"></span>
+    <span><strong>Previous Month:</strong> {{ batch_prev_month.label|default:"No data" }}</span>
+  </div>
+  <div class="period-label-item">
+    <span class="period-dot dot-grey"></span>
+    <span><strong>Previous Week:</strong> {{ batch_prev_week.label|default:"No data" }}</span>
+  </div>
+  <div class="period-label-item">
+    <span class="period-dot dot-grey"></span>
+    <span><strong>Current Week:</strong> {{ batch_current_week.label|default:"No data" }}</span>
+  </div>
+</div>
+
+<!-- SCORECARD TABLE -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Performance Scorecard</h3>
+      <p class="card-subtitle">
+        🟢 ≥100% of target &nbsp;·&nbsp; 🟡 50–99% &nbsp;·&nbsp; 🔴 &lt;50% &nbsp;·&nbsp; % Target Achieved = Current Week ÷ Monthly Target × 100
+      </p>
+    </div>
+    <button class="btn btn-sm btn-outline" onclick="printScorecard()">🖨️ Print / Save PDF</button>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      <table class="scorecard-table" id="scorecard-table">
+        <thead>
+          <tr>
+            <th class="sc-indicator">Indicator</th>
+            <th class="sc-target">Monthly Target</th>
+            <th class="sc-col">{{ batch_prev_month.label|default:"Previous Month" }}</th>
+            <th class="sc-col">{{ batch_prev_week.label|default:"Previous Week" }}</th>
+            <th class="sc-col sc-current">{{ batch_current_week.label|default:"Current Week" }}</th>
+            <th class="sc-col sc-achieved">% Monthly Target Achieved</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="sc-indicator-cell">{{ row.label }}</td>
+            <td class="sc-target-cell">{{ row.target }}</td>
+            <td class="sc-cell sc-{{ row.prev_month.colour }}">
+              {{ row.prev_month.display }}
+            </td>
+            <td class="sc-cell sc-{{ row.prev_week.colour }}">
+              {{ row.prev_week.display }}
+            </td>
+            <td class="sc-cell sc-{{ row.current_week.colour }} sc-current">
+              {{ row.current_week.display }}
+            </td>
+            <td class="sc-cell sc-achieved-cell {% if row.current_week.pct_target %}sc-{% if row.current_week.pct_target >= 100 %}green{% elif row.current_week.pct_target >= 50 %}yellow{% else %}red{% endif %}{% endif %}">
+              {% if row.current_week.pct_target %}
+                {{ row.current_week.pct_target }}%
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function printScorecard() {
+  window.print();
+}
+</script>
+{% endblock %}
