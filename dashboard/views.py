@@ -73,6 +73,7 @@ def upload_view(request):
             batch.uploaded_by = request.user
             batch.year  = int(form.cleaned_data['year'])
             batch.month = int(form.cleaned_data['month'])
+            batch.week_end_date = form.cleaned_data.get('week_end_date')
             batch.save()
 
             chw_rows, chw_errors = parse_chw_file(batch, request.FILES['chw_file'])
@@ -697,6 +698,14 @@ class SyncUploadForm(django_forms.ModelForm):
     week_start_date = django_forms.DateField(
         required=False,
         widget=django_forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+        label='Week Start Date',
+        help_text='First day of the reporting period',
+    )
+    week_end_date = django_forms.DateField(
+        required=False,
+        widget=django_forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+        label='Week End Date (optional)',
+        help_text='Last day of the reporting period. Leave blank for standard week label.',
     )
     sync_file = django_forms.FileField(
         label='CHP Sync Report File (.xlsx)',
@@ -730,6 +739,7 @@ def sync_upload_view(request):
         batch.uploaded_by = request.user
         batch.year  = int(form.cleaned_data['year'])
         batch.month = int(form.cleaned_data['month'])
+        batch.week_end_date = form.cleaned_data.get('week_end_date')
         batch.save()
 
         rows, errors = parse_sync_file(batch, request.FILES['sync_file'])

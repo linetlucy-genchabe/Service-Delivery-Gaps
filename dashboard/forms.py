@@ -28,8 +28,14 @@ class UploadBatchForm(forms.ModelForm):
     week_start_date = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
-        label='Week Start Date (for weekly uploads only)',
-        help_text='Select the Monday/start date of the week being uploaded (e.g. 2026-04-06 for "Week of 9 Apr")',
+        label='Week Start Date',
+        help_text='First day of the reporting period (e.g. 2026-05-01)',
+    )
+    week_end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-input'}),
+        label='Week End Date (optional)',
+        help_text='Last day of the reporting period (e.g. 2026-05-15). Leave blank for a standard week label.',
     )
     chw_file = forms.FileField(
         label='CHW Detail File (.xlsx)',
@@ -46,7 +52,7 @@ class UploadBatchForm(forms.ModelForm):
 
     class Meta:
         model = UploadBatch
-        fields = ['period_type', 'year', 'month', 'week_start_date', 'chw_file', 'supervision_file', 'notes']
+        fields = ['period_type', 'year', 'month', 'week_start_date', 'week_end_date', 'chw_file', 'supervision_file', 'notes']
 
     def clean(self):
         cleaned = super().clean()

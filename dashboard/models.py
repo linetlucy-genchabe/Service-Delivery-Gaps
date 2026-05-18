@@ -29,6 +29,7 @@ class UploadBatch(models.Model):
     month         = models.PositiveSmallIntegerField(choices=MONTH_CHOICES)
     # For weekly uploads: the anchor date shown to users e.g. "9 Apr 2026"
     week_start_date = models.DateField(null=True, blank=True)
+    week_end_date   = models.DateField(null=True, blank=True)
 
     # Raw files kept for audit / re-processing
     chw_file        = models.FileField(upload_to='uploads/chw/')
@@ -43,7 +44,11 @@ class UploadBatch(models.Model):
 
     def __str__(self):
         if self.period_type == 'weekly' and self.week_start_date:
-            return f"Week of {self.week_start_date.strftime('%d %b %Y').lstrip('0')} ({self.get_month_display()} {self.year})"
+            start = self.week_start_date.strftime('%d %b %Y').lstrip('0')
+            if self.week_end_date:
+                end = self.week_end_date.strftime('%d %b %Y').lstrip('0')
+                return f"{start} – {end} ({self.get_month_display()} {self.year})"
+            return f"Week of {start} ({self.get_month_display()} {self.year})"
         return f"{self.get_month_display()} {self.year} – Monthly"
 
     @property
@@ -226,7 +231,7 @@ class SyncUploadBatch(models.Model):
     year            = models.PositiveSmallIntegerField()
     month           = models.PositiveSmallIntegerField(choices=MONTH_CHOICES)
     week_start_date = models.DateField(null=True, blank=True)
-    sync_file       = models.FileField(upload_to='uploads/sync/')
+    week_end_date   = models.DateField(null=True, blank=True)
     notes           = models.TextField(blank=True)
 
     class Meta:
@@ -236,7 +241,11 @@ class SyncUploadBatch(models.Model):
 
     def __str__(self):
         if self.period_type == 'weekly' and self.week_start_date:
-            return f"Sync – Week of {self.week_start_date.strftime('%d %b %Y').lstrip('0')} ({self.get_month_display()} {self.year})"
+            start = self.week_start_date.strftime('%d %b %Y').lstrip('0')
+            if self.week_end_date:
+                end = self.week_end_date.strftime('%d %b %Y').lstrip('0')
+                return f"Sync – {start} – {end} ({self.get_month_display()} {self.year})"
+            return f"Sync – Week of {start} ({self.get_month_display()} {self.year})"
         return f"Sync – {self.get_month_display()} {self.year} – Monthly"
 
     @property
