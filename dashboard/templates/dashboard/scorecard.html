@@ -155,37 +155,50 @@
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll">
-      <table class="scorecard-table" id="scorecard-table">
+      <table id="scorecard-table" style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
-          <tr>
-            <th class="sc-indicator">Indicator</th>
-            <th class="sc-target">Monthly Target</th>
-            <th class="sc-col">{{ batch_prev_month.label|default:"Previous Month" }}</th>
-            <th class="sc-col">{{ batch_prev_week.label|default:"Previous Week" }}</th>
-            <th class="sc-col sc-current">{{ batch_current_week.label|default:"Current Week" }}</th>
-            <th class="sc-col sc-achieved">% Monthly Target Achieved</th>
+          <tr style="background:#1B3A6B;">
+            <th style="padding:12px 14px;text-align:left;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:180px;">Indicator</th>
+            <th style="padding:12px 14px;text-align:center;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:100px;">Monthly Target</th>
+            <th style="padding:12px 14px;text-align:center;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:140px;">{{ batch_prev_month.label|default:"Previous Month" }}</th>
+            <th style="padding:12px 14px;text-align:center;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:140px;">{{ batch_prev_week.label|default:"Previous Week" }}</th>
+            <th style="padding:12px 14px;text-align:center;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:140px;border-left:2px solid #E8431A;border-right:2px solid #E8431A;">{{ batch_current_week.label|default:"Current Week" }}</th>
+            <th style="padding:12px 14px;text-align:center;color:white;font-size:12px;border-bottom:3px solid #E8431A;min-width:130px;background:rgba(255,255,255,0.08);">% Monthly Target Achieved</th>
           </tr>
         </thead>
         <tbody>
           {% for row in rows %}
-          <tr>
-            <td class="sc-indicator-cell">{{ row.label }}</td>
-            <td class="sc-target-cell">{{ row.target }}</td>
-            <td class="sc-cell sc-{{ row.prev_month.colour }}">
+          <tr style="border-bottom:1px solid #E5E7EB;">
+            <td style="padding:12px 14px;font-weight:600;color:#1B3A6B;background:#EEF2F8;">{{ row.label }}</td>
+            <td style="padding:12px 14px;text-align:center;font-weight:600;color:#4B5563;background:#F9FAFB;">{{ row.target }}</td>
+            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;
+              {% if row.prev_month.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif row.prev_month.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif row.prev_month.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
               {{ row.prev_month.display }}
             </td>
-            <td class="sc-cell sc-{{ row.prev_week.colour }}">
+            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;
+              {% if row.prev_week.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif row.prev_week.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif row.prev_week.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
               {{ row.prev_week.display }}
             </td>
-            <td class="sc-cell sc-{{ row.current_week.colour }} sc-current">
+            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;border-left:2px solid #E8431A;border-right:2px solid #E8431A;
+              {% if row.current_week.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif row.current_week.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif row.current_week.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
               {{ row.current_week.display }}
             </td>
-            <td class="sc-cell sc-achieved-cell {% if row.current_week.pct_target %}sc-{% if row.current_week.pct_target >= 100 %}green{% elif row.current_week.pct_target >= 50 %}yellow{% else %}red{% endif %}{% endif %}">
+            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:13px;
               {% if row.current_week.pct_target %}
-                {{ row.current_week.pct_target }}%
-              {% else %}
-                —
-              {% endif %}
+                {% if row.current_week.pct_target >= 100 %}background:#DCFCE7;color:#166534;
+                {% elif row.current_week.pct_target >= 50 %}background:#FEF9C3;color:#854D0E;
+                {% else %}background:#FEE2E2;color:#991B1B;{% endif %}
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
+              {% if row.current_week.pct_target %}{{ row.current_week.pct_target }}%{% else %}—{% endif %}
             </td>
           </tr>
           {% endfor %}
