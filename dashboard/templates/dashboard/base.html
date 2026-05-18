@@ -37,6 +37,7 @@
   <div class="nav-actions" id="nav-actions">
     {% if user.is_authenticated %}
       <a href="{% url 'dashboard' %}" class="btn btn-ghost-sm">Gaps Dashboard</a>
+      <a href="{% url 'scorecard' %}" class="btn btn-ghost-sm">Scorecard</a>
       <a href="{% url 'sync_dashboard' %}" class="btn btn-ghost-sm">Sync Dashboard</a>
       <a href="{% url 'sync_compare' %}" class="btn btn-ghost-sm">Sync Compare</a>
       {% if is_uploader %}
