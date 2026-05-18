@@ -1113,8 +1113,8 @@ def api_compare_download(request):
 
 # Hardcoded targets (universal across all counties/sub-counties/CHUs)
 SCORECARD_TARGETS = {
-    'active_chps_pct':     {'target': 100, 'unit': '%',  'label': 'Active CHPs',               'higher_is_better': True},
-    'hh_coverage_pct':     {'target': 85,  'unit': '%',  'label': 'HH Coverage',                'higher_is_better': True},
+    'active_chps':         {'target': None, 'unit': '',   'label': 'Active CHPs',               'higher_is_better': True},
+    'hh_coverage_pct':     {'target': 85,   'unit': '%',  'label': 'HH Coverage',                'higher_is_better': True},
     'avg_positive_diag':   {'target': 10,  'unit': '',   'label': 'Avg Positive Diagnoses/CHP', 'higher_is_better': True},
     'pnc_ontime_pct':      {'target': 85,  'unit': '%',  'label': 'On Time PNC',                'higher_is_better': True},
     'preg_registered_chp': {'target': 1,   'unit': '',   'label': 'Preg Registered/CHP',        'higher_is_better': True},
@@ -1195,8 +1195,8 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
 
 
 def get_colour(value, target, higher_is_better=True):
-    """Return green/yellow/red based on % of target achieved."""
-    if value is None or target == 0:
+    """Return green/yellow/red based on % of target achieved. None target = no colour."""
+    if value is None or target is None or target == 0:
         return 'grey'
     pct = value / target * 100 if higher_is_better else (2 * target - value) / target * 100
     if pct >= 100:   return 'green'
@@ -1326,11 +1326,10 @@ def scorecard_view(request):
             pct_target = round(val / target * 100, 1) if target else None
             colour = get_colour(val, target, hib)
             return {'value': val, 'display': display, 'colour': colour, 'pct_target': pct_target}
-
         rows.append({
             'key':    key,
             'label':  meta['label'],
-            'target': f"{target}{meta['unit']}",
+            'target': f"{target}{meta['unit']}" if target is not None else '—',
             'prev_month':   cell(metrics_prev_month),
             'prev_week':    cell(metrics_prev_week),
             'current_week': cell(metrics_current_week),
