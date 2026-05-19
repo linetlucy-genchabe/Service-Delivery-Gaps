@@ -45,7 +45,7 @@ function initDrilldownCatNav() {
       const panel = document.getElementById(this.dataset.ddcat);
       if (panel) {
         panel.classList.add('active');
-        // load the active tab in this panel
+        // Always load the active tab in this panel when switching to it
         const activeTab = panel.querySelector('.tab-btn.active');
         if (activeTab) loadTable(activeTab.dataset.tab);
       }
@@ -74,7 +74,6 @@ const _loaded = {};
 
 function loadTable(tab) {
   if (_loaded[tab]) return;
-  _loaded[tab] = true;
 
   const params = new URLSearchParams({
     batch: BATCH_ID || '', county: COUNTY || '',
@@ -95,14 +94,23 @@ function loadTable(tab) {
   };
 
   const ep  = endpoints[tab];
+  if (!ep) return;
   const url = ep.includes('?') ? ep + params.toString() : ep + '?' + params.toString();
+
+  // Mark loading
+  const c = getContainer(tab);
+  if (!c) return;
+  c.innerHTML = '<div class="table-loading">Loading…</div>';
 
   fetch(url)
     .then(r => r.json())
-    .then(data => renderTable(tab, data))
+    .then(data => {
+      _loaded[tab] = true;  // only cache on success
+      renderTable(tab, data);
+    })
     .catch(() => {
-      const c = getContainer(tab);
-      if (c) c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data. Please refresh.</div>';
+      // Don't cache — allow retry on next click
+      c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data. Click the tab to retry.</div>';
     });
 }
 
