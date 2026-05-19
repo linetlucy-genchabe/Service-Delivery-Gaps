@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initTabs();
   initDefinitionModal();
   if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH) {
-    loadTable('unsupervised');
+    loadTable('inactive-chps');
   }
 });
 
@@ -81,6 +81,7 @@ function loadTable(tab) {
   });
 
   const endpoints = {
+    'inactive-chps':      '/api/inactive-chps/',
     'unsupervised':       '/api/unsupervised/',
     'lp-not-supervised':  '/api/low-performers/?group=unsupervised&',
     'lp-supervised':      '/api/low-performers/?group=supervised&',
@@ -90,6 +91,7 @@ function loadTable(tab) {
     'u5-high-hh':         '/api/u5-gap/?type=high_hh_low_u5&',
     'u5-high-u5':         '/api/u5-gap/?type=high_u5_low_pos&',
     'low-iccm':           '/api/low-iccm/',
+    'zero-positive':      '/api/zero-positive/',
     'same-day':           '/api/same-day-flags/',
   };
 
@@ -116,6 +118,7 @@ function loadTable(tab) {
 
 function getContainer(tab) {
   const map = {
+    'inactive-chps':     'inactive-chps-container',
     'unsupervised':      'unsupervised-table-container',
     'lp-not-supervised': 'lp-not-supervised-table-container',
     'lp-supervised':     'lp-supervised-table-container',
@@ -125,6 +128,7 @@ function getContainer(tab) {
     'u5-high-hh':        'u5-high-hh-container',
     'u5-high-u5':        'u5-high-u5-container',
     'low-iccm':          'low-iccm-container',
+    'zero-positive':     'zero-positive-container',
     'same-day':          'same-day-table-container',
   };
   return document.getElementById(map[tab]);
@@ -137,7 +141,8 @@ function renderTable(tab, data) {
     c.innerHTML = '<div class="table-empty">✅ No records — great result!</div>';
     return;
   }
-  if      (tab === 'unsupervised')      renderUnsupervisedTable(c, data.results);
+  if      (tab === 'inactive-chps')    renderInactiveChpsTable(c, data.results);
+  else if (tab === 'unsupervised')      renderUnsupervisedTable(c, data.results);
   else if (tab === 'lp-not-supervised') renderLowPerfTable(c, data.results, data.threshold, false);
   else if (tab === 'lp-supervised')     renderLowPerfTable(c, data.results, data.threshold, true);
   else if (tab === 'supervised-3plus')  renderSup3PlusTable(c, data.results);
@@ -146,7 +151,27 @@ function renderTable(tab, data) {
   else if (tab === 'u5-high-hh')        renderU5HighHHTable(c, data.results);
   else if (tab === 'u5-high-u5')        renderU5HighU5Table(c, data.results);
   else if (tab === 'low-iccm')          renderLowICCMTable(c, data.results);
+  else if (tab === 'zero-positive')     renderZeroPositiveTable(c, data.results);
   else if (tab === 'same-day')          renderSameDayTable(c, data.results);
+}
+
+// ── Inactive CHPs ─────────────────────────────────────────────
+function renderInactiveChpsTable(c, rows) {
+  if (!rows || rows.length === 0) {
+    c.innerHTML = '<div class="table-empty">✅ No inactive CHPs found.</div>';
+    return;
+  }
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td>
+      <td>${esc(r.chp_area)}</td><td>${esc(r.chw_name)}</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} inactive CHP(s)</div>`;
+  c.innerHTML = h;
 }
 
 // ── Unsupervised ──────────────────────────────────────────────
@@ -244,6 +269,27 @@ function renderAncGapTable(c, rows) {
       <td class="num ${gap>5?'bad':gap>2?'warn':''}">${gap}</td></tr>`;
   });
   h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with unvisited pregnancies</div>`;
+  c.innerHTML = h;
+}
+
+// ── Zero Positive Diagnoses ───────────────────────────────────
+function renderZeroPositiveTable(c, rows) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">HH Visits</th><th class="num">U5 Assessed</th>
+    <th class="num">iCCM Assessments</th><th class="num">Positive Diagnoses</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.hh_visits||0}</td>
+      <td class="num">${r.num_u5_assessed||0}</td>
+      <td class="num">${r.iccm_assessments||0}</td>
+      <td class="num bad">0</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with zero positive diagnoses</div>`;
   c.innerHTML = h;
 }
 

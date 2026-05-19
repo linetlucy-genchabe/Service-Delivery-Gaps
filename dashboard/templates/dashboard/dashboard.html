@@ -94,6 +94,12 @@
       <div class="stat-sub">{{ indicators.total_inactive }} inactive · {{ indicators.total_chps }} total in dataset</div>
       <button class="definition-btn" data-def="Active CHPs: CHPs whose status in eCHIS is marked as Active. These are the CHPs expected to conduct household visits and community health activities this period.">View definition</button>
     </div>
+    <div class="stat-card red">
+      <div class="stat-value">{{ indicators.total_inactive }}</div>
+      <div class="stat-label">Inactive CHPs</div>
+      <div class="stat-sub">CHPs marked as inactive in eCHIS this period · {{ indicators.total_chps }} total</div>
+      <button class="definition-btn" data-def="Inactive CHPs: CHPs whose status in eCHIS is marked as Inactive this period. These CHPs are not expected to be conducting household visits. A high number may indicate CHPs who have dropped out, transferred, or have not been reactivated after a break.">View definition</button>
+    </div>
     <div class="stat-card cyan">
       <div class="stat-value">{{ indicators.hh_visits_total }}</div>
       <div class="stat-label">Total HH Visits</div>
@@ -173,6 +179,12 @@
       <div class="stat-label">Low iCCM Assessments</div>
       <div class="stat-sub">Active CHPs with fewer than 5 iCCM assessments this period</div>
       <button class="definition-btn" data-def="Low iCCM Assessments: Active CHPs who conducted fewer than 5 Integrated Community Case Management (iCCM) assessments this period. iCCM assessments involve evaluating sick children under 5 for malaria, pneumonia and diarrhea. A low count may indicate the CHP is not identifying or assessing sick children during household visits.">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.zero_positive_count == 0 %}green{% elif indicators.zero_positive_count < 100 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.zero_positive_count }}</div>
+      <div class="stat-label">Zero Positive Diagnoses</div>
+      <div class="stat-sub">Active CHPs with zero positive U5 diagnoses recorded this period</div>
+      <button class="definition-btn" data-def="Zero Positive Diagnoses: Active CHPs who recorded zero positive diagnoses for Under-5 children this period. While some CHPs may genuinely have no sick children, a high count across an area likely indicates CHPs are not completing assessments properly or not recording positive findings.">View definition</button>
     </div>
   </div>
 </div>
@@ -306,13 +318,27 @@
 
 <!-- Drill-down category nav -->
 <div class="drilldown-cat-nav">
-  <button class="dd-cat-btn active" data-ddcat="dd-supervision">🔍 Supervision</button>
+  <button class="dd-cat-btn active" data-ddcat="dd-workforce">👥 Workforce</button>
+  <button class="dd-cat-btn" data-ddcat="dd-supervision">🔍 Supervision</button>
   <button class="dd-cat-btn" data-ddcat="dd-performance">⚠️ Performance</button>
   <button class="dd-cat-btn" data-ddcat="dd-maternal">🤱 Maternal Health</button>
 </div>
 
+<!-- WORKFORCE drill-down -->
+<div class="dd-cat-panel active" id="dd-workforce">
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="inactive-chps">Inactive CHPs <span class="tab-count">{{ indicators.total_inactive }}</span></button>
+  </div>
+  <div class="tab-panel active" id="tab-inactive-chps">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">Inactive CHPs</h3><p class="card-subtitle">CHPs marked as inactive in eCHIS this period.</p></div>
+      <a href="{% url 'download_inactive_chps' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="inactive-chps-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+</div>
+
 <!-- SUPERVISION drill-down -->
-<div class="dd-cat-panel active" id="dd-supervision">
+<div class="dd-cat-panel" id="dd-supervision">
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="unsupervised">Not Supervised <span class="tab-count">{{ indicators.unsupervised_count }}</span></button>
     <button class="tab-btn" data-tab="lp-not-supervised">Low Perf. Not Supervised <span class="tab-count">{{ indicators.low_performers_unsupervised }}</span></button>
@@ -359,6 +385,7 @@
     <button class="tab-btn active" data-tab="u5-high-hh">Good HH, Low U5 Assessment <span class="tab-count">{{ indicators.high_hh_low_u5_count }}</span></button>
     <button class="tab-btn" data-tab="u5-high-u5">High U5, Zero Diagnoses <span class="tab-count">{{ indicators.high_u5_low_pos_count }}</span></button>
     <button class="tab-btn" data-tab="low-iccm">Low iCCM Assessments <span class="tab-count">{{ indicators.low_iccm_count }}</span></button>
+    <button class="tab-btn" data-tab="zero-positive">Zero Positive Diagnoses <span class="tab-count">{{ indicators.zero_positive_count }}</span></button>
   </div>
   <div class="tab-panel active" id="tab-u5-high-hh">
     <div class="card"><div class="card-header">
@@ -377,6 +404,12 @@
       <div><h3 class="card-title">Active CHPs with Fewer than 5 iCCM Assessments</h3><p class="card-subtitle">CHPs not adequately assessing sick children under 5 — malaria, pneumonia, diarrhea.</p></div>
       <a href="{% url 'download_low_iccm' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="low-iccm-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-zero-positive">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">Active CHPs with Zero Positive Diagnoses</h3><p class="card-subtitle">CHPs recording no positive U5 findings — may indicate missed assessments or recording gaps.</p></div>
+      <a href="{% url 'download_zero_positive' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="zero-positive-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
 

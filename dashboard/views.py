@@ -175,6 +175,30 @@ def dashboard_view(request):
 
 @login_required
 @require_GET
+def api_inactive_chps(request):
+    """Inactive CHPs for the selected batch."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=False)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area', 'chw_name'
+    ).order_by('county', 'sub_county', 'community_health_unit', 'chw_name'))
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+@require_GET
 def api_unsupervised(request):
     batch_id    = request.GET.get('batch')
     county      = request.GET.get('county', '')
@@ -376,6 +400,57 @@ def download_zero_pregnancies(request):
     for r in qs.order_by('community_health_unit', 'chw_name'):
         writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
                          r.chw_name, r.hh_visits, r.pregnancies_registered, r.active_pregnancies])
+    return response
+
+
+@login_required
+@require_GET
+def api_zero_positive(request):
+    """Active CHPs with zero positive diagnoses U5."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, positive_diagnoses_u5=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area',
+        'chw_name', 'hh_visits', 'num_u5_assessed',
+        'iccm_assessments', 'positive_diagnoses_u5'
+    ).order_by('community_health_unit', 'chw_name'))
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_zero_positive(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, positive_diagnoses_u5=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="zero_positive_diagnoses_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area',
+                     'CHP Name', 'HH Visits', 'U5 Assessed', 'iCCM Assessments', 'Positive Diagnoses'])
+    for r in qs.order_by('community_health_unit', 'chw_name'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit, r.chp_area,
+                         r.chw_name, r.hh_visits, r.num_u5_assessed,
+                         r.iccm_assessments, r.positive_diagnoses_u5])
     return response
 
 
