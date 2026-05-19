@@ -268,6 +268,7 @@ function renderU5HighHHTable(c, rows) {
     <th>CHP Area</th><th>CHP Name</th>
     <th class="num">HH Rate</th><th class="num">Registered U5</th>
     <th class="num">U5 Assessed</th><th class="num">U5 Assessment Rate</th>
+    <th class="num">iCCM Assessments</th>
   </tr></thead><tbody>`;
   rows.forEach((r, i) => {
     h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
@@ -276,7 +277,8 @@ function renderU5HighHHTable(c, rows) {
       <td class="num good">${r.hh_rate_pct}%</td>
       <td class="num">${r.registered_children_u5}</td>
       <td class="num">${r.num_u5_assessed}</td>
-      <td class="num bad">${r.u5_rate_pct}%</td></tr>`;
+      <td class="num bad">${r.u5_rate_pct}%</td>
+      <td class="num ${(r.iccm_assessments||0)<5?'warn':''}">${r.iccm_assessments||0}</td></tr>`;
   });
   h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with high HH coverage but low U5 assessment</div>`;
   c.innerHTML = h;
