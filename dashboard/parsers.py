@@ -26,9 +26,17 @@ def _int(val):
 
 
 def _bool_yn(val):
+    if val is None:
+        return False
+    if isinstance(val, float):
+        # NaN (blank cell) must be treated as False, not truthy
+        import math
+        if math.isnan(val):
+            return False
+        return bool(val)
     if isinstance(val, bool):
         return val
-    if isinstance(val, (int, float)):
+    if isinstance(val, int):
         return bool(val)
     if isinstance(val, str):
         return val.strip().lower() in ('yes', 'true', '1')
@@ -258,7 +266,8 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
     ).count()
     low_performer_count = low_performers_unsupervised + low_performers_supervised
 
-    low_iccm_count = active_qs.filter(iccm_assessments__lt=5).count()
+    low_iccm_count      = active_qs.filter(iccm_assessments__lt=5).count()
+    zero_positive_count = active_qs.filter(positive_diagnoses_u5=0).count()
 
     # U5 Assessment gaps (exclude CHPs with 0 registered U5 or 0 registered HHs)
     # Gap 1: HH ≥70% but U5 assessment <40%
@@ -368,6 +377,7 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         'high_hh_low_u5_count': high_hh_low_u5_count,
         'high_u5_low_pos_count': high_u5_low_pos_count,
         'low_iccm_count': low_iccm_count,
+        'zero_positive_count': zero_positive_count,
         # ANC
         'anc_gap_chps': anc_gap_chps,
         'active_pregnancies': active_preg,
