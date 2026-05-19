@@ -100,7 +100,7 @@ def parse_chw_file(batch, file_obj):
                 pnc_3_7d_ontime=_int(row.get('PNC 3-7d On-time', 0)),
                 registered_children_u5=_int(row.get('Registered Children (U5)', 0)),
                 registered_children_u2=_int(row.get('Registered Children (U2)', 0)),
-                num_u5_assessed=_int(row.get('Number of U5 Children Assessed', 0)),
+                num_u5_assessed=_int(row.get('Number of U5 Children Assessed') or row.get('Unique Children Assessed (U5)', 0)),
                 iccm_assessments=_int(row.get('iCCM Assessments', 0)),
                 positive_diagnoses_u5=_int(row.get('Positive Diagnoses (U5)', 0)),
                 treated_visits_u5=_int(row.get('Treated Visits (U5)', 0)),
