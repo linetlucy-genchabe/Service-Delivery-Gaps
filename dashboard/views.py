@@ -1113,13 +1113,17 @@ def api_compare_download(request):
 
 # Hardcoded targets (universal across all counties/sub-counties/CHUs)
 SCORECARD_TARGETS = {
-    'active_chps':         {'target': None, 'unit': '',   'label': 'Active CHPs',               'higher_is_better': True},
-    'hh_coverage_pct':     {'target': 85,   'unit': '%',  'label': 'HH Coverage',                'higher_is_better': True},
-    'avg_positive_diag':   {'target': 10,  'unit': '',   'label': 'Avg Positive Diagnoses/CHP', 'higher_is_better': True},
-    'pnc_ontime_pct':      {'target': 85,  'unit': '%',  'label': 'On Time PNC',                'higher_is_better': True},
-    'preg_registered_chp': {'target': 1,   'unit': '',   'label': 'Preg Registered/CHP',        'higher_is_better': True},
-    'sync_rate_pct':       {'target': 80,  'unit': '%',  'label': '% CHPs Syncing Weekly',      'higher_is_better': True},
-    'supervision_pct':     {'target': 65,  'unit': '%',  'label': '% CHPs Supervised',          'higher_is_better': True},
+    'active_chps':            {'target': None, 'unit': '',  'label': 'Active CHPs',                  'higher_is_better': True},
+    'hh_coverage_pct':        {'target': 85,   'unit': '%', 'label': 'HH Coverage',                  'higher_is_better': True},
+    'u5_assessment_pct':      {'target': 100,  'unit': '%', 'label': 'U5s Assessed',                 'higher_is_better': True},
+    'iccm_assessments':       {'target': None, 'unit': '',  'label': 'iCCM Assessments',             'higher_is_better': True},
+    'avg_positive_diag':      {'target': 10,   'unit': '',  'label': 'Avg Positive Diagnoses/CHP',   'higher_is_better': True},
+    'iccm_referrals':         {'target': None, 'unit': '',  'label': 'iCCM Referrals',               'higher_is_better': True},
+    'iccm_referral_pct':      {'target': None, 'unit': '%', 'label': 'iCCM Referrals Completed',     'higher_is_better': True},
+    'pnc_ontime_pct':         {'target': 85,   'unit': '%', 'label': 'On Time PNC',                  'higher_is_better': True},
+    'preg_registered_chp':    {'target': 1,    'unit': '',  'label': 'Preg Registered/CHP',          'higher_is_better': True},
+    'sync_rate_pct':          {'target': 80,   'unit': '%', 'label': '% CHPs Syncing Weekly',        'higher_is_better': True},
+    'supervision_pct':        {'target': 65,   'unit': '%', 'label': '% CHPs Supervised',            'higher_is_better': True},
 }
 
 
@@ -1165,12 +1169,8 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
     preg_per_chp = round((preg_agg['total_preg'] or 0) / total_active, 2) if total_active else 0
 
     # 6. % CHPs Supervised
-    # Use supervision_visits > 0 from CHW Detail (more reliable than supervised boolean
-    # which can be 100% in weekly extracts). Falls back to supervised boolean if no visits data.
     supervised_via_visits = active_qs.filter(supervision_visits__gt=0).count()
     supervised_via_bool   = active_qs.filter(supervised=True).count()
-    # Prefer supervision_visits count if it gives a more realistic result
-    # If supervised_via_visits == total_active it likely means field not populated — use bool
     supervised = supervised_via_visits if supervised_via_visits < total_active else supervised_via_bool
     sup_pct = round(supervised / total_active * 100, 1) if total_active else 0
 
@@ -1181,16 +1181,36 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
         synced     = sync_qs.filter(days_synced__gte=1).count()
         sync_pct   = round(synced / total_sync * 100, 1) if total_sync else 0
 
+    # 8. Child Health Indicators
+    child_agg = active_qs.aggregate(
+        total_u5_assessed=Sum('num_u5_assessed'),
+        total_registered_u5=Sum('registered_children_u5'),
+        total_iccm=Sum('iccm_assessments'),
+        total_pos=Sum('positive_diagnoses_u5'),
+        total_referrals=Sum('iccm_referrals_total'),
+        total_referrals_completed=Sum('iccm_referral_followup'),
+    )
+    total_u5_assessed    = child_agg['total_u5_assessed'] or 0
+    total_registered_u5  = child_agg['total_registered_u5'] or 0
+    total_iccm           = child_agg['total_iccm'] or 0
+    total_referrals      = child_agg['total_referrals'] or 0
+    total_ref_completed  = child_agg['total_referrals_completed'] or 0
+
+    u5_assessment_pct = round(total_u5_assessed / total_registered_u5 * 100, 1) if total_registered_u5 else 0
+    iccm_referral_pct = round(total_ref_completed / total_referrals * 100, 1) if total_referrals else None
+
     return {
-        'active_chps':        total_active,
-        'total_chps':         total_all,
-        'active_chps_pct':    active_pct,
-        'hh_coverage_pct':    hh_coverage,
-        'avg_positive_diag':  avg_pos,
-        'pnc_ontime_pct':     pnc_pct,
+        'active_chps':         total_active,
+        'total_chps':          total_all,
+        'hh_coverage_pct':     hh_coverage,
+        'u5_assessment_pct':   u5_assessment_pct,
+        'iccm_assessments':    total_iccm,
+        'avg_positive_diag':   avg_pos,
+        'iccm_referrals':      total_referrals,        'iccm_referral_pct':   iccm_referral_pct,
+        'pnc_ontime_pct':      pnc_pct,
         'preg_registered_chp': preg_per_chp,
-        'supervision_pct':    sup_pct,
-        'sync_rate_pct':      sync_pct,
+        'supervision_pct':     sup_pct,
+        'sync_rate_pct':       sync_pct,
     }
 
 
@@ -1346,12 +1366,41 @@ def scorecard_view(request):
         if sub_county:
             filter_opts['chus'] = fqs.filter(county=county, sub_county=sub_county).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
 
+    # Inactive CHPs from the latest CHW batch (current_week, else prev_week, else prev_month)
+    latest_batch = batch_current_week or batch_prev_week or batch_prev_month
+    inactive_chps = []
+    if latest_batch:
+        inactive_qs = CHWRecord.objects.filter(batch=latest_batch, is_active=False)
+        if county:     inactive_qs = inactive_qs.filter(county=county)
+        if sub_county: inactive_qs = inactive_qs.filter(sub_county=sub_county)
+        if chu:        inactive_qs = inactive_qs.filter(community_health_unit=chu)
+
+        # Try to get last sync date from matching sync batch
+        sync_batch = find_matching_sync_batch(latest_batch)
+        sync_lookup = {}
+        if sync_batch:
+            for rec in CHPSyncRecord.objects.filter(batch=sync_batch).values('username', 'last_sync_date'):
+                if rec['username']:
+                    sync_lookup[rec['username']] = rec['last_sync_date']
+
+        for r in inactive_qs.order_by('county', 'sub_county', 'community_health_unit', 'chw_name'):
+            last_sync = sync_lookup.get(r.username)
+            inactive_chps.append({
+                'chw_name':              r.chw_name,
+                'county':                r.county,
+                'sub_county':            r.sub_county,
+                'community_health_unit': r.community_health_unit,
+                'chp_area':              r.chp_area,
+                'last_sync_date':        str(last_sync) if last_sync else '—',
+            })
+
     return render(request, 'dashboard/scorecard.html', {
         'rows':               rows,
         'all_batches':        all_batches,
         'batch_prev_month':   batch_prev_month,
         'batch_prev_week':    batch_prev_week,
         'batch_current_week': batch_current_week,
+        'latest_batch':       latest_batch,
         'override_prev_month':   override_prev_month,
         'override_prev_week':    override_prev_week,
         'override_current_week': override_current_week,
@@ -1359,5 +1408,43 @@ def scorecard_view(request):
         'selected_county':    county,
         'selected_subcounty': sub_county,
         'selected_chu':       chu,
+        'inactive_chps':      inactive_chps,
         'is_uploader':        is_uploader(request.user) if request.user.is_authenticated else False,
     })
+
+
+@login_required
+def download_inactive_chps(request):
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    batch_id   = request.GET.get('batch')
+
+    if batch_id:
+        batch = get_object_or_404(UploadBatch, pk=batch_id)
+    else:
+        batch = UploadBatch.objects.order_by('-year', '-month', '-week_start_date').first()
+
+    if not batch:
+        return HttpResponse('No batch found', status=404)
+
+    qs = CHWRecord.objects.filter(batch=batch, is_active=False)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    sync_batch  = find_matching_sync_batch(batch)
+    sync_lookup = {}
+    if sync_batch:
+        for rec in CHPSyncRecord.objects.filter(batch=sync_batch).values('username', 'last_sync_date'):
+            if rec['username']:
+                sync_lookup[rec['username']] = rec['last_sync_date']
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="inactive_chps_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['CHP Name', 'County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'Last Sync Date'])
+    for r in qs.order_by('county', 'sub_county', 'community_health_unit', 'chw_name'):
+        last_sync = sync_lookup.get(r.username, '—')
+        writer.writerow([r.chw_name, r.county, r.sub_county, r.community_health_unit, r.chp_area, last_sync])
+    return response

@@ -26,6 +26,7 @@ urlpatterns = [
     path('download/supervised-3plus/', views.download_supervised_3plus, name='download_supervised_3plus'),
     # Sync dashboard
     path('scorecard/', views.scorecard_view, name='scorecard'),
+    path('download/inactive-chps/', views.download_inactive_chps, name='download_inactive_chps'),
     path('sync/',                          views.sync_dashboard_view,    name='sync_dashboard'),
     path('sync/upload/',                   views.sync_upload_view,       name='sync_upload'),
     path('sync/upload/delete/<int:pk>/',   views.sync_delete_batch_view, name='sync_delete_batch'),

@@ -193,6 +193,49 @@
 </div>
 {% endif %}
 
+<!-- INACTIVE CHPs -->
+{% if inactive_chps %}
+<div class="section-label" style="margin-top:24px;">👤 Inactive CHPs — {{ latest_batch.label }}</div>
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Inactive CHPs ({{ inactive_chps|length }})</h3>
+      <p class="card-subtitle">CHPs with Active = No in the current batch{% if selected_county %} · {{ selected_county }}{% endif %}{% if selected_subcounty %} · {{ selected_subcounty }}{% endif %}</p>
+    </div>
+    <a href="{% url 'download_inactive_chps' %}?batch={{ latest_batch.pk }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}"
+       class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll" style="max-height:480px;overflow-y:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th><th>CHP Name</th><th>County</th><th>Sub-County</th>
+            <th>Community Health Unit</th><th>CHP Area</th><th>Last Sync Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for chp in inactive_chps %}
+          <tr>
+            <td class="zero">{{ forloop.counter }}</td>
+            <td><strong>{{ chp.chw_name }}</strong></td>
+            <td>{{ chp.county }}</td>
+            <td>{{ chp.sub_county }}</td>
+            <td>{{ chp.community_health_unit }}</td>
+            <td class="zero">{{ chp.chp_area }}</td>
+            <td class="zero">{{ chp.last_sync_date }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% elif rows %}
+<div class="section-label" style="margin-top:24px;">👤 Inactive CHPs</div>
+<div class="card"><div class="card-body"><p class="muted">✅ No inactive CHPs found for the current filters.</p></div></div>
+{% endif %}
+
 <div class="modal-overlay" id="def-modal" style="display:none;">
   <div class="modal">
     <div class="modal-header"><h3>Indicator Definition</h3><button class="modal-close" onclick="document.getElementById('def-modal').style.display='none'">×</button></div>
