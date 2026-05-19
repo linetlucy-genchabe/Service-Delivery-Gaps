@@ -164,9 +164,13 @@ class CHWRecord(models.Model):
 
     class Meta:
         indexes = [
+            models.Index(fields=['batch', 'is_active']),
             models.Index(fields=['batch', 'county']),
             models.Index(fields=['batch', 'county', 'sub_county']),
             models.Index(fields=['batch', 'county', 'sub_county', 'community_health_unit']),
+            models.Index(fields=['batch', 'is_active', 'county']),
+            models.Index(fields=['batch', 'is_active', 'supervised']),
+            models.Index(fields=['batch', 'is_active', 'supervision_visits']),
             models.Index(fields=['is_active']),
         ]
 
