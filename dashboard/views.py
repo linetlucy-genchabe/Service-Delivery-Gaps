@@ -311,7 +311,7 @@ def api_u5_gap(request):
     rows = list(qs.values(
         'county', 'sub_county', 'community_health_unit', 'chp_area',
         'chw_name', 'registered_hhs', 'hh_visits',
-        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5'
+        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5', 'iccm_assessments'
     ))
 
     results = []
@@ -1169,9 +1169,16 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
     preg_per_chp = round((preg_agg['total_preg'] or 0) / total_active, 2) if total_active else 0
 
     # 6. % CHPs Supervised
-    supervised_via_visits = active_qs.filter(supervision_visits__gt=0).count()
-    supervised_via_bool   = active_qs.filter(supervised=True).count()
-    supervised = supervised_via_visits if supervised_via_visits < total_active else supervised_via_bool
+    # Use supervised boolean from CHW Detail file first.
+    # If it returns 100% (all True — weekly supervised-only extract bug), fall back to supervision_visits.
+    supervised_bool   = active_qs.filter(supervised=True).count()
+    supervised_visits = active_qs.filter(supervision_visits__gt=0).count()
+
+    if supervised_bool == total_active and supervised_visits < total_active:
+        # supervised=True for all rows — file was a supervised-only extract, use visits count
+        supervised = supervised_visits
+    else:
+        supervised = supervised_bool
     sup_pct = round(supervised / total_active * 100, 1) if total_active else 0
 
     # 7. Sync rate — from sync queryset if provided
