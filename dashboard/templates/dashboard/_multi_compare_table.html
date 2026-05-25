@@ -1,0 +1,52 @@
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">{{ title }}</h3>
+      <p class="card-subtitle">{{ desc }}</p>
+    </div>
+    <a href="{% url 'sync_compare_download' %}?category={{ category }}&batch_a={{ selected_batch_ids.batch_a }}&batch_b={{ selected_batch_ids.batch_b }}{% if selected_batch_ids.batch_c %}&batch_c={{ selected_batch_ids.batch_c }}{% endif %}{% if selected_batch_ids.batch_d %}&batch_d={{ selected_batch_ids.batch_d }}{% endif %}&county={{ county }}&sub_county={{ sub_county }}&chu={{ chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      {% if rows %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>County</th>
+            <th>Sub-County</th>
+            <th>Community Health Unit</th>
+            <th>CHP Name</th>
+            <th>Username</th>
+            {% for label in labels %}
+            <th class="num">Days ({{ label }})</th>
+            {% endfor %}
+            <th class="num">Periods Synced</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td class="zero">{{ forloop.counter }}</td>
+            <td>{{ r.county }}</td>
+            <td>{{ r.sub_county }}</td>
+            <td><strong>{{ r.community_health_unit }}</strong></td>
+            <td>{{ r.chp_name }}</td>
+            <td class="zero">{{ r.username }}</td>
+            {% for days in r.days %}
+            <td class="num {% if days == '—' %}zero{% elif days == 0 %}bad{% elif days >= 1 %}good{% endif %}">{{ days }}</td>
+            {% endfor %}
+            <td class="num {% if r.synced_count == 0 %}bad{% elif r.synced_count == labels|length %}good{% else %}warn{% endif %}">
+              {{ r.synced_count }}/{{ labels|length }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">{{ rows|length }} CHP(s)</div>
+      {% else %}
+      <div class="table-empty">✅ No CHPs in this category.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
