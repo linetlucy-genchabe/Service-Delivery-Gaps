@@ -6,9 +6,9 @@
   <div>
     <h1 class="page-title">Sync Period Comparison</h1>
     {% if comparison %}
-      <p class="page-subtitle period-badge">📅 {{ comparison.batch_a.label }} vs {{ comparison.batch_b.label }}</p>
+      <p class="page-subtitle period-badge">📅 Comparing {{ comparison.n }} period{{ comparison.n|pluralize }} · {{ comparison.total }} CHPs total</p>
     {% else %}
-      <p class="page-subtitle">Select two reporting periods to compare CHP sync behaviour.</p>
+      <p class="page-subtitle">Select 2–4 reporting periods to compare CHP sync behaviour across the month.</p>
     {% endif %}
   </div>
   <a href="{% url 'sync_dashboard' %}" class="btn btn-outline">← Sync Dashboard</a>
@@ -17,27 +17,58 @@
 <!-- PERIOD SELECTORS -->
 <div class="filter-bar">
   <form method="get" class="filter-form" id="compare-form">
+    {% if selected_county %}<input type="hidden" name="county" value="{{ selected_county }}">{% endif %}
+    {% if selected_subcounty %}<input type="hidden" name="sub_county" value="{{ selected_subcounty }}">{% endif %}
+    {% if selected_chu %}<input type="hidden" name="chu" value="{{ selected_chu }}">{% endif %}
+
     <div class="filter-group">
-      <label class="filter-label">Period A (Earlier)</label>
+      <label class="filter-label">Period 1 <span style="color:var(--red)">*</span></label>
       <select name="batch_a" class="filter-select" onchange="this.form.submit()">
-        <option value="">— Select period A —</option>
+        <option value="">— Required —</option>
         {% for b in batches %}
-          <option value="{{ b.pk }}" {% if batch_a_id == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_a == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
         {% endfor %}
       </select>
     </div>
-
     <div class="filter-group">
-      <label class="filter-label">Period B (Later)</label>
+      <label class="filter-label">Period 2 <span style="color:var(--red)">*</span></label>
       <select name="batch_b" class="filter-select" onchange="this.form.submit()">
-        <option value="">— Select period B —</option>
+        <option value="">— Required —</option>
         {% for b in batches %}
-          <option value="{{ b.pk }}" {% if batch_b_id == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_b == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
         {% endfor %}
       </select>
     </div>
+    <div class="filter-group">
+      <label class="filter-label">Period 3 <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+      <select name="batch_c" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Optional —</option>
+        {% for b in batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_c == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Period 4 <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+      <select name="batch_d" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Optional —</option>
+        {% for b in batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_d == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
 
-    {% if comparison %}
+{% if comparison %}
+<!-- GEOGRAPHY FILTERS -->
+<div class="filter-bar" style="padding-top:0;margin-top:-8px;">
+  <form method="get" class="filter-form">
+    {% if selected_batch_ids.batch_a %}<input type="hidden" name="batch_a" value="{{ selected_batch_ids.batch_a }}">{% endif %}
+    {% if selected_batch_ids.batch_b %}<input type="hidden" name="batch_b" value="{{ selected_batch_ids.batch_b }}">{% endif %}
+    {% if selected_batch_ids.batch_c %}<input type="hidden" name="batch_c" value="{{ selected_batch_ids.batch_c }}">{% endif %}
+    {% if selected_batch_ids.batch_d %}<input type="hidden" name="batch_d" value="{{ selected_batch_ids.batch_d }}">{% endif %}
+
     <div class="filter-group">
       <label class="filter-label">County</label>
       <select name="county" class="filter-select" onchange="this.form.submit()">
@@ -47,8 +78,7 @@
         {% endfor %}
       </select>
     </div>
-
-    {% if selected_county %}
+    {% if selected_county and filter_opts.sub_counties %}
     <div class="filter-group">
       <label class="filter-label">Sub-County</label>
       <select name="sub_county" class="filter-select" onchange="this.form.submit()">
@@ -59,8 +89,7 @@
       </select>
     </div>
     {% endif %}
-
-    {% if selected_subcounty %}
+    {% if selected_subcounty and filter_opts.chus %}
     <div class="filter-group">
       <label class="filter-label">Community Health Unit</label>
       <select name="chu" class="filter-select" onchange="this.form.submit()">
@@ -71,193 +100,145 @@
       </select>
     </div>
     {% endif %}
-
     {% if selected_county %}
-      <a href="?batch_a={{ batch_a_id }}&batch_b={{ batch_b_id }}" class="filter-reset">✕ Clear Filters</a>
+      <a href="?{% for k,v in selected_batch_ids.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
-    {% endif %}
-
-    <!-- carry hidden fields -->
-    {% if batch_a_id %}<input type="hidden" name="batch_a" value="{{ batch_a_id }}">{% endif %}
-    {% if batch_b_id %}<input type="hidden" name="batch_b" value="{{ batch_b_id }}">{% endif %}
-    {% if selected_county %}<input type="hidden" name="county" value="{{ selected_county }}">{% endif %}
-    {% if selected_subcounty %}<input type="hidden" name="sub_county" value="{{ selected_subcounty }}">{% endif %}
-    {% if selected_chu %}<input type="hidden" name="chu" value="{{ selected_chu }}">{% endif %}
   </form>
 </div>
 
-{% if not comparison %}
-<div class="empty-dashboard">
-  <div class="empty-icon">🔄</div>
-  <h2>Select Two Periods to Compare</h2>
-  <p>Choose Period A and Period B above to see how CHP sync behaviour changed between the two periods.</p>
+<!-- PERIOD LABELS -->
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  {% for b in comparison.batches %}
+  <span style="background:var(--navy);color:white;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;">
+    Period {{ forloop.counter }}: {{ b.label }}
+  </span>
+  {% endfor %}
 </div>
-
-{% else %}
 
 <!-- SUMMARY CARDS -->
-<div class="section-label">📊 Comparison Summary — {{ comparison.total }} CHPs total</div>
+<div class="section-label">📊 Comparison Summary — {{ comparison.total }} CHPs across {{ comparison.n }} period{{ comparison.n|pluralize }}</div>
 <div class="cards-grid">
-
   <div class="stat-card green">
-    <div class="stat-value">{{ comparison.count_both }}</div>
-    <div class="stat-label">✅ Synced in Both Periods</div>
-    <div class="stat-sub">CHPs who synced at least once in both {{ comparison.batch_a.label }} and {{ comparison.batch_b.label }}</div>
-    <button class="definition-btn" data-def="Synced Both Periods: CHPs who successfully synced their phone data at least once in both reporting periods. These CHPs are consistently active and uploading data to eCHIS.">View definition</button>
+    <div class="stat-value">{{ comparison.count_all }}</div>
+    <div class="stat-label">✅ Synced All Periods</div>
+    <div class="stat-sub">Synced in every selected period — consistently active</div>
+    <button class="definition-btn" data-def="Synced All Periods: CHPs who successfully synced at least once in every single selected reporting period. These are your most consistently active data capturers.">View definition</button>
   </div>
-
-  <div class="stat-card yellow">
-    <div class="stat-value">{{ comparison.count_a_only }}</div>
-    <div class="stat-label">⚠️ Synced Period A Only</div>
-    <div class="stat-sub">Synced in {{ comparison.batch_a.label }} but NOT in {{ comparison.batch_b.label }} — dropped off</div>
-    <button class="definition-btn" data-def="Synced Period A Only: CHPs who synced during the earlier period but did not sync during the later period. These CHPs were active but have since dropped off — they need follow-up to understand why they stopped syncing.">View definition</button>
-  </div>
-
   <div class="stat-card cyan">
-    <div class="stat-value">{{ comparison.count_b_only }}</div>
-    <div class="stat-label">🔵 Synced Period B Only</div>
-    <div class="stat-sub">Synced in {{ comparison.batch_b.label }} but NOT in {{ comparison.batch_a.label }} — newly active</div>
-    <button class="definition-btn" data-def="Synced Period B Only: CHPs who did not sync during the earlier period but did sync during the later period. These CHPs were inactive and have since become active — a positive trend.">View definition</button>
+    <div class="stat-value">{{ comparison.count_most }}</div>
+    <div class="stat-label">🔵 Synced Most Periods</div>
+    <div class="stat-sub">Synced in more than half but not all periods — mostly active</div>
+    <button class="definition-btn" data-def="Synced Most Periods: CHPs who synced in more than half of the selected periods but missed at least one. They are mostly active but inconsistent — worth checking what caused them to miss a period.">View definition</button>
   </div>
-
+  <div class="stat-card yellow">
+    <div class="stat-value">{{ comparison.count_some }}</div>
+    <div class="stat-label">🟡 Synced Some Periods</div>
+    <div class="stat-sub">Synced in half or fewer periods — inconsistently active</div>
+    <button class="definition-btn" data-def="Synced Some Periods: CHPs who synced in half or fewer of the selected periods (but more than one). These CHPs are inconsistent syncers — they have synced before but are frequently missing. Targeted follow-up is needed.">View definition</button>
+  </div>
+  <div class="stat-card {% if comparison.count_appeared > 0 %}navy{% else %}green{% endif %}">
+    <div class="stat-value">{{ comparison.count_appeared }}</div>
+    <div class="stat-label">🟠 Appeared / Dropped Off</div>
+    <div class="stat-sub">Only synced in exactly one period — new or dropped off</div>
+    <button class="definition-btn" data-def="Appeared or Dropped Off: CHPs who synced in exactly one of the selected periods. They may be newly activated CHPs appearing for the first time, or previously active CHPs who have dropped off and only appeared once. Investigate individually.">View definition</button>
+  </div>
   <div class="stat-card red">
     <div class="stat-value">{{ comparison.count_never }}</div>
-    <div class="stat-label">🔴 Never Synced Either Period</div>
-    <div class="stat-sub">CHPs who did not sync in either period — persistent non-syncers, highest priority</div>
-    <button class="definition-btn" data-def="Never Synced Either Period: CHPs who did not sync their phone data in either reporting period. These are persistent non-syncers — their work is completely invisible in eCHIS across both periods. This is the highest-priority group for follow-up and support.">View definition</button>
+    <div class="stat-label">🔴 Never Synced Any Period</div>
+    <div class="stat-sub">Zero syncs across all selected periods — persistent non-syncers</div>
+    <button class="definition-btn" data-def="Never Synced Any Period: CHPs who did not sync in any of the selected reporting periods. These are persistent non-syncers — their work is completely invisible in eCHIS across all selected periods. Highest priority for follow-up and support.">View definition</button>
   </div>
-
 </div>
 
-<!-- VISUAL BREAKDOWN BAR -->
+<!-- VISUAL BAR -->
 <div class="section-label">📈 Visual Breakdown</div>
 <div class="card">
   <div class="card-body">
-    <div class="compare-bar-wrap">
-      {% with total=comparison.total %}
-      {% if total > 0 %}
-        <div class="compare-bar">
-          {% if comparison.count_both > 0 %}
-          <div class="compare-seg seg-green" style="width:{% widthratio comparison.count_both total 100 %}%"
-               title="Synced Both: {{ comparison.count_both }}">
-            {% if comparison.count_both > total|divisibleby:10 %}{{ comparison.count_both }}{% endif %}
-          </div>
-          {% endif %}
-          {% if comparison.count_a_only > 0 %}
-          <div class="compare-seg seg-yellow" style="width:{% widthratio comparison.count_a_only total 100 %}%"
-               title="Period A Only: {{ comparison.count_a_only }}">
-            {% if comparison.count_a_only > total|divisibleby:10 %}{{ comparison.count_a_only }}{% endif %}
-          </div>
-          {% endif %}
-          {% if comparison.count_b_only > 0 %}
-          <div class="compare-seg seg-cyan" style="width:{% widthratio comparison.count_b_only total 100 %}%"
-               title="Period B Only: {{ comparison.count_b_only }}">
-            {% if comparison.count_b_only > total|divisibleby:10 %}{{ comparison.count_b_only }}{% endif %}
-          </div>
-          {% endif %}
-          {% if comparison.count_never > 0 %}
-          <div class="compare-seg seg-red" style="width:{% widthratio comparison.count_never total 100 %}%"
-               title="Never Synced: {{ comparison.count_never }}">
-            {% if comparison.count_never > total|divisibleby:10 %}{{ comparison.count_never }}{% endif %}
-          </div>
-          {% endif %}
-        </div>
-        <div class="compare-legend">
-          <span class="legend-item"><span class="legend-dot dot-green"></span> Synced Both ({{ comparison.count_both }})</span>
-          <span class="legend-item"><span class="legend-dot dot-yellow"></span> Period A Only ({{ comparison.count_a_only }})</span>
-          <span class="legend-item"><span class="legend-dot dot-cyan"></span> Period B Only ({{ comparison.count_b_only }})</span>
-          <span class="legend-item"><span class="legend-dot dot-red"></span> Never Synced ({{ comparison.count_never }})</span>
-        </div>
-      {% endif %}
-      {% endwith %}
+    {% with total=comparison.total %}
+    {% if total > 0 %}
+    <div class="compare-bar" style="height:52px;">
+      {% if comparison.count_all > 0 %}
+      <div class="compare-seg seg-green" style="width:{% widthratio comparison.count_all total 100 %}%" title="Synced All: {{ comparison.count_all }}">
+        {% if comparison.count_all > 50 %}{{ comparison.count_all }}{% endif %}
+      </div>{% endif %}
+      {% if comparison.count_most > 0 %}
+      <div class="compare-seg seg-cyan" style="width:{% widthratio comparison.count_most total 100 %}%" title="Synced Most: {{ comparison.count_most }}">
+        {% if comparison.count_most > 50 %}{{ comparison.count_most }}{% endif %}
+      </div>{% endif %}
+      {% if comparison.count_some > 0 %}
+      <div class="compare-seg seg-yellow" style="width:{% widthratio comparison.count_some total 100 %}%" title="Synced Some: {{ comparison.count_some }}">
+        {% if comparison.count_some > 50 %}{{ comparison.count_some }}{% endif %}
+      </div>{% endif %}
+      {% if comparison.count_appeared > 0 %}
+      <div class="compare-seg" style="width:{% widthratio comparison.count_appeared total 100 %}%;background:#EA580C;" title="Appeared/Dropped: {{ comparison.count_appeared }}">
+        {% if comparison.count_appeared > 50 %}{{ comparison.count_appeared }}{% endif %}
+      </div>{% endif %}
+      {% if comparison.count_never > 0 %}
+      <div class="compare-seg seg-red" style="width:{% widthratio comparison.count_never total 100 %}%" title="Never Synced: {{ comparison.count_never }}">
+        {% if comparison.count_never > 50 %}{{ comparison.count_never }}{% endif %}
+      </div>{% endif %}
     </div>
+    <div class="compare-legend">
+      <span class="legend-item"><span class="legend-dot dot-green"></span>Synced All ({{ comparison.count_all }})</span>
+      <span class="legend-item"><span class="legend-dot dot-cyan"></span>Synced Most ({{ comparison.count_most }})</span>
+      <span class="legend-item"><span class="legend-dot dot-yellow"></span>Synced Some ({{ comparison.count_some }})</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#EA580C;"></span>Appeared/Dropped ({{ comparison.count_appeared }})</span>
+      <span class="legend-item"><span class="legend-dot dot-red"></span>Never Synced ({{ comparison.count_never }})</span>
+    </div>
+    {% endif %}
+    {% endwith %}
   </div>
 </div>
 
 <!-- DRILL-DOWN TABS -->
 <div class="section-label">📋 Drill-Down by Category</div>
 <div class="tab-bar">
-  <button class="tab-btn active" data-tab="comp-never">🔴 Never Synced Either <span class="tab-count">{{ comparison.count_never }}</span></button>
-  <button class="tab-btn" data-tab="comp-a-only">⚠️ Dropped Off (A Only) <span class="tab-count">{{ comparison.count_a_only }}</span></button>
-  <button class="tab-btn" data-tab="comp-b-only">🔵 Newly Active (B Only) <span class="tab-count">{{ comparison.count_b_only }}</span></button>
-  <button class="tab-btn" data-tab="comp-both">✅ Consistent Syncers <span class="tab-count">{{ comparison.count_both }}</span></button>
+  <button class="tab-btn active" data-tab="comp-never">🔴 Never Synced <span class="tab-count">{{ comparison.count_never }}</span></button>
+  <button class="tab-btn" data-tab="comp-some">🟡 Synced Some <span class="tab-count">{{ comparison.count_some }}</span></button>
+  <button class="tab-btn" data-tab="comp-appeared">🟠 Appeared/Dropped <span class="tab-count">{{ comparison.count_appeared }}</span></button>
+  <button class="tab-btn" data-tab="comp-most">🔵 Synced Most <span class="tab-count">{{ comparison.count_most }}</span></button>
+  <button class="tab-btn" data-tab="comp-all">✅ Synced All <span class="tab-count">{{ comparison.count_all }}</span></button>
 </div>
 
-{% for tab_id, tab_rows, tab_title, tab_desc, tab_category, tab_cls in comparison_tabs %}
-{% endfor %}
+{% with batch_ids_qs="batch_a="|add:selected_batch_ids.batch_a|add:"&batch_b="|add:selected_batch_ids.batch_b %}
+{% for tab_id, category, title, desc in comp_tabs_meta %}{% endfor %}
 
-<!-- Never synced both -->
 <div class="tab-panel active" id="tab-comp-never">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">CHPs Who Never Synced in Either Period</h3>
-        <p class="card-subtitle">Persistent non-syncers across {{ comparison.batch_a.label }} and {{ comparison.batch_b.label }} — highest priority for follow-up.</p></div>
-      <a href="{% url 'sync_compare_download' %}?batch_a={{ batch_a_id }}&batch_b={{ batch_b_id }}&category=never_synced_both&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-    </div>
-    <div class="card-body no-pad"><div class="table-scroll">
-      {% include 'dashboard/_compare_table.html' with rows=comparison.never_synced_both batch_a=comparison.batch_a batch_b=comparison.batch_b %}
-    </div></div>
-  </div>
+  {% include 'dashboard/_multi_compare_table.html' with rows=comparison.never_synced labels=comparison.labels title="CHPs Who Never Synced in Any Period" desc="Persistent non-syncers — zero syncs across all selected periods." category="never_synced" selected_batch_ids=selected_batch_ids county=selected_county sub_county=selected_subcounty chu=selected_chu %}
 </div>
-
-<!-- Dropped off -->
-<div class="tab-panel" id="tab-comp-a-only">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Synced in {{ comparison.batch_a.label }} — Did Not Sync in {{ comparison.batch_b.label }}</h3>
-        <p class="card-subtitle">These CHPs were active but have since dropped off. Investigate what changed.</p></div>
-      <a href="{% url 'sync_compare_download' %}?batch_a={{ batch_a_id }}&batch_b={{ batch_b_id }}&category=synced_a_only&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-    </div>
-    <div class="card-body no-pad"><div class="table-scroll">
-      {% include 'dashboard/_compare_table.html' with rows=comparison.synced_a_only batch_a=comparison.batch_a batch_b=comparison.batch_b %}
-    </div></div>
-  </div>
+<div class="tab-panel" id="tab-comp-some">
+  {% include 'dashboard/_multi_compare_table.html' with rows=comparison.synced_some labels=comparison.labels title="CHPs Synced in Some Periods (Half or Fewer)" desc="Inconsistent syncers — synced in multiple periods but less than half." category="synced_some" selected_batch_ids=selected_batch_ids county=selected_county sub_county=selected_subcounty chu=selected_chu %}
 </div>
-
-<!-- Newly active -->
-<div class="tab-panel" id="tab-comp-b-only">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Did Not Sync in {{ comparison.batch_a.label }} — Synced in {{ comparison.batch_b.label }}</h3>
-        <p class="card-subtitle">These CHPs were inactive but are now syncing — a positive improvement.</p></div>
-      <a href="{% url 'sync_compare_download' %}?batch_a={{ batch_a_id }}&batch_b={{ batch_b_id }}&category=synced_b_only&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-    </div>
-    <div class="card-body no-pad"><div class="table-scroll">
-      {% include 'dashboard/_compare_table.html' with rows=comparison.synced_b_only batch_a=comparison.batch_a batch_b=comparison.batch_b %}
-    </div></div>
-  </div>
+<div class="tab-panel" id="tab-comp-appeared">
+  {% include 'dashboard/_multi_compare_table.html' with rows=comparison.appeared_dropped labels=comparison.labels title="CHPs Who Synced in Exactly One Period" desc="Either newly appeared or dropped off — only active in one period." category="appeared_dropped" selected_batch_ids=selected_batch_ids county=selected_county sub_county=selected_subcounty chu=selected_chu %}
 </div>
-
-<!-- Consistent syncers -->
-<div class="tab-panel" id="tab-comp-both">
-  <div class="card">
-    <div class="card-header">
-      <div><h3 class="card-title">Synced in Both {{ comparison.batch_a.label }} and {{ comparison.batch_b.label }}</h3>
-        <p class="card-subtitle">Consistently active CHPs — these are your reliable data capturers.</p></div>
-      <a href="{% url 'sync_compare_download' %}?batch_a={{ batch_a_id }}&batch_b={{ batch_b_id }}&category=synced_both&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-    </div>
-    <div class="card-body no-pad"><div class="table-scroll">
-      {% include 'dashboard/_compare_table.html' with rows=comparison.synced_both batch_a=comparison.batch_a batch_b=comparison.batch_b %}
-    </div></div>
-  </div>
+<div class="tab-panel" id="tab-comp-most">
+  {% include 'dashboard/_multi_compare_table.html' with rows=comparison.synced_most labels=comparison.labels title="CHPs Synced in Most Periods (More Than Half)" desc="Mostly active but missed at least one period." category="synced_most" selected_batch_ids=selected_batch_ids county=selected_county sub_county=selected_subcounty chu=selected_chu %}
 </div>
+<div class="tab-panel" id="tab-comp-all">
+  {% include 'dashboard/_multi_compare_table.html' with rows=comparison.synced_all labels=comparison.labels title="CHPs Synced in All Selected Periods" desc="Consistently active across every selected period." category="synced_all" selected_batch_ids=selected_batch_ids county=selected_county sub_county=selected_subcounty chu=selected_chu %}
+</div>
+{% endwith %}
 
+{% else %}
+<div class="empty-dashboard">
+  <div class="empty-icon">🔄</div>
+  <h2>Select Periods to Compare</h2>
+  <p>Choose at least 2 periods above. Periods 3 and 4 are optional — use them to compare a full month of weekly data.</p>
+</div>
 {% endif %}
 
-<!-- Definition Modal -->
 <div class="modal-overlay" id="def-modal" style="display:none;">
   <div class="modal">
     <div class="modal-header"><h3>Indicator Definition</h3><button class="modal-close" onclick="closeModal()">×</button></div>
     <div class="modal-body" id="def-modal-body"></div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -266,8 +247,6 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('tab-' + this.dataset.tab).classList.add('active');
     });
   });
-
-  // Definition modal
   document.querySelectorAll('.definition-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       document.getElementById('def-modal-body').textContent = this.dataset.def;
@@ -279,11 +258,5 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 function closeModal() { document.getElementById('def-modal').style.display = 'none'; }
-
-// Fix duplicate hidden fields — remove duplicates from selects
-document.querySelectorAll('select[name="batch_a"], select[name="batch_b"], select[name="county"], select[name="sub_county"], select[name="chu"]').forEach(sel => {
-  const hidden = document.querySelector(`input[type="hidden"][name="${sel.name}"]`);
-  if (hidden) hidden.remove();
-});
 </script>
 {% endblock %}
