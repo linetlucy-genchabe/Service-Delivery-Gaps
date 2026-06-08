@@ -1469,11 +1469,12 @@ def scorecard_view(request):
                 return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
 
             if row_type == 'active_chps':
-                val  = metrics.get('active_chps', 0)
-                pct  = metrics.get('active_chps_pct', 0)
+                val   = metrics.get('active_chps', 0)
+                pct   = metrics.get('active_chps_pct', 0)
                 total = metrics.get('total_chps', 0)
+                colour = get_colour(pct, 100)
                 return {
-                    'value': val, 'colour': 'grey', 'pct_target': None, 'type': row_type,
+                    'value': val, 'colour': colour, 'pct_target': round(pct, 1), 'type': row_type,
                     'display': f"{val} ({pct}%)",
                     'detail': f"of {total} total CHPs",
                 }
