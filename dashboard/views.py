@@ -1537,7 +1537,8 @@ def scorecard_view(request):
         if row_type == 'child_health':
             target_display = f"100% of {(metrics_current_week or metrics_prev_month or {}).get('total_registered_u5', 0):,} U5s; avg {10} sick children"
         elif row_type == 'active_chps':
-            target_display = '100% of total CHPs'
+            total = (metrics_current_week or metrics_prev_week or metrics_prev_month or {}).get('total_chps', 0)
+            target_display = str(total) if total else '—'
         else:
             target_display = f"{target}{meta['unit']}" if target is not None else '—'
 
