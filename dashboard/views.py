@@ -1472,7 +1472,9 @@ def scorecard_view(request):
                 val   = metrics.get('active_chps', 0)
                 pct   = metrics.get('active_chps_pct', 0)
                 total = metrics.get('total_chps', 0)
-                colour = get_colour(pct, 100)
+                if pct >= 90:   colour = 'green'
+                elif pct >= 70: colour = 'yellow'
+                else:           colour = 'red'
                 return {
                     'value': val, 'colour': colour, 'pct_target': round(pct, 1), 'type': row_type,
                     'display': f"{val} ({pct}%)",
