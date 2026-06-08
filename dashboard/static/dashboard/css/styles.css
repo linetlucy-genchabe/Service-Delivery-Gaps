@@ -817,3 +817,21 @@ body {
   .sc-cell, .sc-indicator-cell, .sc-target-cell { padding: 8px 8px; }
   .scorecard-period-labels { flex-direction: column; gap: 6px; }
 }
+
+/* ======================== SCORECARD PAGE — COMPACT LAYOUT ======================== */
+/* Tighten spacing so the full scorecard table is visible without vertical scroll */
+body.scorecard-page .page-header        { margin-bottom: 8px; padding-bottom: 8px; }
+body.scorecard-page .filter-bar         { padding: 8px 16px; margin-bottom: 6px; }
+body.scorecard-page details             { padding: 8px 14px; margin-bottom: 8px; }
+body.scorecard-page .scorecard-period-labels { margin-bottom: 8px; }
+body.scorecard-page .section-label      { display: none; }
+body.scorecard-page .card               { box-shadow: none; border-radius: 6px; }
+body.scorecard-page .card-header        { padding: 8px 14px; }
+body.scorecard-page .card-body.no-pad   { padding: 0; }
+body.scorecard-page .main-content       { padding: 10px 16px; }
+body.scorecard-page .footer             { display: none; }
+
+@media (max-width: 768px) {
+  body.scorecard-page .section-label { display: block; }
+  body.scorecard-page .footer        { display: flex; }
+}
