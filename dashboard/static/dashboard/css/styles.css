@@ -55,7 +55,6 @@ body {
 /* ======================== NAVBAR ======================== */
 .navbar {
   background: var(--navy);
-  border-bottom: 3px solid var(--orange);
   padding: 0 24px;
   height: 64px;
   display: flex;
@@ -83,7 +82,6 @@ body {
 /* ======================== FOOTER ======================== */
 .footer {
   background: var(--navy);
-  border-top: 2px solid var(--orange);
   padding: 12px 24px;
   display: flex;
   justify-content: space-between;
