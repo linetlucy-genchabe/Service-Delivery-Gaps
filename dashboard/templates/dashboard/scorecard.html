@@ -189,7 +189,7 @@
           </td>
           {% endwith %}
           <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
-            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{% if cw.pct_colour %}{% if cw.pct_colour == 'green' %}background:#BBF7D0;color:#14532D;{% elif cw.pct_colour == 'yellow' %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
             {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
           </td>
         </tr>
@@ -217,7 +217,7 @@
           </td>
           {% endwith %}
           <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
-            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{% if cw.pct_colour %}{% if cw.pct_colour == 'green' %}background:#BBF7D0;color:#14532D;{% elif cw.pct_colour == 'yellow' %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
             {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
           </td>
         </tr>

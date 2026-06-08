@@ -1476,7 +1476,9 @@ def scorecard_view(request):
                 elif pct >= 70: colour = 'yellow'
                 else:           colour = 'red'
                 return {
-                    'value': val, 'colour': colour, 'pct_target': round(pct, 1), 'type': row_type,
+                    'value': val, 'colour': colour, 'pct_target': round(pct, 1),
+                    'pct_colour': colour,  # same threshold for % achieved column
+                    'type': row_type,
                     'display': f"{val} ({pct}%)",
                     'detail': f"of {total} total CHPs",
                 }
