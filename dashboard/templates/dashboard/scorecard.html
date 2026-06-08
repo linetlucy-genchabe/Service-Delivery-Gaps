@@ -143,85 +143,84 @@
     <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print / Save PDF</button>
   </div>
   <div class="card-body no-pad">
-    <table id="scorecard-table" style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;border:1px solid #E5E7EB;">
+    <table id="scorecard-table" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">
       <colgroup>
         <col style="width:16%">
-        <col style="width:14%">
+        <col style="width:13%">
         <col style="width:17%">
         <col style="width:17%">
         <col style="width:17%">
-        <col style="width:19%">
+        <col style="width:20%">
       </colgroup>
       <thead>
         <tr style="background:#1B3A6B;">
-          <th style="padding:11px 12px;text-align:left;color:white;font-size:11px;font-weight:700;border-right:1px solid rgba(255,255,255,0.15);">Indicator</th>
-          <th style="padding:11px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border-right:1px solid rgba(255,255,255,0.15);">Monthly Target</th>
-          <th style="padding:11px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border-right:1px solid rgba(255,255,255,0.15);">{{ batch_prev_month.label|default:"Previous Month" }}</th>
-          <th style="padding:11px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border-right:1px solid rgba(255,255,255,0.15);">{{ batch_prev_week.label|default:"Previous Week" }}</th>
-          <th style="padding:11px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border-right:1px solid rgba(255,255,255,0.15);">{{ batch_current_week.label|default:"Current Week" }}</th>
-          <th style="padding:11px 12px;text-align:center;color:white;font-size:11px;font-weight:700;">% Monthly Target Achieved</th>
+          <th style="padding:10px 12px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">Indicator</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">Monthly Target</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">{{ batch_prev_month.label|default:"Previous Month" }}</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">{{ batch_prev_week.label|default:"Previous Week" }}</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">{{ batch_current_week.label|default:"Current Week" }}</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">% Monthly Target Achieved</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
         {% with pm=row.prev_month pw=row.prev_week cw=row.current_week %}
 
-        {# Define reusable cell style macros #}
         {% if row.type == 'child_health' %}
-          {# Child health always neutral background #}
-          <tr style="border-bottom:1px solid #E5E7EB;vertical-align:top;">
-            <td style="padding:10px 12px;font-weight:600;color:#1B3A6B;background:#EEF2F8;vertical-align:middle;font-size:12px;border-right:1px solid #E5E7EB;">{{ row.label }}</td>
-            <td style="padding:10px 12px;text-align:left;font-weight:500;color:#4B5563;background:#F9FAFB;font-size:11px;border-right:1px solid #E5E7EB;">{{ row.target }}</td>
-            {% for cell in pm|make_list %}{% endfor %}
-            {% with cell=pm %}
-            <td style="padding:8px 12px;background:white;vertical-align:top;border-right:1px solid #E5E7EB;">
-              {% if cell.lines %}{% for lbl, val in cell.lines %}<div style="line-height:1.9;font-size:12px;border-bottom:1px solid #F3F4F6;padding:1px 0;"><span style="color:#6B7280;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.03em;">{{ lbl }}</span><br><span style="font-weight:600;color:#111827;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#9CA3AF;">—</span>{% endif %}
-            </td>
-            {% endwith %}
-            {% with cell=pw %}
-            <td style="padding:8px 12px;background:white;vertical-align:top;border-right:1px solid #E5E7EB;">
-              {% if cell.lines %}{% for lbl, val in cell.lines %}<div style="line-height:1.9;font-size:12px;border-bottom:1px solid #F3F4F6;padding:1px 0;"><span style="color:#6B7280;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.03em;">{{ lbl }}</span><br><span style="font-weight:600;color:#111827;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#9CA3AF;">—</span>{% endif %}
-            </td>
-            {% endwith %}
-            {% with cell=cw %}
-            <td style="padding:8px 12px;background:#F8F9FF;vertical-align:top;border-left:1px solid #D1D5DB;">
-              {% if cell.lines %}{% for lbl, val in cell.lines %}<div style="line-height:1.9;font-size:12px;border-bottom:1px solid #E8EDFB;padding:1px 0;"><span style="color:#6B7280;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.03em;">{{ lbl }}</span><br><span style="font-weight:600;color:#111827;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#9CA3AF;">—</span>{% endif %}
-            </td>
-            {% endwith %}
-            <td style="padding:11px 12px;text-align:center;font-weight:700;font-size:13px;
-              {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#DCFCE7;color:#166534;{% elif cw.pct_target >= 50 %}background:#FEF9C3;color:#854D0E;{% else %}background:#FEE2E2;color:#991B1B;{% endif %}{% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
-              {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
-            </td>
-          </tr>
+        <tr style="vertical-align:top;">
+          <td style="padding:10px 12px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;vertical-align:middle;">{{ row.label }}</td>
+          <td style="padding:10px 12px;text-align:left;font-weight:500;color:#475569;background:#F1F5F9;font-size:10px;border:2px solid white;">{{ row.target }}</td>
+          {% with cell=pm %}
+          <td style="padding:8px 12px;border:2px solid white;vertical-align:top;
+            {% if cell.colour == 'green' %}background:#DCFCE7;{% elif cell.colour == 'yellow' %}background:#FEF9C3;{% elif cell.colour == 'red' %}background:#FEE2E2;{% else %}background:#F8FAFC;{% endif %}">
+            {% if cell.lines %}{% for lbl,val in cell.lines %}<div style="line-height:1.8;font-size:11px;"><span style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.6;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#94A3B8;">—</span>{% endif %}
+          </td>
+          {% endwith %}
+          {% with cell=pw %}
+          <td style="padding:8px 12px;border:2px solid white;vertical-align:top;
+            {% if cell.colour == 'green' %}background:#DCFCE7;{% elif cell.colour == 'yellow' %}background:#FEF9C3;{% elif cell.colour == 'red' %}background:#FEE2E2;{% else %}background:#F8FAFC;{% endif %}">
+            {% if cell.lines %}{% for lbl,val in cell.lines %}<div style="line-height:1.8;font-size:11px;"><span style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.6;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#94A3B8;">—</span>{% endif %}
+          </td>
+          {% endwith %}
+          {% with cell=cw %}
+          <td style="padding:8px 12px;border:2px solid white;vertical-align:top;
+            {% if cell.colour == 'green' %}background:#DCFCE7;{% elif cell.colour == 'yellow' %}background:#FEF9C3;{% elif cell.colour == 'red' %}background:#FEE2E2;{% else %}background:#F8FAFC;{% endif %}">
+            {% if cell.lines %}{% for lbl,val in cell.lines %}<div style="line-height:1.8;font-size:11px;"><span style="display:block;font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.6;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#94A3B8;">—</span>{% endif %}
+          </td>
+          {% endwith %}
+          <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
+            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
+          </td>
+        </tr>
 
         {% else %}
-          {# Standard row #}
-          <tr style="border-bottom:1px solid #E5E7EB;">
-            <td style="padding:11px 12px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:12px;border-right:1px solid #E5E7EB;">{{ row.label }}</td>
-            <td style="padding:11px 12px;text-align:center;font-weight:600;color:#4B5563;background:#F9FAFB;font-size:12px;border-right:1px solid #E5E7EB;">{{ row.target }}</td>
-            {% with cell=pm %}
-            <td style="padding:11px 12px;text-align:center;font-weight:700;font-size:13px;border-right:1px solid #E5E7EB;
-              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
-              {{ cell.display }}
-            </td>
-            {% endwith %}
-            {% with cell=pw %}
-            <td style="padding:11px 12px;text-align:center;font-weight:700;font-size:13px;border-right:1px solid #E5E7EB;
-              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
-              {{ cell.display }}
-            </td>
-            {% endwith %}
-            {% with cell=cw %}
-            <td style="padding:11px 12px;text-align:center;font-weight:700;font-size:13px;border-left:1px solid #D1D5DB;
-              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
-              {{ cell.display }}
-            </td>
-            {% endwith %}
-            <td style="padding:11px 12px;text-align:center;font-weight:700;font-size:13px;
-              {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#DCFCE7;color:#166534;{% elif cw.pct_target >= 50 %}background:#FEF9C3;color:#854D0E;{% else %}background:#FEE2E2;color:#991B1B;{% endif %}{% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
-              {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
-            </td>
-          </tr>
+        <tr>
+          <td style="padding:10px 12px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
+          <td style="padding:10px 12px;text-align:center;font-weight:500;color:#475569;background:#F1F5F9;font-size:11px;border:2px solid white;">{{ row.target }}</td>
+          {% with cell=pm %}
+          <td style="padding:10px 12px;text-align:center;font-weight:600;font-size:13px;border:2px solid white;
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {{ cell.display }}
+          </td>
+          {% endwith %}
+          {% with cell=pw %}
+          <td style="padding:10px 12px;text-align:center;font-weight:600;font-size:13px;border:2px solid white;
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {{ cell.display }}
+          </td>
+          {% endwith %}
+          {% with cell=cw %}
+          <td style="padding:10px 12px;text-align:center;font-weight:600;font-size:13px;border:2px solid white;
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {{ cell.display }}
+          </td>
+          {% endwith %}
+          <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
+            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
+          </td>
+        </tr>
         {% endif %}
 
         {% endwith %}
@@ -231,7 +230,6 @@
   </div>
 </div>
 {% endif %}
-
 <!-- INACTIVE CHPs -->
 {% if inactive_chps %}
 <div class="section-label" style="margin-top:24px;">👤 Inactive CHPs — {{ latest_batch.label }}</div>
