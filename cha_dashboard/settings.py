@@ -105,7 +105,8 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_MANIFEST_STRICT = False  # Don't error on missing manifest entries
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -177,3 +178,6 @@ JAZZMIN_UI_TWEAKS = {
     "brand_colour": "navbar-dark",
     "theme": "default",
 }
+
+# Static file cache busting — bump this when CSS/JS changes
+STATIC_VERSION = '1.0'
