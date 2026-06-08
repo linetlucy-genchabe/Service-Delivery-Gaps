@@ -158,24 +158,57 @@
         <tbody>
           {% for row in rows %}
           {% with pm=row.prev_month pw=row.prev_week cw=row.current_week %}
-          <tr style="border-bottom:1px solid #E5E7EB;">
-            <td style="padding:12px 14px;font-weight:600;color:#1B3A6B;background:#EEF2F8;">{{ row.label }}</td>
-            <td style="padding:12px 14px;text-align:center;font-weight:600;color:#4B5563;background:#F9FAFB;">{{ row.target }}</td>
-            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;
-              {% if pm.colour == 'green' %}background:#DCFCE7;color:#166534;
-              {% elif pm.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
-              {% elif pm.colour == 'red' %}background:#FEE2E2;color:#991B1B;
-              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">{{ pm.display }}</td>
-            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;
-              {% if pw.colour == 'green' %}background:#DCFCE7;color:#166534;
-              {% elif pw.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
-              {% elif pw.colour == 'red' %}background:#FEE2E2;color:#991B1B;
-              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">{{ pw.display }}</td>
-            <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;border-left:2px solid #E8431A;border-right:2px solid #E8431A;
-              {% if cw.colour == 'green' %}background:#DCFCE7;color:#166534;
-              {% elif cw.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
-              {% elif cw.colour == 'red' %}background:#FEE2E2;color:#991B1B;
-              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">{{ cw.display }}</td>
+          <tr style="border-bottom:1px solid #E5E7EB;vertical-align:top;">
+
+            {# Indicator label #}
+            <td style="padding:12px 14px;font-weight:600;color:#1B3A6B;background:#EEF2F8;vertical-align:middle;">{{ row.label }}</td>
+
+            {# Monthly Target #}
+            <td style="padding:10px 12px;text-align:left;font-weight:600;color:#4B5563;background:#F9FAFB;font-size:12px;">{{ row.target }}</td>
+
+            {# Helper macro — render a cell based on type #}
+            {% for cell in pm|make_list %}{% endfor %}{# dummy loop to enable with #}
+
+            {# Previous Month #}
+            {% with cell=pm %}
+            <td style="padding:{% if row.type == 'child_health' %}8px 12px{% else %}12px 14px{% endif %};text-align:{% if row.type == 'child_health' %}left{% else %}center{% endif %};font-weight:700;font-size:{% if row.type == 'child_health' %}12px{% else %}14px{% endif %};
+              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
+              {% if row.type == 'child_health' and cell.lines %}
+                {% for label, val in cell.lines %}<div style="white-space:nowrap;line-height:1.8;"><span style="color:#6B7280;font-weight:500;font-size:11px;">{{ label }}:</span> {{ val }}</div>{% endfor %}
+              {% else %}{{ cell.display }}{% endif %}
+            </td>
+            {% endwith %}
+
+            {# Previous Week #}
+            {% with cell=pw %}
+            <td style="padding:{% if row.type == 'child_health' %}8px 12px{% else %}12px 14px{% endif %};text-align:{% if row.type == 'child_health' %}left{% else %}center{% endif %};font-weight:700;font-size:{% if row.type == 'child_health' %}12px{% else %}14px{% endif %};
+              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
+              {% if row.type == 'child_health' and cell.lines %}
+                {% for label, val in cell.lines %}<div style="white-space:nowrap;line-height:1.8;"><span style="color:#6B7280;font-weight:500;font-size:11px;">{{ label }}:</span> {{ val }}</div>{% endfor %}
+              {% else %}{{ cell.display }}{% endif %}
+            </td>
+            {% endwith %}
+
+            {# Current Week #}
+            {% with cell=cw %}
+            <td style="padding:{% if row.type == 'child_health' %}8px 12px{% else %}12px 14px{% endif %};text-align:{% if row.type == 'child_health' %}left{% else %}center{% endif %};font-weight:700;font-size:{% if row.type == 'child_health' %}12px{% else %}14px{% endif %};border-left:2px solid #E8431A;border-right:2px solid #E8431A;
+              {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;
+              {% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;
+              {% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;
+              {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
+              {% if row.type == 'child_health' and cell.lines %}
+                {% for label, val in cell.lines %}<div style="white-space:nowrap;line-height:1.8;"><span style="color:#6B7280;font-weight:500;font-size:11px;">{{ label }}:</span> {{ val }}</div>{% endfor %}
+              {% else %}{{ cell.display }}{% endif %}
+            </td>
+            {% endwith %}
+
+            {# % Monthly Target Achieved #}
             <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:13px;
               {% if cw.pct_target %}
                 {% if cw.pct_target >= 100 %}background:#DCFCE7;color:#166534;
@@ -184,6 +217,7 @@
               {% else %}background:#F3F4F6;color:#9CA3AF;font-weight:400;{% endif %}">
               {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
             </td>
+
           </tr>
           {% endwith %}
           {% endfor %}

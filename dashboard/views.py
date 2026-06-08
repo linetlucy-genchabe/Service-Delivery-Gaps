@@ -1208,17 +1208,15 @@ def api_compare_download(request):
 
 # Hardcoded targets (universal across all counties/sub-counties/CHUs)
 SCORECARD_TARGETS = {
-    'active_chps':            {'target': None, 'unit': '',  'label': 'Active CHPs',                  'higher_is_better': True},
-    'hh_coverage_pct':        {'target': 85,   'unit': '%', 'label': 'HH Coverage',                  'higher_is_better': True},
-    'u5_assessment_pct':      {'target': 100,  'unit': '%', 'label': 'U5s Assessed',                 'higher_is_better': True},
-    'iccm_assessments':       {'target': None, 'unit': '',  'label': 'iCCM Assessments',             'higher_is_better': True},
-    'avg_positive_diag':      {'target': 10,   'unit': '',  'label': 'Avg Positive Diagnoses/CHP',   'higher_is_better': True},
-    'iccm_referrals':         {'target': None, 'unit': '',  'label': 'iCCM Referrals',               'higher_is_better': True},
-    'iccm_referral_pct':      {'target': None, 'unit': '%', 'label': 'iCCM Referrals Completed',     'higher_is_better': True},
-    'pnc_ontime_pct':         {'target': 85,   'unit': '%', 'label': 'On Time PNC',                  'higher_is_better': True},
-    'preg_registered_chp':    {'target': 1,    'unit': '',  'label': 'Preg Registered/CHP',          'higher_is_better': True},
-    'sync_rate_pct':          {'target': 80,   'unit': '%', 'label': '% CHPs Syncing Weekly',        'higher_is_better': True},
-    'supervision_pct':        {'target': 65,   'unit': '%', 'label': '% CHPs Supervised',            'higher_is_better': True},
+    'active_chps':            {'target': None, 'unit': '',  'label': 'Active CHPs',              'higher_is_better': True, 'type': 'active_chps'},
+    'hh_coverage_pct':        {'target': 85,   'unit': '%', 'label': 'HH Coverage',               'higher_is_better': True, 'type': 'simple'},
+    'child_health':           {'target': None, 'unit': '',  'label': 'Child Health Indicators',   'higher_is_better': True, 'type': 'child_health'},
+    'iccm_referrals':         {'target': None, 'unit': '',  'label': 'iCCM Referrals',            'higher_is_better': True, 'type': 'simple'},
+    'iccm_referral_pct':      {'target': 90,   'unit': '%', 'label': 'iCCM Referrals Completed',  'higher_is_better': True, 'type': 'iccm_ref'},
+    'pnc_ontime_pct':         {'target': 85,   'unit': '%', 'label': 'On Time PNC',               'higher_is_better': True, 'type': 'pnc'},
+    'preg_registered_chp':    {'target': 1,    'unit': '',  'label': 'Preg Registered/CHP',       'higher_is_better': True, 'type': 'simple'},
+    'sync_rate_pct':          {'target': 80,   'unit': '%', 'label': '% CHPs Syncing Weekly',     'higher_is_better': True, 'type': 'simple'},
+    'supervision_pct':        {'target': 65,   'unit': '%', 'label': '% CHPs Supervised',         'higher_is_better': True, 'type': 'simple'},
 }
 
 
@@ -1295,25 +1293,49 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
         total_pos=Sum('positive_diagnoses_u5'),
         total_referrals=Sum('iccm_referrals_total'),
         total_referrals_completed=Sum('iccm_referral_followup'),
+        total_fever_cases=Sum('fever_cases'),
+        total_fever_tested=Sum('fever_tested_rdt'),
     )
     total_u5_assessed    = child_agg['total_u5_assessed'] or 0
     total_registered_u5  = child_agg['total_registered_u5'] or 0
     total_iccm           = child_agg['total_iccm'] or 0
     total_referrals      = child_agg['total_referrals'] or 0
     total_ref_completed  = child_agg['total_referrals_completed'] or 0
+    total_fever_cases    = child_agg['total_fever_cases'] or 0
+    total_fever_tested   = child_agg['total_fever_tested'] or 0
 
     u5_assessment_pct = round(total_u5_assessed / total_registered_u5 * 100, 1) if total_registered_u5 else 0
     iccm_referral_pct = round(total_ref_completed / total_referrals * 100, 1) if total_referrals else None
+    avg_pos_diag      = round((child_agg['total_pos'] or 0) / total_active, 1) if total_active else 0
+
+    # PNC numerator/denominator for display
+    pnc_numerator   = pnc_agg['pnc'] or 0
+    pnc_denominator = pnc_agg['del_total'] or 0
+
+    # Active CHPs as % of total CHPs
+    active_chps_pct = round(total_active / total_all * 100, 1) if total_all else 0
 
     return {
         'active_chps':         total_active,
         'total_chps':          total_all,
+        'active_chps_pct':     active_chps_pct,
         'hh_coverage_pct':     hh_coverage,
+        'hh_visits_total':     hh_metrics['total_visits'] or 0,
+        'hh_registered_total': hh_metrics['total_registered'] or 0,
         'u5_assessment_pct':   u5_assessment_pct,
+        'total_registered_u5': total_registered_u5,
+        'total_u5_assessed':   total_u5_assessed,
         'iccm_assessments':    total_iccm,
-        'avg_positive_diag':   avg_pos,
-        'iccm_referrals':      total_referrals,        'iccm_referral_pct':   iccm_referral_pct,
+        'avg_positive_diag':   avg_pos_diag,
+        'total_positive_diag': child_agg['total_pos'] or 0,
+        'fever_cases':         total_fever_cases,
+        'fever_tested':        total_fever_tested,
+        'iccm_referrals':      total_referrals,
+        'iccm_referral_pct':   iccm_referral_pct,
+        'iccm_ref_completed':  total_ref_completed,
         'pnc_ontime_pct':      pnc_pct,
+        'pnc_numerator':       pnc_numerator,
+        'pnc_denominator':     pnc_denominator,
         'preg_registered_chp': preg_per_chp,
         'supervision_pct':     sup_pct,
         'sync_rate_pct':       sync_pct,
@@ -1439,26 +1461,94 @@ def scorecard_view(request):
     # Build scorecard rows
     rows = []
     for key, meta in SCORECARD_TARGETS.items():
-        target = meta['target']
+        target     = meta['target']
+        row_type   = meta.get('type', 'simple')
 
-        def cell(metrics, key=key, target=target, hib=meta['higher_is_better']):
+        def make_cell(metrics, key=key, target=target, meta=meta, row_type=row_type):
             if metrics is None:
-                return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None}
-            val = metrics.get(key)
-            if val is None:
-                return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None}
-            unit = meta['unit']
-            display = f"{val}{unit}" if unit == '%' else str(val)
-            pct_target = round(val / target * 100, 1) if target else None
-            colour = get_colour(val, target, hib)
-            return {'value': val, 'display': display, 'colour': colour, 'pct_target': pct_target}
+                return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+
+            if row_type == 'active_chps':
+                val  = metrics.get('active_chps', 0)
+                pct  = metrics.get('active_chps_pct', 0)
+                total = metrics.get('total_chps', 0)
+                return {
+                    'value': val, 'colour': 'grey', 'pct_target': None, 'type': row_type,
+                    'display': f"{val} ({pct}%)",
+                    'detail': f"of {total} total CHPs",
+                }
+
+            elif row_type == 'child_health':
+                ru5  = metrics.get('total_registered_u5', 0)
+                au5  = metrics.get('total_u5_assessed', 0)
+                upct = metrics.get('u5_assessment_pct', 0)
+                iccm = metrics.get('iccm_assessments', 0)
+                pos  = metrics.get('total_positive_diag', 0)
+                avg  = metrics.get('avg_positive_diag', 0)
+                fc   = metrics.get('fever_cases', 0)
+                ft   = metrics.get('fever_tested', 0)
+                colour = get_colour(upct, 100)
+                return {
+                    'value': upct, 'colour': colour, 'pct_target': round(upct, 1), 'type': row_type,
+                    'lines': [
+                        ('U5 Pop', f"{ru5:,}"),
+                        ('Assessed', f"{au5:,} ({upct}%)"),
+                        ('iCCM Assessments', f"{iccm:,}"),
+                        ('Sick Children (avg)', f"{pos:,} ({avg})"),
+                        ('Fever', f"{fc:,} tested {ft:,}"),
+                    ]
+                }
+
+            elif row_type == 'pnc':
+                val  = metrics.get('pnc_ontime_pct', 0)
+                num  = metrics.get('pnc_numerator', 0)
+                den  = metrics.get('pnc_denominator', 0)
+                pct_target = round(val / target * 100, 1) if target else None
+                colour = get_colour(val, target)
+                return {
+                    'value': val, 'colour': colour, 'pct_target': pct_target, 'type': row_type,
+                    'display': f"{val}% ({num}/{den})",
+                }
+
+            elif row_type == 'iccm_ref':
+                val  = metrics.get('iccm_referral_pct')
+                comp = metrics.get('iccm_ref_completed', 0)
+                tot  = metrics.get('iccm_referrals', 0)
+                if val is None:
+                    return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+                pct_target = round(val / target * 100, 1) if target else None
+                colour = get_colour(val, target)
+                return {
+                    'value': val, 'colour': colour, 'pct_target': pct_target, 'type': row_type,
+                    'display': f"{comp} ({val}%)",
+                }
+
+            else:
+                val = metrics.get(key)
+                if val is None:
+                    return {'value': None, 'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+                unit = meta['unit']
+                display = f"{val}{unit}" if unit == '%' else str(val)
+                pct_target = round(val / target * 100, 1) if target else None
+                colour = get_colour(val, target, meta['higher_is_better'])
+                return {'value': val, 'display': display, 'colour': colour, 'pct_target': pct_target, 'type': row_type}
+
+        # Monthly target display
+        if row_type == 'child_health':
+            target_display = f"100% of {(metrics_current_week or metrics_prev_month or {}).get('total_registered_u5', 0):,} U5s; avg {10} sick children"
+        elif row_type == 'active_chps':
+            target_display = '100% of total CHPs'
+        else:
+            target_display = f"{target}{meta['unit']}" if target is not None else '—'
+
         rows.append({
             'key':    key,
             'label':  meta['label'],
-            'target': f"{target}{meta['unit']}" if target is not None else '—',
-            'prev_month':   cell(metrics_prev_month),
-            'prev_week':    cell(metrics_prev_week),
-            'current_week': cell(metrics_current_week),
+            'target': target_display,
+            'type':   row_type,
+            'prev_month':   make_cell(metrics_prev_month),
+            'prev_week':    make_cell(metrics_prev_week),
+            'current_week': make_cell(metrics_current_week),
         })
 
     # Filter options from the most data-rich batch
