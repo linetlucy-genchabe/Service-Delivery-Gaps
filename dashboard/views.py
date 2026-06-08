@@ -1410,9 +1410,10 @@ def auto_detect_batches(county=None, sub_county=None, chu=None):
 
 def scorecard_view(request):
     """Weekly performance scorecard view."""
-    county     = request.GET.get('county', '')
-    sub_county = request.GET.get('sub_county', '')
-    chu        = request.GET.get('chu', '')
+    # Multi-select: getlist returns [] if nothing selected
+    selected_counties    = request.GET.getlist('county')
+    selected_subcounties = request.GET.getlist('sub_county')
+    selected_chus        = request.GET.getlist('chu')
 
     # Manual override batch selectors
     override_prev_month   = request.GET.get('batch_prev_month', '')
@@ -1438,9 +1439,9 @@ def scorecard_view(request):
         if batch is None:
             return None
         qs = CHWRecord.objects.filter(batch=batch)
-        if county:     qs = qs.filter(county=county)
-        if sub_county: qs = qs.filter(sub_county=sub_county)
-        if chu:        qs = qs.filter(community_health_unit=chu)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
         return qs
 
     def get_sync_qs(chw_batch):
@@ -1449,9 +1450,9 @@ def scorecard_view(request):
             return None
         qs = CHPSyncRecord.objects.filter(batch=sync_batch).exclude(
             county='').exclude(sub_county='').exclude(community_health_unit='')
-        if county:     qs = qs.filter(county=county)
-        if sub_county: qs = qs.filter(sub_county=sub_county)
-        if chu:        qs = qs.filter(community_health_unit=chu)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
         return qs
 
     metrics_prev_month   = compute_scorecard_metrics(get_chw_qs(batch_prev_month),   get_sync_qs(batch_prev_month))   if batch_prev_month   else None
@@ -1563,19 +1564,19 @@ def scorecard_view(request):
     if filter_batch:
         fqs = CHWRecord.objects.filter(batch=filter_batch)
         filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
-        if county:
-            filter_opts['sub_counties'] = fqs.filter(county=county).values_list('sub_county', flat=True).distinct().order_by('sub_county')
-        if sub_county:
-            filter_opts['chus'] = fqs.filter(county=county, sub_county=sub_county).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+        if selected_counties:
+            filter_opts['sub_counties'] = fqs.filter(county__in=selected_counties).values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        if selected_subcounties:
+            filter_opts['chus'] = fqs.filter(sub_county__in=selected_subcounties).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
 
     # Inactive CHPs from the latest CHW batch (current_week, else prev_week, else prev_month)
     latest_batch = batch_current_week or batch_prev_week or batch_prev_month
     inactive_chps = []
     if latest_batch:
         inactive_qs = CHWRecord.objects.filter(batch=latest_batch, is_active=False)
-        if county:     inactive_qs = inactive_qs.filter(county=county)
-        if sub_county: inactive_qs = inactive_qs.filter(sub_county=sub_county)
-        if chu:        inactive_qs = inactive_qs.filter(community_health_unit=chu)
+        if selected_counties:    inactive_qs = inactive_qs.filter(county__in=selected_counties)
+        if selected_subcounties: inactive_qs = inactive_qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        inactive_qs = inactive_qs.filter(community_health_unit__in=selected_chus)
 
         # Try to get last sync date from matching sync batch
         sync_batch = find_matching_sync_batch(latest_batch)
@@ -1606,12 +1607,12 @@ def scorecard_view(request):
         'override_prev_month':   override_prev_month,
         'override_prev_week':    override_prev_week,
         'override_current_week': override_current_week,
-        'filter_opts':        filter_opts,
-        'selected_county':    county,
-        'selected_subcounty': sub_county,
-        'selected_chu':       chu,
-        'inactive_chps':      inactive_chps,
-        'is_uploader':        is_uploader(request.user) if request.user.is_authenticated else False,
+        'filter_opts':           filter_opts,
+        'selected_counties':     selected_counties,
+        'selected_subcounties':  selected_subcounties,
+        'selected_chus':         selected_chus,
+        'inactive_chps':         inactive_chps,
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
     })
 
 

@@ -2,6 +2,47 @@
 {% block title %}Weekly Performance Scorecard{% endblock %}
 {% block body_class %}scorecard-page{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Checkbox dropdown */
+.multi-select-wrap { position:relative; display:inline-block; min-width:160px; }
+.multi-select-btn {
+  width:100%; padding:7px 32px 7px 10px; border:1.5px solid #D1D5DB;
+  border-radius:6px; background:white; cursor:pointer; font-size:13px;
+  color:#374151; text-align:left; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; position:relative;
+}
+.multi-select-btn::after {
+  content:'▾'; position:absolute; right:10px; top:50%;
+  transform:translateY(-50%); color:#6B7280; pointer-events:none;
+}
+.multi-select-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0;
+  min-width:100%; max-width:280px; background:white;
+  border:1.5px solid #D1D5DB; border-radius:8px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1); z-index:200;
+  max-height:220px; overflow-y:auto;
+}
+.multi-select-dropdown.open { display:block; }
+.multi-select-option {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; cursor:pointer; font-size:13px; color:#374151;
+}
+.multi-select-option:hover { background:#F3F4F6; }
+.multi-select-option input[type=checkbox] { accent-color:#1B3A6B; width:14px; height:14px; flex-shrink:0; }
+.multi-select-footer {
+  padding:8px 12px; border-top:1px solid #E5E7EB;
+  display:flex; gap:8px;
+}
+.multi-select-footer button {
+  flex:1; padding:5px 0; border-radius:5px; font-size:12px;
+  font-weight:500; cursor:pointer; border:none;
+}
+.ms-apply { background:#1B3A6B; color:white; }
+.ms-clear  { background:#F3F4F6; color:#374151; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div>
@@ -9,9 +50,9 @@
     <p class="page-subtitle">
       {% if batch_current_week %}
         Auto-detected: {{ batch_current_week.label }}
-        {% if selected_county %} › {{ selected_county }}{% endif %}
-        {% if selected_subcounty %} › {{ selected_subcounty }}{% endif %}
-        {% if selected_chu %} › {{ selected_chu }}{% endif %}
+        {% if selected_counties %} › {{ selected_counties|join:", " }}{% endif %}
+        {% if selected_subcounties %} › {{ selected_subcounties|join:", " }}{% endif %}
+        {% if selected_chus %} › {{ selected_chus|join:", " }}{% endif %}
       {% else %}
         Upload CHW data to generate the scorecard automatically.
       {% endif %}
@@ -19,10 +60,9 @@
   </div>
 </div>
 
-<!-- FILTERS — no hidden field duplication, selects carry their own values -->
+<!-- FILTERS -->
 <div class="filter-bar">
   <form method="get" class="filter-form" id="scorecard-form">
-    <!-- Preserve batch overrides -->
     {% if override_prev_month %}<input type="hidden" name="batch_prev_month" value="{{ override_prev_month }}">{% endif %}
     {% if override_prev_week %}<input type="hidden" name="batch_prev_week" value="{{ override_prev_week }}">{% endif %}
     {% if override_current_week %}<input type="hidden" name="batch_current" value="{{ override_current_week }}">{% endif %}
@@ -30,40 +70,73 @@
     {% if filter_opts.counties %}
     <div class="filter-group">
       <label class="filter-label">County</label>
-      <select name="county" class="filter-select" onchange="this.form.submit()">
-        <option value="">All Counties</option>
-        {% for c in filter_opts.counties %}
-          <option value="{{ c }}" {% if selected_county == c %}selected{% endif %}>{{ c }}</option>
-        {% endfor %}
-      </select>
+      <div class="multi-select-wrap" id="ms-county">
+        <button type="button" class="multi-select-btn" onclick="toggleMs('ms-county')">
+          {% if selected_counties %}{{ selected_counties|join:", " }}{% else %}All Counties{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-county-dd">
+          {% for c in filter_opts.counties %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="county" value="{{ c }}" {% if c in selected_counties %}checked{% endif %}>
+            {{ c }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMs('ms-county')">Clear</button>
+            <button type="button" class="ms-apply" onclick="submitMs()">Apply</button>
+          </div>
+        </div>
+      </div>
     </div>
     {% endif %}
 
-    {% if selected_county and filter_opts.sub_counties %}
+    {% if filter_opts.sub_counties %}
     <div class="filter-group">
       <label class="filter-label">Sub-County</label>
-      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
-        <option value="">All Sub-Counties</option>
-        {% for sc in filter_opts.sub_counties %}
-          <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
-        {% endfor %}
-      </select>
+      <div class="multi-select-wrap" id="ms-subcounty">
+        <button type="button" class="multi-select-btn" onclick="toggleMs('ms-subcounty')">
+          {% if selected_subcounties %}{{ selected_subcounties|join:", " }}{% else %}All Sub-Counties{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-subcounty-dd">
+          {% for sc in filter_opts.sub_counties %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="sub_county" value="{{ sc }}" {% if sc in selected_subcounties %}checked{% endif %}>
+            {{ sc }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMs('ms-subcounty')">Clear</button>
+            <button type="button" class="ms-apply" onclick="submitMs()">Apply</button>
+          </div>
+        </div>
+      </div>
     </div>
     {% endif %}
 
-    {% if selected_subcounty and filter_opts.chus %}
+    {% if filter_opts.chus %}
     <div class="filter-group">
       <label class="filter-label">Community Health Unit</label>
-      <select name="chu" class="filter-select" onchange="this.form.submit()">
-        <option value="">All CHUs</option>
-        {% for chu in filter_opts.chus %}
-          <option value="{{ chu }}" {% if selected_chu == chu %}selected{% endif %}>{{ chu }}</option>
-        {% endfor %}
-      </select>
+      <div class="multi-select-wrap" id="ms-chu">
+        <button type="button" class="multi-select-btn" onclick="toggleMs('ms-chu')">
+          {% if selected_chus %}{{ selected_chus|length }} CHU(s) selected{% else %}All CHUs{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-chu-dd">
+          {% for chu in filter_opts.chus %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="chu" value="{{ chu }}" {% if chu in selected_chus %}checked{% endif %}>
+            {{ chu }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMs('ms-chu')">Clear</button>
+            <button type="button" class="ms-apply" onclick="submitMs()">Apply</button>
+          </div>
+        </div>
+      </div>
     </div>
     {% endif %}
 
-    {% if selected_county %}
+    {% if selected_counties %}
       <a href="{% url 'scorecard' %}{% if override_prev_month %}?batch_prev_month={{ override_prev_month }}{% endif %}{% if override_prev_week %}&batch_prev_week={{ override_prev_week }}{% endif %}{% if override_current_week %}&batch_current={{ override_current_week }}{% endif %}" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
   </form>
@@ -74,9 +147,9 @@
   <summary style="cursor:pointer;font-weight:600;color:#1B3A6B;list-style:none;user-select:none;">⚙️ Override Auto-detected Periods</summary>
   <form method="get" style="margin-top:14px;">
     <!-- Preserve geography filters -->
-    {% if selected_county %}<input type="hidden" name="county" value="{{ selected_county }}">{% endif %}
-    {% if selected_subcounty %}<input type="hidden" name="sub_county" value="{{ selected_subcounty }}">{% endif %}
-    {% if selected_chu %}<input type="hidden" name="chu" value="{{ selected_chu }}">{% endif %}
+    {% for c in selected_counties %}<input type="hidden" name="county" value="{{ c }}">{% endfor %}
+    {% for sc in selected_subcounties %}<input type="hidden" name="sub_county" value="{{ sc }}">{% endfor %}
+    {% for chu in selected_chus %}<input type="hidden" name="chu" value="{{ chu }}">{% endfor %}
 
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;">
@@ -284,10 +357,46 @@
 
 {% block extra_js %}
 <script>
-document.querySelectorAll('.definition-btn').forEach(btn => {
-  btn.addEventListener('click', function() {
-    document.getElementById('def-modal-body').textContent = this.dataset.def;
-    document.getElementById('def-modal').style.display = 'flex';
+function toggleMs(id) {
+  const dd = document.getElementById(id + '-dd');
+  document.querySelectorAll('.multi-select-dropdown').forEach(el => {
+    if (el.id !== id + '-dd') el.classList.remove('open');
+  });
+  dd.classList.toggle('open');
+}
+
+function clearMs(id) {
+  document.querySelectorAll(`#${id}-dd input[type=checkbox]`).forEach(cb => cb.checked = false);
+  updateBtn(id);
+}
+
+function updateBtn(id) {
+  const checked = [...document.querySelectorAll(`#${id}-dd input[type=checkbox]:checked`)].map(cb => cb.value);
+  const btn = document.querySelector(`#${id} .multi-select-btn`);
+  if (id === 'ms-chu') {
+    btn.textContent = checked.length ? `${checked.length} CHU(s) selected` : 'All CHUs';
+  } else {
+    btn.textContent = checked.length ? checked.join(', ') : (id === 'ms-county' ? 'All Counties' : 'All Sub-Counties');
+  }
+}
+
+function submitMs() {
+  document.querySelectorAll('.multi-select-dropdown').forEach(el => el.classList.remove('open'));
+  document.getElementById('scorecard-form').submit();
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.multi-select-wrap')) {
+    document.querySelectorAll('.multi-select-dropdown').forEach(el => el.classList.remove('open'));
+  }
+});
+
+// Update button labels on checkbox change
+document.querySelectorAll('.multi-select-option input').forEach(cb => {
+  cb.addEventListener('change', function() {
+    const wrap = this.closest('.multi-select-wrap');
+    updateBtn(wrap.id);
   });
 });
 </script>
