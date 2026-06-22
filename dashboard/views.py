@@ -1356,16 +1356,32 @@ def find_matching_sync_batch(chw_batch):
     """Find sync batch closest in time to a CHW batch."""
     if chw_batch is None:
         return None
+
     qs = SyncUploadBatch.objects.filter(
         year=chw_batch.year, month=chw_batch.month,
         period_type=chw_batch.period_type
     )
+
+    if not qs.exists():
+        # Try any sync batch from same year/month regardless of period type
+        qs = SyncUploadBatch.objects.filter(
+            year=chw_batch.year, month=chw_batch.month
+        )
+
     if chw_batch.period_type == 'weekly' and chw_batch.week_start_date:
-        # Prefer exact week match, then closest
+        # Prefer exact week_start_date match
         exact = qs.filter(week_start_date=chw_batch.week_start_date).first()
         if exact:
             return exact
-    return qs.first()
+        # Fall back to closest sync batch by week_start_date
+        # Get all with a week_start_date and find the nearest
+        dated = list(qs.exclude(week_start_date__isnull=True))
+        if dated:
+            return min(dated, key=lambda b: abs(
+                (b.week_start_date - chw_batch.week_start_date).days
+            ))
+
+    return qs.order_by('-week_start_date', '-uploaded_at').first()
 
 
 def auto_detect_batches(county=None, sub_county=None, chu=None):
