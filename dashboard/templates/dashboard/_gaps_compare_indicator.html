@@ -1,0 +1,75 @@
+<div class="card" style="margin-bottom:14px;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">{{ ind.label|default:title }}</h3>
+      <p class="card-subtitle">
+        🔴 Persistent (all {{ n }} periods): <strong>{{ ind.count_persistent|default:ind.persistent|length }}</strong> &nbsp;·&nbsp;
+        🟡 Recurring: <strong>{{ ind.count_recurring|default:ind.recurring|length }}</strong> &nbsp;·&nbsp;
+        🟠 Occasional: <strong>{{ ind.count_occasional|default:ind.occasional|length }}</strong>
+      </p>
+    </div>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      {% with persistent=ind.persistent recurring=ind.recurring occasional=ind.occasional %}
+      {% if persistent or recurring or occasional %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>County</th>
+            <th>Sub-County</th>
+            <th>Community Health Unit</th>
+            <th>CHP Area</th>
+            <th>CHP Name</th>
+            <th>Username</th>
+            <th class="num">Periods Flagged</th>
+            {% for l in labels %}<th>{{ l }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in persistent %}
+          <tr style="background:#FEE2E2;">
+            <td><span style="background:#DC2626;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🔴 Persistent</span></td>
+            <td>{{ r.county }}</td><td>{{ r.sub_county }}</td>
+            <td><strong>{{ r.community_health_unit }}</strong></td>
+            <td>{{ r.chp_area }}</td><td>{{ r.chw_name }}</td>
+            <td class="zero">{{ r.username }}</td>
+            <td class="num bad">{{ r.flag_count }}/{{ r.flag_total }}</td>
+            {% for f in r.periods %}<td class="{% if f %}bad{% else %}zero{% endif %}">{% if f %}✓{% else %}—{% endif %}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+          {% for r in recurring %}
+          <tr style="background:#FEF9C3;">
+            <td><span style="background:#D97706;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🟡 Recurring</span></td>
+            <td>{{ r.county }}</td><td>{{ r.sub_county }}</td>
+            <td><strong>{{ r.community_health_unit }}</strong></td>
+            <td>{{ r.chp_area }}</td><td>{{ r.chw_name }}</td>
+            <td class="zero">{{ r.username }}</td>
+            <td class="num warn">{{ r.flag_count }}/{{ r.flag_total }}</td>
+            {% for f in r.periods %}<td class="{% if f %}warn{% else %}zero{% endif %}">{% if f %}✓{% else %}—{% endif %}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+          {% for r in occasional %}
+          <tr style="background:#FFEDD5;">
+            <td><span style="background:#EA580C;color:white;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">🟠 Occasional</span></td>
+            <td>{{ r.county }}</td><td>{{ r.sub_county }}</td>
+            <td><strong>{{ r.community_health_unit }}</strong></td>
+            <td>{{ r.chp_area }}</td><td>{{ r.chw_name }}</td>
+            <td class="zero">{{ r.username }}</td>
+            <td class="num">{{ r.flag_count }}/{{ r.flag_total }}</td>
+            {% for f in r.periods %}<td class="{% if f %}zero{% else %}zero{% endif %}">{% if f %}✓{% else %}—{% endif %}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">
+        {{ persistent|length|add:recurring|length|add:occasional|length }} CHP(s) flagged across selected periods
+      </div>
+      {% else %}
+      <div class="table-empty">✅ No CHPs flagged for this indicator across selected periods.</div>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+</div>

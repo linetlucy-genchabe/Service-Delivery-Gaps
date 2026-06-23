@@ -1,0 +1,168 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Gaps Comparison{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Gaps Comparison</h1>
+    <p class="page-subtitle">Track CHPs with consistent gaps across multiple reporting periods.</p>
+  </div>
+</div>
+
+<!-- BATCH SELECTORS -->
+<div class="filter-bar">
+  <form method="get" class="filter-form" id="compare-form">
+    {% if selected_counties %}<input type="hidden" name="county" value="{{ selected_counties|join:',' }}">{% endif %}
+    {% if selected_subcounties %}<input type="hidden" name="sub_county" value="{{ selected_subcounties|join:',' }}">{% endif %}
+    {% if selected_chus %}<input type="hidden" name="chu" value="{{ selected_chus|join:',' }}">{% endif %}
+
+    <div class="filter-group">
+      <label class="filter-label">Period A <span style="color:var(--red)">*</span></label>
+      <select name="batch_a" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Select —</option>
+        {% for b in all_batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_a == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Period B <span style="color:var(--red)">*</span></label>
+      <select name="batch_b" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Select —</option>
+        {% for b in all_batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_b == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Period C <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+      <select name="batch_c" class="filter-select" onchange="this.form.submit()">
+        <option value="">— Optional —</option>
+        {% for b in all_batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_ids.batch_c == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if comparison %}
+
+<!-- GEOGRAPHY FILTERS -->
+<div class="filter-bar" style="margin-top:-8px;">
+  <form method="get" class="filter-form">
+    <input type="hidden" name="batch_a" value="{{ selected_batch_ids.batch_a }}">
+    <input type="hidden" name="batch_b" value="{{ selected_batch_ids.batch_b }}">
+    {% if selected_batch_ids.batch_c %}<input type="hidden" name="batch_c" value="{{ selected_batch_ids.batch_c }}">{% endif %}
+
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for c in filter_opts.counties %}
+          <option value="{{ c }}" {% if c in selected_counties %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if filter_opts.sub_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in filter_opts.sub_counties %}
+          <option value="{{ sc }}" {% if sc in selected_subcounties %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if filter_opts.chus %}
+    <div class="filter-group">
+      <label class="filter-label">CHU</label>
+      <select name="chu" class="filter-select" onchange="this.form.submit()">
+        <option value="">All CHUs</option>
+        {% for chu in filter_opts.chus %}
+          <option value="{{ chu }}" {% if chu in selected_chus %}selected{% endif %}>{{ chu }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if selected_counties or selected_subcounties or selected_chus %}
+    <a href="?batch_a={{ selected_batch_ids.batch_a }}&batch_b={{ selected_batch_ids.batch_b }}{% if selected_batch_ids.batch_c %}&batch_c={{ selected_batch_ids.batch_c }}{% endif %}" class="filter-reset">✕ Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- PERIOD LABELS -->
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+  {% for b in comparison.batches %}
+  <span style="background:var(--navy);color:white;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;">Period {{ forloop.counter }}: {{ b.label }}</span>
+  {% endfor %}
+  <a href="{% url 'gaps_compare_download' %}?batch_a={{ selected_batch_ids.batch_a }}&batch_b={{ selected_batch_ids.batch_b }}{% if selected_batch_ids.batch_c %}&batch_c={{ selected_batch_ids.batch_c }}{% endif %}{% for c in selected_counties %}&county={{ c }}{% endfor %}{% for sc in selected_subcounties %}&sub_county={{ sc }}{% endfor %}" class="btn btn-sm btn-outline" style="margin-left:auto;">⬇ Download All (Excel)</a>
+</div>
+
+<!-- CATEGORY NAV -->
+<div class="category-nav" style="margin-bottom:16px;">
+  <button class="cat-btn active" data-section="gc-supervision">🔍 Supervision</button>
+  <button class="cat-btn" data-section="gc-performance">⚠️ Performance</button>
+  <button class="cat-btn" data-section="gc-maternal">🤱 Maternal Health</button>
+  <button class="cat-btn" data-section="gc-inactive">👤 Inactive CHPs</button>
+</div>
+
+<!-- SUPERVISION -->
+<div class="cat-section active" id="section-gc-supervision">
+  {% with cat=comparison.categories.supervision %}
+  {% for gap_key, ind in cat.indicators.items %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% endfor %}
+  {% endwith %}
+</div>
+
+<!-- PERFORMANCE -->
+<div class="cat-section" id="section-gc-performance">
+  {% with cat=comparison.categories.performance %}
+  {% for gap_key, ind in cat.indicators.items %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% endfor %}
+  {% endwith %}
+</div>
+
+<!-- MATERNAL -->
+<div class="cat-section" id="section-gc-maternal">
+  {% with cat=comparison.categories.maternal %}
+  {% for gap_key, ind in cat.indicators.items %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% endfor %}
+  {% endwith %}
+</div>
+
+<!-- INACTIVE CHPs -->
+<div class="cat-section" id="section-gc-inactive">
+  <div class="section-label">👤 Consistently Inactive CHPs</div>
+  {% with ind=comparison.inactive labels=comparison.labels n=comparison.n %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=labels n=n title="Inactive CHPs" %}
+  {% endwith %}
+</div>
+
+{% else %}
+<div class="empty-dashboard">
+  <div class="empty-icon">📊</div>
+  <h2>Select at Least Two Periods</h2>
+  <p>Choose Period A and Period B above to compare CHP gaps across reporting periods.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.cat-section').forEach(s => s.classList.remove('active'));
+    this.classList.add('active');
+    const sec = document.getElementById('section-' + this.dataset.section);
+    if (sec) sec.classList.add('active');
+  });
+});
+</script>
+{% endblock %}

@@ -1667,3 +1667,293 @@ def download_inactive_chps(request):
         last_sync = sync_lookup.get(r.username, '—')
         writer.writerow([r.chw_name, r.county, r.sub_county, r.community_health_unit, r.chp_area, last_sync])
     return response
+
+
+# ===========================================================================
+# GAPS COMPARISON VIEW
+# ===========================================================================
+
+def get_gap_chps(batch, gap_key, county_list=None, sc_list=None, chu_list=None):
+    """
+    Return a set of usernames flagged for a given gap in a batch.
+    Returns dict: {username: row_data}
+    """
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True)
+    if county_list: qs = qs.filter(county__in=county_list)
+    if sc_list:     qs = qs.filter(sub_county__in=sc_list)
+    if chu_list:    qs = qs.filter(community_health_unit__in=chu_list)
+
+    base_fields = ['username', 'chw_name', 'county', 'sub_county',
+                   'community_health_unit', 'chp_area']
+
+    if gap_key == 'not_supervised':
+        qs = qs.filter(supervised=False)
+    elif gap_key == 'lp_not_supervised':
+        qs = qs.filter(hh_visits__lt=50, supervised=False)
+    elif gap_key == 'lp_supervised':
+        qs = qs.filter(hh_visits__lt=50, supervised=True)
+    elif gap_key == 'supervised_3plus':
+        qs = qs.filter(supervision_visits__gte=3)
+    elif gap_key == 'same_day_flags':
+        # Same-day flags are CHU-level not CHP-level, skip for CHP comparison
+        return {}
+    elif gap_key == 'good_hh_low_u5':
+        rows = list(qs.filter(registered_hhs__gt=0, registered_children_u5__gt=0).values(
+            *base_fields, 'hh_visits', 'registered_hhs', 'num_u5_assessed', 'registered_children_u5'))
+        return {r['username']: r for r in rows
+                if r['username'] and
+                r['hh_visits'] / r['registered_hhs'] >= 0.7 and
+                r['num_u5_assessed'] / r['registered_children_u5'] < 0.4}
+    elif gap_key == 'high_u5_zero_diag':
+        rows = list(qs.filter(registered_children_u5__gt=0, num_u5_assessed__gte=10,
+                              positive_diagnoses_u5=0).values(*base_fields,
+                              'num_u5_assessed', 'registered_children_u5', 'positive_diagnoses_u5'))
+        return {r['username']: r for r in rows if r['username']}
+    elif gap_key == 'low_iccm':
+        qs = qs.filter(iccm_assessments__lt=5)
+    elif gap_key == 'zero_positive':
+        qs = qs.filter(positive_diagnoses_u5=0)
+    elif gap_key == 'anc_gap':
+        qs = qs.filter(active_pregnancies__gt=0, pregnancies_visited=0)
+    elif gap_key == 'zero_pregnancies':
+        qs = qs.filter(active_pregnancies=0)
+
+    return {r['username']: r for r in qs.values(*base_fields) if r['username']}
+
+
+def get_inactive_chps(batch, county_list=None, sc_list=None, chu_list=None):
+    qs = CHWRecord.objects.filter(batch=batch, is_active=False)
+    if county_list: qs = qs.filter(county__in=county_list)
+    if sc_list:     qs = qs.filter(sub_county__in=sc_list)
+    if chu_list:    qs = qs.filter(community_health_unit__in=chu_list)
+    return {r['username']: r for r in qs.values(
+        'username', 'chw_name', 'county', 'sub_county',
+        'community_health_unit', 'chp_area') if r['username']}
+
+
+def classify_chps(dicts, n):
+    """
+    Given list of {username: row} dicts (one per batch),
+    classify each CHP as persistent/recurring/occasional.
+    Returns dict: {username: {'count': N, 'row': {...}, 'periods': [T/F, ...]}}
+    """
+    all_usernames = set()
+    for d in dicts:
+        all_usernames |= set(d.keys())
+
+    result = {'persistent': [], 'recurring': [], 'occasional': []}
+    for username in sorted(all_usernames):
+        periods = [username in d for d in dicts]
+        count   = sum(periods)
+        ref     = next((d[username] for d in dicts if username in d), None)
+        if not ref:
+            continue
+        row = {**ref, 'flag_count': count, 'flag_total': n, 'periods': periods}
+        if count == n:
+            result['persistent'].append(row)
+        elif count > n / 2:
+            result['recurring'].append(row)
+        else:
+            result['occasional'].append(row)
+    return result
+
+
+GAP_INDICATORS = {
+    'supervision': {
+        'label': '🔍 Supervision',
+        'indicators': [
+            ('not_supervised',    'Not Supervised'),
+            ('lp_not_supervised', 'Low Performers — Not Supervised'),
+            ('lp_supervised',     'Low Performers — Supervised'),
+            ('supervised_3plus',  'Supervised 3+ Times'),
+        ]
+    },
+    'performance': {
+        'label': '⚠️ Performance',
+        'indicators': [
+            ('good_hh_low_u5',   'Good HH Visits, Low U5 Assessment'),
+            ('high_u5_zero_diag','High U5 Assessment, Zero Positive Diagnoses'),
+            ('low_iccm',         'Low iCCM Assessments (<5)'),
+            ('zero_positive',    'Zero Positive Diagnoses'),
+        ]
+    },
+    'maternal': {
+        'label': '🤱 Maternal Health',
+        'indicators': [
+            ('anc_gap',           'ANC Gap — Active Pregnancies, Zero Visits'),
+            ('zero_pregnancies',  'Zero Active Pregnancies'),
+        ]
+    },
+}
+
+
+@login_required
+def gaps_compare_view(request):
+    all_batches  = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    batch_ids    = [v for v in [request.GET.get('batch_a'), request.GET.get('batch_b'),
+                                request.GET.get('batch_c')] if v]
+    county_list  = request.GET.getlist('county')
+    sc_list      = request.GET.getlist('sub_county')
+    chu_list     = request.GET.getlist('chu')
+
+    selected_batch_ids = {
+        'batch_a': request.GET.get('batch_a', ''),
+        'batch_b': request.GET.get('batch_b', ''),
+        'batch_c': request.GET.get('batch_c', ''),
+    }
+
+    comparison   = None
+    filter_opts  = {}
+
+    if len(batch_ids) >= 2:
+        batches = [get_object_or_404(UploadBatch, pk=bid) for bid in batch_ids]
+        n       = len(batches)
+        labels  = [b.label for b in batches]
+
+        # Build filter options from first batch
+        fqs = CHWRecord.objects.filter(batch=batches[0])
+        filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
+        if county_list:
+            filter_opts['sub_counties'] = fqs.filter(county__in=county_list).values_list(
+                'sub_county', flat=True).distinct().order_by('sub_county')
+        if sc_list:
+            filter_opts['chus'] = fqs.filter(sub_county__in=sc_list).values_list(
+                'community_health_unit', flat=True).distinct().order_by('community_health_unit')
+
+        kwargs = dict(county_list=county_list or None,
+                      sc_list=sc_list or None,
+                      chu_list=chu_list or None)
+
+        # Compute all indicators
+        categories = {}
+        for cat_key, cat_meta in GAP_INDICATORS.items():
+            indicators = {}
+            for gap_key, gap_label in cat_meta['indicators']:
+                dicts = [get_gap_chps(b, gap_key, **kwargs) for b in batches]
+                classified = classify_chps(dicts, n)
+                indicators[gap_key] = {
+                    'label': gap_label,
+                    'persistent':  classified['persistent'],
+                    'recurring':   classified['recurring'],
+                    'occasional':  classified['occasional'],
+                    'count_persistent': len(classified['persistent']),
+                    'count_recurring':  len(classified['recurring']),
+                    'count_occasional': len(classified['occasional']),
+                }
+            categories[cat_key] = {
+                'label': cat_meta['label'],
+                'indicators': indicators,
+            }
+
+        # Inactive CHPs comparison
+        inactive_dicts = [get_inactive_chps(b, **kwargs) for b in batches]
+        inactive_classified = classify_chps(inactive_dicts, n)
+
+        comparison = {
+            'batches':   batches,
+            'labels':    labels,
+            'n':         n,
+            'categories': categories,
+            'inactive':  inactive_classified,
+            'count_inactive_persistent':  len(inactive_classified['persistent']),
+            'count_inactive_recurring':   len(inactive_classified['recurring']),
+            'count_inactive_occasional':  len(inactive_classified['occasional']),
+        }
+
+    return render(request, 'dashboard/gaps_compare.html', {
+        'all_batches':       all_batches,
+        'selected_batch_ids': selected_batch_ids,
+        'comparison':        comparison,
+        'filter_opts':       filter_opts,
+        'selected_counties': county_list,
+        'selected_subcounties': sc_list,
+        'selected_chus':     chu_list,
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+    })
+
+
+@login_required
+def gaps_compare_download(request):
+    """Download comparison results as Excel with one sheet per indicator."""
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from io import BytesIO
+
+    batch_ids   = [v for v in [request.GET.get('batch_a'), request.GET.get('batch_b'),
+                                request.GET.get('batch_c')] if v]
+    county_list = request.GET.getlist('county') or None
+    sc_list     = request.GET.getlist('sub_county') or None
+    chu_list    = request.GET.getlist('chu') or None
+
+    if len(batch_ids) < 2:
+        return HttpResponse('Need at least 2 batches', status=400)
+
+    batches = [get_object_or_404(UploadBatch, pk=bid) for bid in batch_ids]
+    n       = len(batches)
+    labels  = [b.label for b in batches]
+    kwargs  = dict(county_list=county_list, sc_list=sc_list, chu_list=chu_list)
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)  # remove default sheet
+
+    header_fill   = PatternFill('solid', fgColor='1B3A6B')
+    header_font   = Font(color='FFFFFF', bold=True)
+    red_fill      = PatternFill('solid', fgColor='FEE2E2')
+    yellow_fill   = PatternFill('solid', fgColor='FEF9C3')
+    orange_fill   = PatternFill('solid', fgColor='FFEDD5')
+
+    def write_sheet(ws, rows_by_group, labels):
+        headers = ['Status', 'County', 'Sub-County', 'Community Health Unit',
+                   'CHP Area', 'CHP Name', 'Username', 'Periods Flagged'] + \
+                  [f'Flagged in {l}' for l in labels]
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+
+        row_num = 2
+        fills   = {'persistent': red_fill, 'recurring': yellow_fill, 'occasional': orange_fill}
+        labels_map = {'persistent': 'Persistent', 'recurring': 'Recurring', 'occasional': 'Occasional'}
+
+        for group, rows in rows_by_group.items():
+            for r in rows:
+                periods_str = ', '.join(labels[i] for i, f in enumerate(r['periods']) if f)
+                flag_cols   = ['Yes' if f else 'No' for f in r['periods']]
+                data = [labels_map[group], r['county'], r['sub_county'],
+                        r['community_health_unit'], r.get('chp_area', ''),
+                        r['chw_name'], r['username'],
+                        f"{r['flag_count']}/{r['flag_total']} — {periods_str}"] + flag_cols
+                fill = fills[group]
+                for col, val in enumerate(data, 1):
+                    cell = ws.cell(row=row_num, column=col, value=val)
+                    cell.fill = fill
+                row_num += 1
+
+        for col in ws.columns:
+            ws.column_dimensions[col[0].column_letter].width = 18
+
+    # Write indicator sheets
+    for cat_key, cat_meta in GAP_INDICATORS.items():
+        for gap_key, gap_label in cat_meta['indicators']:
+            dicts      = [get_gap_chps(b, gap_key, **kwargs) for b in batches]
+            classified = classify_chps(dicts, n)
+            ws = wb.create_sheet(title=gap_label[:31])
+            write_sheet(ws, classified, labels)
+
+    # Inactive CHPs sheet
+    inactive_dicts      = [get_inactive_chps(b, **kwargs) for b in batches]
+    inactive_classified = classify_chps(inactive_dicts, n)
+    ws = wb.create_sheet(title='Inactive CHPs')
+    write_sheet(ws, inactive_classified, labels)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="gaps_comparison.xlsx"'
+    return response
