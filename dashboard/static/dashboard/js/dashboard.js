@@ -80,6 +80,13 @@ const _loaded = {};
 function loadTable(tab) {
   if (_loaded[tab]) return;
 
+  const c = getContainer(tab);
+  if (!c) {
+    // Container not in DOM yet — retry after a short delay
+    setTimeout(() => loadTable(tab), 200);
+    return;
+  }
+
   const params = new URLSearchParams({
     batch: BATCH_ID || '', county: COUNTY || '',
     sub_county: SUB_COUNTY || '', chu: CHU || '',
@@ -104,9 +111,6 @@ function loadTable(tab) {
   if (!ep) return;
   const url = ep.includes('?') ? ep + params.toString() : ep + '?' + params.toString();
 
-  // Mark loading
-  const c = getContainer(tab);
-  if (!c) return;
   c.innerHTML = '<div class="table-loading">Loading…</div>';
 
   fetch(url)
