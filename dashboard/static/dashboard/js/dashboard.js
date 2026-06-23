@@ -7,8 +7,9 @@ document.addEventListener('DOMContentLoaded', function () {
   initDrilldownCatNav();
   initTabs();
   initDefinitionModal();
-  if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH) {
-    loadTable('inactive-chps');
+  if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH && BATCH_ID) {
+    // Small delay to ensure all template variables are set
+    setTimeout(() => loadTable('inactive-chps'), 100);
   }
 });
 
