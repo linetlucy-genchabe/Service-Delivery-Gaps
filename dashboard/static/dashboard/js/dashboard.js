@@ -7,9 +7,13 @@ document.addEventListener('DOMContentLoaded', function () {
   initDrilldownCatNav();
   initTabs();
   initDefinitionModal();
-  if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH && BATCH_ID) {
-    // Small delay to ensure all template variables are set
-    setTimeout(() => loadTable('inactive-chps'), 100);
+  // Load the default active tab in the default active dd-cat-panel
+  if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH && typeof BATCH_ID !== 'undefined' && BATCH_ID) {
+    const defaultPanel = document.querySelector('.dd-cat-panel.active');
+    if (defaultPanel) {
+      const defaultTab = defaultPanel.querySelector('.tab-btn.active');
+      if (defaultTab) loadTable(defaultTab.dataset.tab);
+    }
   }
 });
 
@@ -108,11 +112,10 @@ function loadTable(tab) {
   fetch(url)
     .then(r => r.json())
     .then(data => {
-      _loaded[tab] = true;  // only cache on success
       renderTable(tab, data);
+      _loaded[tab] = true;  // cache only after successful render
     })
     .catch(() => {
-      // Don't cache — allow retry on next click
       c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data. Click the tab to retry.</div>';
     });
 }
