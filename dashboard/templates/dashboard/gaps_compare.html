@@ -48,6 +48,15 @@
 
 {% if comparison %}
 
+{% if comparison.error %}
+<div style="background:#FEE2E2;border:1px solid #DC2626;border-radius:8px;padding:16px;margin-bottom:16px;">
+  <strong style="color:#991B1B;">Error loading comparison:</strong>
+  <pre style="font-size:11px;margin-top:8px;white-space:pre-wrap;">{{ comparison.error }}
+
+{{ comparison.traceback }}</pre>
+</div>
+{% else %}
+
 <!-- GEOGRAPHY FILTERS -->
 <div class="filter-bar" style="margin-top:-8px;">
   <form method="get" class="filter-form">
@@ -142,6 +151,8 @@
   {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=labels n=n title="Inactive CHPs" %}
   {% endwith %}
 </div>
+
+{% endif %}
 
 {% else %}
 <div class="empty-dashboard">

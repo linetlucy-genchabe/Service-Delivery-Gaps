@@ -64,7 +64,7 @@
         </tbody>
       </table>
       <div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">
-        {{ persistent|length|add:recurring|length|add:occasional|length }} CHP(s) flagged across selected periods
+        {{ persistent|length }} persistent · {{ recurring|length }} recurring · {{ occasional|length }} occasional
       </div>
       {% else %}
       <div class="table-empty">✅ No CHPs flagged for this indicator across selected periods.</div>

@@ -1806,68 +1806,69 @@ def gaps_compare_view(request):
     filter_opts  = {}
 
     if len(batch_ids) >= 2:
-        batches = [get_object_or_404(UploadBatch, pk=bid) for bid in batch_ids]
-        n       = len(batches)
-        labels  = [b.label for b in batches]
+        try:
+            batches = [get_object_or_404(UploadBatch, pk=bid) for bid in batch_ids]
+            n       = len(batches)
+            labels  = [b.label for b in batches]
 
-        # Build filter options from first batch
-        fqs = CHWRecord.objects.filter(batch=batches[0])
-        filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
-        if county_list:
-            filter_opts['sub_counties'] = fqs.filter(county__in=county_list).values_list(
-                'sub_county', flat=True).distinct().order_by('sub_county')
-        if sc_list:
-            filter_opts['chus'] = fqs.filter(sub_county__in=sc_list).values_list(
-                'community_health_unit', flat=True).distinct().order_by('community_health_unit')
+            # Build filter options from first batch
+            fqs = CHWRecord.objects.filter(batch=batches[0])
+            filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
+            if county_list:
+                filter_opts['sub_counties'] = fqs.filter(county__in=county_list).values_list(
+                    'sub_county', flat=True).distinct().order_by('sub_county')
+            if sc_list:
+                filter_opts['chus'] = fqs.filter(sub_county__in=sc_list).values_list(
+                    'community_health_unit', flat=True).distinct().order_by('community_health_unit')
 
-        kwargs = dict(county_list=county_list or None,
-                      sc_list=sc_list or None,
-                      chu_list=chu_list or None)
+            kwargs = dict(county_list=county_list or None,
+                          sc_list=sc_list or None,
+                          chu_list=chu_list or None)
 
-        # Compute all indicators
-        categories = {}
-        for cat_key, cat_meta in GAP_INDICATORS.items():
-            indicators = {}
-            for gap_key, gap_label in cat_meta['indicators']:
-                dicts = [get_gap_chps(b, gap_key, **kwargs) for b in batches]
-                classified = classify_chps(dicts, n)
-                indicators[gap_key] = {
-                    'label': gap_label,
-                    'persistent':  classified['persistent'],
-                    'recurring':   classified['recurring'],
-                    'occasional':  classified['occasional'],
-                    'count_persistent': len(classified['persistent']),
-                    'count_recurring':  len(classified['recurring']),
-                    'count_occasional': len(classified['occasional']),
+            # Compute all indicators
+            categories = {}
+            for cat_key, cat_meta in GAP_INDICATORS.items():
+                indicators = {}
+                for gap_key, gap_label in cat_meta['indicators']:
+                    dicts = [get_gap_chps(b, gap_key, **kwargs) for b in batches]
+                    classified = classify_chps(dicts, n)
+                    indicators[gap_key] = {
+                        'label': gap_label,
+                        'persistent':  classified['persistent'],
+                        'recurring':   classified['recurring'],
+                        'occasional':  classified['occasional'],
+                        'count_persistent': len(classified['persistent']),
+                        'count_recurring':  len(classified['recurring']),
+                        'count_occasional': len(classified['occasional']),
+                    }
+                categories[cat_key] = {
+                    'label': cat_meta['label'],
+                    'indicators': indicators,
                 }
-            categories[cat_key] = {
-                'label': cat_meta['label'],
-                'indicators': indicators,
+
+            # Inactive CHPs comparison
+            inactive_dicts      = [get_inactive_chps(b, **kwargs) for b in batches]
+            inactive_classified = classify_chps(inactive_dicts, n)
+            inactive_ind = {
+                'label':             'Inactive CHPs',
+                'persistent':        inactive_classified['persistent'],
+                'recurring':         inactive_classified['recurring'],
+                'occasional':        inactive_classified['occasional'],
+                'count_persistent':  len(inactive_classified['persistent']),
+                'count_recurring':   len(inactive_classified['recurring']),
+                'count_occasional':  len(inactive_classified['occasional']),
             }
 
-        # Inactive CHPs comparison
-        inactive_dicts      = [get_inactive_chps(b, **kwargs) for b in batches]
-        inactive_classified = classify_chps(inactive_dicts, n)
-        inactive_ind = {
-            'label':             'Inactive CHPs',
-            'persistent':        inactive_classified['persistent'],
-            'recurring':         inactive_classified['recurring'],
-            'occasional':        inactive_classified['occasional'],
-            'count_persistent':  len(inactive_classified['persistent']),
-            'count_recurring':   len(inactive_classified['recurring']),
-            'count_occasional':  len(inactive_classified['occasional']),
-        }
-
-        comparison = {
-            'batches':   batches,
-            'labels':    labels,
-            'n':         n,
-            'categories': categories,
-            'inactive':  inactive_ind,
-            'count_inactive_persistent':  len(inactive_classified['persistent']),
-            'count_inactive_recurring':   len(inactive_classified['recurring']),
-            'count_inactive_occasional':  len(inactive_classified['occasional']),
-        }
+            comparison = {
+                'batches':   batches,
+                'labels':    labels,
+                'n':         n,
+                'categories': categories,
+                'inactive':  inactive_ind,
+            }
+        except Exception as e:
+            import traceback
+            comparison = {'error': str(e), 'traceback': traceback.format_exc()}
 
     return render(request, 'dashboard/gaps_compare.html', {
         'all_batches':       all_batches,
