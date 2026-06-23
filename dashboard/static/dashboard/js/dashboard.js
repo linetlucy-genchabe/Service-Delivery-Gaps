@@ -7,8 +7,13 @@ document.addEventListener('DOMContentLoaded', function () {
   initDrilldownCatNav();
   initTabs();
   initDefinitionModal();
-  // Load the default active tab in the default active dd-cat-panel
+
   if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH && typeof BATCH_ID !== 'undefined' && BATCH_ID) {
+    // Option 3: Pre-fetch inactive CHPs in background immediately
+    // Store result so it renders instantly when user clicks the tab
+    prefetchTable('inactive-chps');
+
+    // Also load the default active tab in the default active dd-cat-panel
     const defaultPanel = document.querySelector('.dd-cat-panel.active');
     if (defaultPanel) {
       const defaultTab = defaultPanel.querySelector('.tab-btn.active');
@@ -16,6 +21,45 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 });
+
+// Option 1: Manual retry — clears cache and reloads
+function retryTable(tab) {
+  _loaded[tab]     = false;
+  _prefetched[tab] = null;
+  const c = getContainer(tab);
+  if (c) c.innerHTML = '<div class="table-loading">Loading…</div>';
+  loadTable(tab);
+}
+
+// Pre-fetch: fetch data now, store it, render when container is ready
+const _prefetched = {};
+function prefetchTable(tab) {
+  if (_loaded[tab] || _prefetched[tab]) return;
+  const params = new URLSearchParams({
+    batch: BATCH_ID || '', county: COUNTY || '',
+    sub_county: SUB_COUNTY || '', chu: CHU || '',
+  });
+  const endpoints = {
+    'inactive-chps': '/api/inactive-chps/',
+  };
+  const ep = endpoints[tab];
+  if (!ep) return;
+  const url = ep + '?' + params.toString();
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      _prefetched[tab] = data;
+      // Try to render immediately if container already exists
+      const c = getContainer(tab);
+      if (c) {
+        renderTable(tab, data);
+        _loaded[tab] = true;
+      }
+      // Otherwise it will render when loadTable is called on tab click
+    })
+    .catch(() => {});
+}
 
 // ── Filter submission ─────────────────────────────────────────
 function submitFilters() {
@@ -82,8 +126,14 @@ function loadTable(tab) {
 
   const c = getContainer(tab);
   if (!c) {
-    // Container not in DOM yet — retry after a short delay
     setTimeout(() => loadTable(tab), 200);
+    return;
+  }
+
+  // Option 3: Use prefetched data if already available
+  if (_prefetched[tab]) {
+    renderTable(tab, _prefetched[tab]);
+    _loaded[tab] = true;
     return;
   }
 

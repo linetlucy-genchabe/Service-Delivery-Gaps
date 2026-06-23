@@ -332,7 +332,10 @@
   <div class="tab-panel active" id="tab-inactive-chps">
     <div class="card"><div class="card-header">
       <div><h3 class="card-title">Inactive CHPs</h3><p class="card-subtitle">CHPs marked as inactive in eCHIS this period.</p></div>
-      <a href="{% url 'download_inactive_chps' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="retryTable('inactive-chps')" class="btn btn-sm btn-outline" title="Reload table" id="retry-inactive-chps">🔄 Retry</button>
+        <a href="{% url 'download_inactive_chps' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      </div>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="inactive-chps-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
