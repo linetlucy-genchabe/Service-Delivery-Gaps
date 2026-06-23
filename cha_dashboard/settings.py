@@ -60,6 +60,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'dashboard.context_processors.static_version',
             ],
         },
     },
@@ -178,5 +179,8 @@ JAZZMIN_UI_TWEAKS = {
     "theme": "default",
 }
 
-# Static file cache busting — bump this when CSS/JS changes
-STATIC_VERSION = '1.0'
+import os
+
+# Static file cache busting via Railway environment variable
+# Set STATIC_VERSION in Railway Variables panel, increment on each deploy
+STATIC_VERSION = os.environ.get('STATIC_VERSION', '1')

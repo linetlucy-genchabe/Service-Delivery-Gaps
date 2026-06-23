@@ -7,7 +7,7 @@
   <title>{% block title %}Service Delivery Gaps Dashboard{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'dashboard/css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'dashboard/css/styles.css' %}?v={{ STATIC_VERSION }}">
   <link rel="icon" type="image/png" href="{% static 'dashboard/lg_logo.png' %}">
   <link rel="manifest" href="{% static 'dashboard/manifest.json' %}">
   <meta name="theme-color" content="#1B3A6B">
@@ -72,7 +72,7 @@
 </footer>
 
 {% block extra_js %}{% endblock %}
-<script src="{% static 'dashboard/js/dashboard.js' %}"></script>
+<script src="{% static 'dashboard/js/dashboard.js' %}?v={{ STATIC_VERSION }}"></script>
 
 <script>
 // Mobile nav toggle
