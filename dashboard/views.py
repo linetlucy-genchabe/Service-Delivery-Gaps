@@ -1846,15 +1846,24 @@ def gaps_compare_view(request):
             }
 
         # Inactive CHPs comparison
-        inactive_dicts = [get_inactive_chps(b, **kwargs) for b in batches]
+        inactive_dicts      = [get_inactive_chps(b, **kwargs) for b in batches]
         inactive_classified = classify_chps(inactive_dicts, n)
+        inactive_ind = {
+            'label':             'Inactive CHPs',
+            'persistent':        inactive_classified['persistent'],
+            'recurring':         inactive_classified['recurring'],
+            'occasional':        inactive_classified['occasional'],
+            'count_persistent':  len(inactive_classified['persistent']),
+            'count_recurring':   len(inactive_classified['recurring']),
+            'count_occasional':  len(inactive_classified['occasional']),
+        }
 
         comparison = {
             'batches':   batches,
             'labels':    labels,
             'n':         n,
             'categories': categories,
-            'inactive':  inactive_classified,
+            'inactive':  inactive_ind,
             'count_inactive_persistent':  len(inactive_classified['persistent']),
             'count_inactive_recurring':   len(inactive_classified['recurring']),
             'count_inactive_occasional':  len(inactive_classified['occasional']),

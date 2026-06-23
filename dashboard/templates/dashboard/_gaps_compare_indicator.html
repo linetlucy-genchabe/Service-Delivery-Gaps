@@ -3,9 +3,9 @@
     <div>
       <h3 class="card-title">{{ ind.label|default:title }}</h3>
       <p class="card-subtitle">
-        🔴 Persistent (all {{ n }} periods): <strong>{{ ind.count_persistent|default:ind.persistent|length }}</strong> &nbsp;·&nbsp;
-        🟡 Recurring: <strong>{{ ind.count_recurring|default:ind.recurring|length }}</strong> &nbsp;·&nbsp;
-        🟠 Occasional: <strong>{{ ind.count_occasional|default:ind.occasional|length }}</strong>
+        🔴 Persistent (all {{ n }} periods): <strong>{{ ind.count_persistent }}</strong> &nbsp;·&nbsp;
+        🟡 Recurring: <strong>{{ ind.count_recurring }}</strong> &nbsp;·&nbsp;
+        🟠 Occasional: <strong>{{ ind.count_occasional }}</strong>
       </p>
     </div>
   </div>
