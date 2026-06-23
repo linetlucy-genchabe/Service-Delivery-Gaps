@@ -1674,10 +1674,7 @@ def download_inactive_chps(request):
 # ===========================================================================
 
 def get_gap_chps(batch, gap_key, county_list=None, sc_list=None, chu_list=None):
-    """
-    Return a set of usernames flagged for a given gap in a batch.
-    Returns dict: {username: row_data}
-    """
+    """Return {username: row_data} for CHPs flagged for a given gap."""
     qs = CHWRecord.objects.filter(batch=batch, is_active=True)
     if county_list: qs = qs.filter(county__in=county_list)
     if sc_list:     qs = qs.filter(sub_county__in=sc_list)
@@ -1694,21 +1691,30 @@ def get_gap_chps(batch, gap_key, county_list=None, sc_list=None, chu_list=None):
         qs = qs.filter(hh_visits__lt=50, supervised=True)
     elif gap_key == 'supervised_3plus':
         qs = qs.filter(supervision_visits__gte=3)
-    elif gap_key == 'same_day_flags':
-        # Same-day flags are CHU-level not CHP-level, skip for CHP comparison
-        return {}
     elif gap_key == 'good_hh_low_u5':
-        rows = list(qs.filter(registered_hhs__gt=0, registered_children_u5__gt=0).values(
-            *base_fields, 'hh_visits', 'registered_hhs', 'num_u5_assessed', 'registered_children_u5'))
-        return {r['username']: r for r in rows
-                if r['username'] and
-                r['hh_visits'] / r['registered_hhs'] >= 0.7 and
-                r['num_u5_assessed'] / r['registered_children_u5'] < 0.4}
+        # Use DB annotation for performance instead of Python loop
+        from django.db.models import ExpressionWrapper, FloatField, F as DjF
+        qs = qs.filter(registered_hhs__gt=0, registered_children_u5__gt=0)
+        qs = qs.annotate(
+            hh_rate=ExpressionWrapper(
+                DjF('hh_visits') * 1.0 / DjF('registered_hhs'),
+                output_field=FloatField()
+            ),
+            u5_rate=ExpressionWrapper(
+                DjF('num_u5_assessed') * 1.0 / DjF('registered_children_u5'),
+                output_field=FloatField()
+            )
+        ).filter(hh_rate__gte=0.7, u5_rate__lt=0.4)
     elif gap_key == 'high_u5_zero_diag':
-        rows = list(qs.filter(registered_children_u5__gt=0, num_u5_assessed__gte=10,
-                              positive_diagnoses_u5=0).values(*base_fields,
-                              'num_u5_assessed', 'registered_children_u5', 'positive_diagnoses_u5'))
-        return {r['username']: r for r in rows if r['username']}
+        from django.db.models import ExpressionWrapper, FloatField, F as DjF
+        qs = qs.filter(registered_children_u5__gt=0, num_u5_assessed__gte=10,
+                       positive_diagnoses_u5=0)
+        qs = qs.annotate(
+            u5_rate=ExpressionWrapper(
+                DjF('num_u5_assessed') * 1.0 / DjF('registered_children_u5'),
+                output_field=FloatField()
+            )
+        ).filter(u5_rate__gte=0.8)
     elif gap_key == 'low_iccm':
         qs = qs.filter(iccm_assessments__lt=5)
     elif gap_key == 'zero_positive':
@@ -1717,6 +1723,8 @@ def get_gap_chps(batch, gap_key, county_list=None, sc_list=None, chu_list=None):
         qs = qs.filter(active_pregnancies__gt=0, pregnancies_visited=0)
     elif gap_key == 'zero_pregnancies':
         qs = qs.filter(active_pregnancies=0)
+    else:
+        return {}
 
     return {r['username']: r for r in qs.values(*base_fields) if r['username']}
 

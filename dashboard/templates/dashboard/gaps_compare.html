@@ -121,7 +121,7 @@
 <div class="cat-section active" id="section-gc-supervision">
   {% with cat=comparison.categories.supervision %}
   {% for gap_key, ind in cat.indicators.items %}
-  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n only %}
   {% endfor %}
   {% endwith %}
 </div>
@@ -130,7 +130,7 @@
 <div class="cat-section" id="section-gc-performance">
   {% with cat=comparison.categories.performance %}
   {% for gap_key, ind in cat.indicators.items %}
-  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n only %}
   {% endfor %}
   {% endwith %}
 </div>
@@ -139,7 +139,7 @@
 <div class="cat-section" id="section-gc-maternal">
   {% with cat=comparison.categories.maternal %}
   {% for gap_key, ind in cat.indicators.items %}
-  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=comparison.labels n=comparison.n only %}
   {% endfor %}
   {% endwith %}
 </div>
@@ -147,9 +147,7 @@
 <!-- INACTIVE CHPs -->
 <div class="cat-section" id="section-gc-inactive">
   <div class="section-label">👤 Consistently Inactive CHPs</div>
-  {% with ind=comparison.inactive labels=comparison.labels n=comparison.n %}
-  {% include 'dashboard/_gaps_compare_indicator.html' with ind=ind labels=labels n=n title="Inactive CHPs" %}
-  {% endwith %}
+  {% include 'dashboard/_gaps_compare_indicator.html' with ind=comparison.inactive labels=comparison.labels n=comparison.n only %}
 </div>
 
 {% endif %}
