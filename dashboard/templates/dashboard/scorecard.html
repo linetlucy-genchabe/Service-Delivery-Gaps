@@ -169,7 +169,7 @@
   <div class="card-header">
     <div>
       <h3 class="card-title">Performance Scorecard</h3>
-      <p class="card-subtitle">🟢 ≥100% of target &nbsp;·&nbsp; 🟡 70–99% &nbsp;·&nbsp; 🔴 &lt;70% &nbsp;·&nbsp; % Target Achieved = Most Recent Week ÷ Monthly Target × 100</p>
+      <p class="card-subtitle">🟢 Target achieved (≥100%) &nbsp;·&nbsp; 🟡 50–99% of target &nbsp;·&nbsp; 🔴 &lt;50% of target &nbsp;·&nbsp; % Target Achieved = Most Recent Week ÷ Monthly Target × 100</p>
     </div>
     <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print / Save PDF</button>
   </div>
@@ -215,7 +215,7 @@
           {% endfor %}
           {% with cw=row.weeks|last %}
           <td style="padding:10px 10px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
-            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 70 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
             {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
           </td>
           {% endwith %}
@@ -243,7 +243,7 @@
           {% endfor %}
           {% with cw=row.weeks|last %}
           <td style="padding:10px 10px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
-            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 70 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cw.pct_target %}{% if cw.pct_target >= 100 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
             {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
           </td>
           {% endwith %}
