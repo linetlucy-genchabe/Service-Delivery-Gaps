@@ -214,9 +214,17 @@
           </td>
           {% endfor %}
           {% with cw=row.weeks|last %}
-          <td style="padding:10px 10px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
-            {% if cw.pct_target %}{% if cw.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
-            {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
+          <td style="padding:8px 10px;text-align:left;font-weight:700;font-size:11px;border:2px solid white;vertical-align:top;background:#F8FAFC;">
+            <div style="margin-bottom:6px;padding:4px 6px;border-radius:4px;
+              {% if cw.pct_target %}{% if cw.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cw.pct_target_label|default:"U5 Assessed" }}</span>
+              {% if cw.pct_target %}{{ cw.pct_target }}%{% else %}—{% endif %}
+            </div>
+            <div style="padding:4px 6px;border-radius:4px;
+              {% if cw.pct_target_2 %}{% if cw.pct_target_2 >= 90 %}background:#BBF7D0;color:#14532D;{% elif cw.pct_target_2 >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cw.pct_target_2_label|default:"Sick Children Avg" }}</span>
+              {% if cw.pct_target_2 %}{{ cw.pct_target_2 }}%{% else %}—{% endif %}
+            </div>
           </td>
           {% endwith %}
         </tr>

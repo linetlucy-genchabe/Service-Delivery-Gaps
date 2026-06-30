@@ -1525,8 +1525,17 @@ def scorecard_view(request):
                 fc   = metrics.get('fever_cases', 0)
                 ft   = metrics.get('fever_tested', 0)
                 colour = get_colour(upct, 100)
+
+                # Two separate target achievements: U5 assessment % and avg sick children
+                avg_target = 10
+                avg_pct_target = round(avg / avg_target * 100, 1) if avg_target else None
+
                 return {
-                    'value': upct, 'colour': colour, 'pct_target': round(upct, 1), 'type': row_type,
+                    'value': upct, 'colour': colour, 'pct_target': round(upct, 1),
+                    'pct_target_2': avg_pct_target,
+                    'pct_target_label':   'U5 Assessed',
+                    'pct_target_2_label': 'Sick Children Avg',
+                    'type': row_type,
                     'lines': [
                         ('U5 Pop', f"{ru5:,}"),
                         ('Assessed', f"{au5:,} ({upct}%)"),
