@@ -1249,12 +1249,17 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
     avg_pos = round((pos_agg['total_pos'] or 0) / total_active, 2) if total_active else 0
 
     # 4. On Time PNC % = sum(PNC 48hr) / sum(Total Deliveries)
+    #    Also PNC 3-7 day on-time
     pnc_agg = active_qs.filter(total_deliveries__gt=0).aggregate(
         pnc=Sum('pnc_48hr_ontime'),
+        pnc_3_7d=Sum('pnc_3_7d_ontime'),
         del_total=Sum('total_deliveries'),
     )
     pnc_pct = round(
         (pnc_agg['pnc'] or 0) / (pnc_agg['del_total'] or 1) * 100, 1
+    )
+    pnc_3_7d_pct = round(
+        (pnc_agg['pnc_3_7d'] or 0) / (pnc_agg['del_total'] or 1) * 100, 1
     )
 
     # 5. Pregnancies Registered per CHP
@@ -1311,6 +1316,7 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
     # PNC numerator/denominator for display
     pnc_numerator   = pnc_agg['pnc'] or 0
     pnc_denominator = pnc_agg['del_total'] or 0
+    pnc_3_7d_numerator = pnc_agg['pnc_3_7d'] or 0
 
     # Active CHPs as % of total CHPs
     active_chps_pct = round(total_active / total_all * 100, 1) if total_all else 0
@@ -1336,6 +1342,8 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
         'pnc_ontime_pct':      pnc_pct,
         'pnc_numerator':       pnc_numerator,
         'pnc_denominator':     pnc_denominator,
+        'pnc_3_7d_pct':        pnc_3_7d_pct,
+        'pnc_3_7d_numerator':  pnc_3_7d_numerator,
         'preg_registered_chp': preg_per_chp,
         'supervision_pct':     sup_pct,
         'sync_rate_pct':       sync_pct,
@@ -1387,40 +1395,37 @@ def find_matching_sync_batch(chw_batch):
 def auto_detect_batches(county=None, sub_county=None, chu=None):
     """
     Auto-detect which CHW batches to use for each scorecard column.
-    Returns dict with keys: prev_month, prev_week, current_week
+    Returns dict with keys: prev_month, weeks (list, oldest first)
     """
-    from datetime import date
-    import calendar
-
     all_batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date', '-uploaded_at')
 
     monthly  = list(all_batches.filter(period_type='monthly'))
     weekly   = list(all_batches.filter(period_type='weekly'))
 
-    # Current week = most recent weekly batch
-    current_week = weekly[0] if weekly else None
+    # Current month = month of the most recent weekly batch (or monthly if no weekly)
+    current_month_ref = weekly[0] if weekly else (monthly[0] if monthly else None)
 
-    # Previous week = second most recent weekly batch in same month
-    prev_week = None
-    if current_week:
-        same_month_weekly = [b for b in weekly if b.year == current_week.year and b.month == current_week.month and b.pk != current_week.pk]
-        prev_week = same_month_weekly[0] if same_month_weekly else None
+    weeks = []
+    if current_month_ref:
+        # All weekly batches in the same year/month as the most recent one, oldest first
+        same_month_weekly = [b for b in weekly
+                              if b.year == current_month_ref.year and b.month == current_month_ref.month]
+        weeks = sorted(same_month_weekly, key=lambda b: b.week_start_date or date.min)
 
-    # Previous month = most recent monthly batch from a different month
-    # OR most recent weekly batch from previous month
+    # Previous month = most recent monthly batch from a strictly earlier month
+    # OR most recent weekly batch from an earlier month if no monthly upload exists
     prev_month = None
-    if current_week:
-        prev_monthly = [b for b in monthly if (b.year, b.month) < (current_week.year, current_week.month)]
+    if current_month_ref:
+        prev_monthly = [b for b in monthly if (b.year, b.month) < (current_month_ref.year, current_month_ref.month)]
         if prev_monthly:
             prev_month = prev_monthly[0]
         else:
-            prev_weekly_other_month = [b for b in weekly if (b.year, b.month) < (current_week.year, current_week.month)]
+            prev_weekly_other_month = [b for b in weekly if (b.year, b.month) < (current_month_ref.year, current_month_ref.month)]
             prev_month = prev_weekly_other_month[0] if prev_weekly_other_month else None
 
     return {
-        'prev_month':   prev_month,
-        'prev_week':    prev_week,
-        'current_week': current_week,
+        'prev_month': prev_month,
+        'weeks':      weeks,  # oldest to newest
     }
 
 
@@ -1436,20 +1441,22 @@ def scorecard_view(request):
     override_prev_week    = request.GET.get('batch_prev_week', '')
     override_current_week = request.GET.get('batch_current', '')
 
+    override_weeks         = request.GET.getlist('batch_week')  # list of overridden week batch IDs, in order
+
     all_batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
 
     # Auto-detect
     auto = auto_detect_batches()
 
-    # Apply overrides
-    def resolve_batch(override, auto_val):
-        if override:
-            return UploadBatch.objects.filter(pk=override).first()
-        return auto_val
+    # Resolve previous month (single override still supported)
+    batch_prev_month = UploadBatch.objects.filter(pk=override_prev_month).first() if override_prev_month else auto['prev_month']
 
-    batch_prev_month   = resolve_batch(override_prev_month,   auto['prev_month'])
-    batch_prev_week    = resolve_batch(override_prev_week,    auto['prev_week'])
-    batch_current_week = resolve_batch(override_current_week, auto['current_week'])
+    # Resolve weeks — if override_weeks provided, use those in order; else auto-detected weeks
+    if override_weeks:
+        batch_weeks = [UploadBatch.objects.filter(pk=wid).first() for wid in override_weeks]
+        batch_weeks = [b for b in batch_weeks if b is not None]
+    else:
+        batch_weeks = auto['weeks']
 
     def get_chw_qs(batch):
         if batch is None:
@@ -1471,9 +1478,17 @@ def scorecard_view(request):
         if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
         return qs
 
-    metrics_prev_month   = compute_scorecard_metrics(get_chw_qs(batch_prev_month),   get_sync_qs(batch_prev_month))   if batch_prev_month   else None
-    metrics_prev_week    = compute_scorecard_metrics(get_chw_qs(batch_prev_week),     get_sync_qs(batch_prev_week))    if batch_prev_week    else None
-    metrics_current_week = compute_scorecard_metrics(get_chw_qs(batch_current_week),  get_sync_qs(batch_current_week)) if batch_current_week else None
+    metrics_prev_month = compute_scorecard_metrics(get_chw_qs(batch_prev_month), get_sync_qs(batch_prev_month)) if batch_prev_month else None
+
+    # Compute metrics for each week column
+    week_columns = []
+    for b in batch_weeks:
+        m = compute_scorecard_metrics(get_chw_qs(b), get_sync_qs(b))
+        week_columns.append({'batch': b, 'metrics': m})
+
+    # Current week = last (most recent) week column, used for % Target Achieved
+    metrics_current_week = week_columns[-1]['metrics'] if week_columns else None
+    batch_current_week   = week_columns[-1]['batch']   if week_columns else None
 
     # Build scorecard rows
     rows = []
@@ -1522,14 +1537,19 @@ def scorecard_view(request):
                 }
 
             elif row_type == 'pnc':
-                val  = metrics.get('pnc_ontime_pct', 0)
-                num  = metrics.get('pnc_numerator', 0)
-                den  = metrics.get('pnc_denominator', 0)
-                pct_target = round(val / target * 100, 1) if target else None
-                colour = get_colour(val, target)
+                val48  = metrics.get('pnc_ontime_pct', 0)
+                num48  = metrics.get('pnc_numerator', 0)
+                den48  = metrics.get('pnc_denominator', 0)
+                val37  = metrics.get('pnc_3_7d_pct', 0)
+                num37  = metrics.get('pnc_3_7d_numerator', 0)
+                colour = get_colour(val48, target)
+                pct_target = round(val48 / target * 100, 1) if target else None
                 return {
-                    'value': val, 'colour': colour, 'pct_target': pct_target, 'type': row_type,
-                    'display': f"{val}% ({num}/{den})",
+                    'value': val48, 'colour': colour, 'pct_target': pct_target, 'type': row_type,
+                    'lines': [
+                        ('PNC 48hr On-time', f"{val48}% ({num48}/{den48})"),
+                        ('PNC 3-7d On-time', f"{val37}% ({num37}/{den48})"),
+                    ]
                 }
 
             elif row_type == 'iccm_ref':
@@ -1559,7 +1579,7 @@ def scorecard_view(request):
         if row_type == 'child_health':
             target_display = f"100% of {(metrics_current_week or metrics_prev_month or {}).get('total_registered_u5', 0):,} U5s; avg {10} sick children"
         elif row_type == 'active_chps':
-            total = (metrics_current_week or metrics_prev_week or metrics_prev_month or {}).get('total_chps', 0)
+            total = (metrics_current_week or metrics_prev_month or {}).get('total_chps', 0)
             target_display = str(total) if total else '—'
         else:
             target_display = f"{target}{meta['unit']}" if target is not None else '—'
@@ -1569,13 +1589,12 @@ def scorecard_view(request):
             'label':  meta['label'],
             'target': target_display,
             'type':   row_type,
-            'prev_month':   make_cell(metrics_prev_month),
-            'prev_week':    make_cell(metrics_prev_week),
-            'current_week': make_cell(metrics_current_week),
+            'prev_month': make_cell(metrics_prev_month),
+            'weeks':      [make_cell(wc['metrics']) for wc in week_columns],
         })
 
     # Filter options from the most data-rich batch
-    filter_batch = batch_current_week or batch_prev_week or batch_prev_month
+    filter_batch = batch_current_week or batch_prev_month
     filter_opts  = {}
     if filter_batch:
         fqs = CHWRecord.objects.filter(batch=filter_batch)
@@ -1585,8 +1604,8 @@ def scorecard_view(request):
         if selected_subcounties:
             filter_opts['chus'] = fqs.filter(sub_county__in=selected_subcounties).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
 
-    # Inactive CHPs from the latest CHW batch (current_week, else prev_week, else prev_month)
-    latest_batch = batch_current_week or batch_prev_week or batch_prev_month
+    # Inactive CHPs from the latest CHW batch (most recent week, else prev_month)
+    latest_batch = batch_current_week or batch_prev_month
     inactive_chps = []
     if latest_batch:
         inactive_qs = CHWRecord.objects.filter(batch=latest_batch, is_active=False)
@@ -1617,12 +1636,11 @@ def scorecard_view(request):
         'rows':               rows,
         'all_batches':        all_batches,
         'batch_prev_month':   batch_prev_month,
-        'batch_prev_week':    batch_prev_week,
+        'week_batches':       [wc['batch'] for wc in week_columns],
         'batch_current_week': batch_current_week,
         'latest_batch':       latest_batch,
         'override_prev_month':   override_prev_month,
-        'override_prev_week':    override_prev_week,
-        'override_current_week': override_current_week,
+        'override_weeks':        override_weeks,
         'filter_opts':           filter_opts,
         'selected_counties':     selected_counties,
         'selected_subcounties':  selected_subcounties,
@@ -1634,10 +1652,10 @@ def scorecard_view(request):
 
 @login_required
 def download_inactive_chps(request):
-    county     = request.GET.get('county', '')
-    sub_county = request.GET.get('sub_county', '')
-    chu        = request.GET.get('chu', '')
-    batch_id   = request.GET.get('batch')
+    counties     = request.GET.getlist('county')
+    sub_counties = request.GET.getlist('sub_county')
+    chus         = request.GET.getlist('chu')
+    batch_id     = request.GET.get('batch')
 
     if batch_id:
         batch = get_object_or_404(UploadBatch, pk=batch_id)
@@ -1648,9 +1666,9 @@ def download_inactive_chps(request):
         return HttpResponse('No batch found', status=404)
 
     qs = CHWRecord.objects.filter(batch=batch, is_active=False)
-    if county:     qs = qs.filter(county=county)
-    if sub_county: qs = qs.filter(sub_county=sub_county)
-    if chu:        qs = qs.filter(community_health_unit=chu)
+    if counties:     qs = qs.filter(county__in=counties)
+    if sub_counties: qs = qs.filter(sub_county__in=sub_counties)
+    if chus:          qs = qs.filter(community_health_unit__in=chus)
 
     sync_batch  = find_matching_sync_batch(batch)
     sync_lookup = {}
