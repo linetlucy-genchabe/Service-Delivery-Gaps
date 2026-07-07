@@ -280,3 +280,65 @@ class CHPSyncRecord(models.Model):
 
     def __str__(self):
         return f"{self.chp_name} – {self.community_health_unit} [{self.batch}]"
+
+
+# ===========================================================================
+# KPI Report Models
+# ===========================================================================
+
+MONTH_CHOICES = [
+    (1,'January'),(2,'February'),(3,'March'),(4,'April'),
+    (5,'May'),(6,'June'),(7,'July'),(8,'August'),
+    (9,'September'),(10,'October'),(11,'November'),(12,'December'),
+]
+
+class KPIReport(models.Model):
+    """
+    An uploaded KE Monthly Report Excel file.
+    Each file covers multiple months of data — we store metadata here.
+    """
+    file            = models.FileField(upload_to='kpi_reports/')
+    report_month    = models.IntegerField(choices=MONTH_CHOICES, help_text="Latest month in this report")
+    report_year     = models.IntegerField()
+    uploaded_by     = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    uploaded_at     = models.DateTimeField(auto_now_add=True)
+    notes           = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-report_year', '-report_month']
+
+    def __str__(self):
+        return f"KPI Report – {self.get_report_month_display()} {self.report_year}"
+
+    def get_report_month_display(self):
+        return dict(MONTH_CHOICES).get(self.report_month, str(self.report_month))
+
+    @property
+    def label(self):
+        return str(self)
+
+
+class KPIDataPoint(models.Model):
+    """
+    One metric value for a given county/sub-county/month from a KPI report.
+    county = '' means Kenya-level aggregate.
+    sub_county = '' means county-level aggregate.
+    """
+    report      = models.ForeignKey(KPIReport, on_delete=models.CASCADE, related_name='data_points')
+    county      = models.CharField(max_length=100, blank=True, db_index=True)
+    sub_county  = models.CharField(max_length=100, blank=True, db_index=True)
+    metric_key  = models.CharField(max_length=100, db_index=True)
+    year        = models.IntegerField(db_index=True)
+    month       = models.IntegerField(db_index=True)
+    value       = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['county', 'sub_county', 'metric_key', 'year', 'month'],
+                         name='kpi_lookup_idx'),
+        ]
+        unique_together = ['report', 'county', 'sub_county', 'metric_key', 'year', 'month']
+
+    def __str__(self):
+        geo = f"{self.county}/{self.sub_county}" if self.sub_county else (self.county or 'Kenya')
+        return f"{geo} – {self.metric_key} – {self.month}/{self.year}: {self.value}"

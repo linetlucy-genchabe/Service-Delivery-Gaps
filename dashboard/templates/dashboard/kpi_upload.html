@@ -1,0 +1,78 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Upload KPI Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Upload KPI Report</h1>
+    <p class="page-subtitle">Upload the KE Monthly Report Excel file to populate the KPI Trends Scorecard.</p>
+  </div>
+  <a href="{% url 'kpi_scorecard' %}" class="btn btn-outline">← KPI Scorecard</a>
+</div>
+
+{% if success %}
+<div class="alert alert-success" style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#166534;">✅ {{ success }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error" style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#991B1B;">⚠️ {{ error }}</div>
+{% endif %}
+
+<div class="card" style="max-width:600px;">
+  <div class="card-header"><h3 class="card-title">Upload New KPI Report</h3></div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:14px;">
+      {% csrf_token %}
+      <div class="filter-group">
+        <label class="filter-label">KE Monthly Report File (.xlsx) <span style="color:var(--red)">*</span></label>
+        <input type="file" name="file" accept=".xlsx" required style="padding:6px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;">
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div class="filter-group" style="flex:1;">
+          <label class="filter-label">Latest Month in Report <span style="color:var(--red)">*</span></label>
+          <select name="report_month" class="filter-select" required>
+            <option value="">— Select —</option>
+            {% for val, label in form.fields.report_month.choices %}
+            {% if val %}<option value="{{ val }}">{{ label }}</option>{% endif %}
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-group" style="flex:1;">
+          <label class="filter-label">Year <span style="color:var(--red)">*</span></label>
+          <input type="number" name="report_year" value="2026" min="2020" max="2030" class="filter-select" required>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Notes (optional)</label>
+        <textarea name="notes" rows="2" class="filter-select" style="height:auto;resize:none;"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">⬆ Upload & Parse</button>
+    </form>
+  </div>
+</div>
+
+{% if reports %}
+<div class="section-label" style="margin-top:24px;">📁 Uploaded KPI Reports</div>
+<div class="card">
+  <div class="card-body no-pad">
+    <table class="data-table">
+      <thead><tr><th>Report</th><th>Uploaded</th><th>Notes</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td><strong>{{ r }}</strong></td>
+          <td class="zero">{{ r.uploaded_at|date:"d M Y H:i" }}</td>
+          <td>{{ r.notes|default:"—" }}</td>
+          <td>
+            <form method="post" action="{% url 'kpi_delete' r.pk %}" onsubmit="return confirm('Delete this report and all its data?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none;cursor:pointer;">🗑 Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

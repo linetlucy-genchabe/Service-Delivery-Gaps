@@ -2046,3 +2046,317 @@ def gaps_compare_download(request):
     )
     response['Content-Disposition'] = 'attachment; filename="gaps_comparison.xlsx"'
     return response
+
+
+# ===========================================================================
+# KPI REPORT UPLOAD VIEW
+# ===========================================================================
+
+@login_required
+def kpi_upload_view(request):
+    from .models import KPIReport
+    from .forms import KPIReportForm
+    from .kpi_parser import parse_kpi_report
+
+    reports = KPIReport.objects.all().order_by('-report_year', '-report_month')
+    success = error = None
+
+    if request.method == 'POST':
+        form = KPIReportForm(request.POST, request.FILES)
+        if form.is_valid():
+            report = form.save(commit=False)
+            report.uploaded_by = request.user
+            report.save()
+            rows, errors = parse_kpi_report(report)
+            if errors:
+                error = f"Uploaded with warnings: {'; '.join(errors[:3])}"
+            else:
+                success = f"KPI Report uploaded — {rows} data points parsed."
+        else:
+            error = "Form invalid — check required fields."
+    else:
+        form = KPIReportForm()
+
+    return render(request, 'dashboard/kpi_upload.html', {
+        'form':    form,
+        'reports': reports,
+        'success': success,
+        'error':   error,
+        'is_uploader': is_uploader(request.user),
+    })
+
+
+@login_required
+def kpi_delete_view(request, pk):
+    from .models import KPIReport
+    if request.method == 'POST':
+        report = get_object_or_404(KPIReport, pk=pk)
+        report.delete()
+    return redirect('kpi_upload')
+
+
+# ===========================================================================
+# KPI SCORECARD DATA HELPERS
+# ===========================================================================
+
+MONTH_NAMES = {
+    1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',
+    7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'
+}
+
+def get_kpi_value(county, sub_county, metric_key, year, month, report_ids):
+    """Fetch a single KPI value for a given geo/metric/period."""
+    from .models import KPIDataPoint
+    qs = KPIDataPoint.objects.filter(
+        report_id__in=report_ids,
+        county=county,
+        sub_county=sub_county,
+        metric_key=metric_key,
+        year=year,
+        month=month,
+    ).first()
+    return qs.value if qs else None
+
+
+def compute_kpi_scorecard_metrics(county, sub_county, year, month, report_ids):
+    """
+    Compute scorecard-compatible metrics dict for a given geo/period
+    from KPIDataPoint records.
+    """
+    def g(key):
+        return get_kpi_value(county, sub_county, key, year, month, report_ids)
+
+    active_chps     = g('active_chps')
+    hh_cov          = g('hh_coverage_pct')
+    u5_assessed     = g('u5_assessments')
+    u5_total        = g('u5_children')
+    sick_avg        = g('sick_children_avg')
+    iccm_per        = g('iccm_assessments_per')
+    iccm_ref_pct    = g('iccm_ref_completed')
+    pnc_48          = g('pnc_48hr')
+    pnc_37          = g('pnc_3_7d')
+    deliveries      = g('facility_deliveries')
+    preg_chp        = g('preg_per_chp')
+    sync_pct        = g('sync_pct')
+    sup_pct         = g('supervision_pct')
+
+    # Compute derived
+    u5_pct = round(u5_assessed / u5_total * 100, 1) if u5_total and u5_total > 0 else None
+    hh_pct = round(hh_cov * 100, 1) if hh_cov is not None else None
+    iccm_ref_pct_out = round(iccm_ref_pct * 100, 1) if iccm_ref_pct is not None else None
+    sync_pct_out = round(sync_pct * 100, 1) if sync_pct is not None else None
+    sup_pct_out  = round(sup_pct * 100, 1) if sup_pct is not None else None
+    pnc_48_pct   = round(pnc_48 / deliveries * 100, 1) if pnc_48 and deliveries else None
+    pnc_37_pct   = round(pnc_37 / deliveries * 100, 1) if pnc_37 and deliveries else None
+    sick_avg_out = round(sick_avg, 2) if sick_avg is not None else None
+    iccm_per_out = round(iccm_per, 1) if iccm_per is not None else None
+
+    return {
+        'active_chps':         int(active_chps) if active_chps is not None else None,
+        'active_chps_pct':     None,  # no total CHPs in KPI file
+        'total_chps':          None,
+        'hh_coverage_pct':     hh_pct,
+        'hh_visits_total':     None,
+        'hh_registered_total': None,
+        'total_registered_u5': int(u5_total) if u5_total else None,
+        'total_u5_assessed':   int(u5_assessed) if u5_assessed else None,
+        'u5_assessment_pct':   u5_pct,
+        'iccm_assessments':    iccm_per_out,
+        'avg_positive_diag':   sick_avg_out,
+        'total_positive_diag': None,
+        'fever_cases':         None,
+        'fever_tested':        None,
+        'iccm_referrals':      None,
+        'iccm_referral_pct':   iccm_ref_pct_out,
+        'iccm_ref_completed':  None,
+        'pnc_ontime_pct':      pnc_48_pct,
+        'pnc_numerator':       int(pnc_48) if pnc_48 else None,
+        'pnc_denominator':     int(deliveries) if deliveries else None,
+        'pnc_3_7d_pct':        pnc_37_pct,
+        'pnc_3_7d_numerator':  int(pnc_37) if pnc_37 else None,
+        'preg_registered_chp': round(preg_chp, 2) if preg_chp is not None else None,
+        'sync_rate_pct':       sync_pct_out,
+        'supervision_pct':     sup_pct_out,
+    }
+
+
+@login_required
+def kpi_scorecard_view(request):
+    """KPI Trends scorecard — reads from KPIDataPoint records."""
+    from .models import KPIReport, KPIDataPoint
+
+    # Filters
+    selected_county    = request.GET.get('kpi_county', '')
+    selected_subcounty = request.GET.get('kpi_subcounty', '')
+
+    # Month selection — default last 6 available months
+    selected_months = request.GET.getlist('kpi_month')  # list of "YYYY-MM"
+
+    # Get all available reports
+    all_reports = KPIReport.objects.all()
+    report_ids  = list(all_reports.values_list('id', flat=True))
+
+    # Get all available months from data
+    available_months = list(
+        KPIDataPoint.objects.filter(report_id__in=report_ids)
+        .values('year', 'month')
+        .distinct()
+        .order_by('year', 'month')
+    )
+
+    # Build month columns — selected or last 6
+    if selected_months:
+        month_cols = []
+        for ym in selected_months:
+            try:
+                y, m = ym.split('-')
+                month_cols.append({'year': int(y), 'month': int(m),
+                                   'label': f"{MONTH_NAMES.get(int(m), m)} {y}"})
+            except Exception:
+                pass
+    else:
+        last6 = available_months[-6:] if len(available_months) > 6 else available_months
+        month_cols = [{'year': m['year'], 'month': m['month'],
+                       'label': f"{MONTH_NAMES.get(m['month'], m['month'])} {m['year']}"}
+                      for m in last6]
+
+    # Geo resolution
+    if selected_subcounty:
+        county_key     = selected_county
+        subcounty_key  = selected_subcounty
+    elif selected_county:
+        county_key    = selected_county
+        subcounty_key = ''
+    else:
+        county_key    = ''
+        subcounty_key = ''
+
+    # Build filter options
+    counties = list(
+        KPIDataPoint.objects.filter(report_id__in=report_ids)
+        .exclude(county='').values_list('county', flat=True)
+        .distinct().order_by('county')
+    )
+    subcounties = []
+    if selected_county:
+        subcounties = list(
+            KPIDataPoint.objects.filter(report_id__in=report_ids, county=selected_county)
+            .exclude(sub_county='').values_list('sub_county', flat=True)
+            .distinct().order_by('sub_county')
+        )
+
+    # Compute metrics per month column
+    kpi_columns = []
+    for mc in month_cols:
+        m = compute_kpi_scorecard_metrics(
+            county_key, subcounty_key, mc['year'], mc['month'], report_ids
+        )
+        kpi_columns.append({'label': mc['label'], 'year': mc['year'],
+                            'month': mc['month'], 'metrics': m})
+
+    # Build rows using same SCORECARD_TARGETS
+    metrics_current = kpi_columns[-1]['metrics'] if kpi_columns else None
+    rows = []
+
+    for key, meta in SCORECARD_TARGETS.items():
+        target   = meta['target']
+        row_type = meta.get('type', 'simple')
+
+        def make_kpi_cell(metrics, key=key, target=target, meta=meta, row_type=row_type):
+            if metrics is None:
+                return {'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+
+            if row_type == 'active_chps':
+                val = metrics.get('active_chps')
+                if val is None:
+                    return {'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+                colour = 'grey'  # no total CHPs in KPI file
+                return {'display': f"{val:,}", 'colour': colour, 'pct_target': None, 'type': row_type}
+
+            elif row_type == 'child_health':
+                ru5  = metrics.get('total_registered_u5')
+                au5  = metrics.get('total_u5_assessed')
+                upct = metrics.get('u5_assessment_pct')
+                iccm = metrics.get('iccm_assessments')
+                avg  = metrics.get('avg_positive_diag')
+                colour = get_colour(upct, 100) if upct is not None else 'grey'
+                avg_pct = round(avg / 10 * 100, 1) if avg is not None else None
+                return {
+                    'colour': colour, 'pct_target': upct,
+                    'pct_target_2': avg_pct,
+                    'pct_target_label': 'U5 Assessed',
+                    'pct_target_2_label': 'Sick Children Avg',
+                    'type': row_type,
+                    'lines': [
+                        ('U5 Pop',             f"{ru5:,}" if ru5 else '—'),
+                        ('Assessed',           f"{au5:,} ({upct}%)" if au5 and upct else '—'),
+                        ('iCCM Assess/CHP',    f"{iccm}" if iccm else '—'),
+                        ('Sick Children (avg)', f"{avg}" if avg else '—'),
+                        ('Fever',              '—'),
+                    ]
+                }
+
+            elif row_type == 'pnc':
+                val48 = metrics.get('pnc_ontime_pct')
+                num48 = metrics.get('pnc_numerator')
+                den   = metrics.get('pnc_denominator')
+                val37 = metrics.get('pnc_3_7d_pct')
+                num37 = metrics.get('pnc_3_7d_numerator')
+                colour = get_colour(val48, target) if val48 is not None else 'grey'
+                pct_target = round(val48 / target * 100, 1) if val48 and target else None
+                return {
+                    'colour': colour, 'pct_target': pct_target, 'type': row_type,
+                    'lines': [
+                        ('PNC 48hr On-time', f"{val48}% ({num48}/{den})" if val48 else '—'),
+                        ('PNC 3-7d On-time', f"{val37}% ({num37}/{den})" if val37 else '—'),
+                    ]
+                }
+
+            elif row_type == 'iccm_ref':
+                val = metrics.get('iccm_referral_pct')
+                if val is None:
+                    return {'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+                pct_target = round(val / target * 100, 1) if target else None
+                colour = get_colour(val, target)
+                return {'display': f"{val}%", 'colour': colour, 'pct_target': pct_target, 'type': row_type}
+
+            else:
+                val = metrics.get(key)
+                if val is None:
+                    return {'display': '—', 'colour': 'grey', 'pct_target': None, 'type': row_type}
+                unit = meta['unit']
+                display = f"{val}{unit}" if unit == '%' else str(val)
+                pct_target = round(val / target * 100, 1) if target else None
+                colour = get_colour(val, target, meta.get('higher_is_better', True))
+                return {'display': display, 'colour': colour, 'pct_target': pct_target, 'type': row_type}
+
+        # Target display
+        if row_type == 'child_health':
+            ru5 = (metrics_current or {}).get('total_registered_u5', 0)
+            target_display = f"100% of {ru5:,} U5s; avg 10 sick/CHP" if ru5 else "—"
+        elif row_type == 'active_chps':
+            target_display = '—'
+        else:
+            target_display = f"{target}{meta['unit']}" if target is not None else '—'
+
+        rows.append({
+            'key':    key,
+            'label':  meta['label'],
+            'target': target_display,
+            'type':   row_type,
+            'months': [make_kpi_cell(kc['metrics']) for kc in kpi_columns],
+        })
+
+    return render(request, 'dashboard/kpi_scorecard.html', {
+        'rows':              rows,
+        'kpi_columns':       kpi_columns,
+        'all_reports':       all_reports,
+        'available_months':  available_months,
+        'selected_months':   selected_months,
+        'selected_county':   selected_county,
+        'selected_subcounty': selected_subcounty,
+        'counties':          counties,
+        'subcounties':       subcounties,
+        'has_data':          bool(kpi_columns and report_ids),
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+    })

@@ -1,0 +1,169 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}KPI Trends Scorecard{% endblock %}
+{% block body_class %}scorecard-page{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">KPI Trends Scorecard</h1>
+    <p class="page-subtitle">
+      Monthly performance from KE Monthly Report uploads
+      {% if selected_county %} › {{ selected_county }}{% endif %}
+      {% if selected_subcounty %} › {{ selected_subcounty }}{% endif %}
+    </p>
+  </div>
+  {% if is_uploader %}
+  <a href="{% url 'kpi_upload' %}" class="btn btn-sm btn-outline">⬆ Upload KPI Report</a>
+  {% endif %}
+</div>
+
+<!-- VIEW TOGGLE (back to scorecard) -->
+<div style="display:flex;gap:0;margin-bottom:14px;border:1.5px solid #1B3A6B;border-radius:8px;overflow:hidden;width:fit-content;">
+  <a href="{% url 'scorecard' %}?mode=weekly" style="padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none;background:white;color:#1B3A6B;">📅 Weekly</a>
+  <a href="{% url 'scorecard' %}?mode=monthly" style="padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none;border-left:1.5px solid #1B3A6B;background:white;color:#1B3A6B;">🗓️ Monthly</a>
+  <a href="{% url 'kpi_scorecard' %}" style="padding:8px 20px;font-size:13px;font-weight:600;text-decoration:none;border-left:1.5px solid #1B3A6B;background:#1B3A6B;color:white;">📊 KPI Trends</a>
+</div>
+
+<!-- FILTERS -->
+<form method="get" class="filter-bar" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:10px;">
+
+  <div class="filter-group">
+    <label class="filter-label">County</label>
+    <select name="kpi_county" class="filter-select" onchange="this.form.submit()">
+      <option value="">Kenya (All)</option>
+      {% for c in counties %}
+        <option value="{{ c }}" {% if selected_county == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% if selected_county and subcounties %}
+  <div class="filter-group">
+    <label class="filter-label">Sub-County</label>
+    <select name="kpi_subcounty" class="filter-select" onchange="this.form.submit()">
+      <option value="">All Sub-Counties</option>
+      {% for sc in subcounties %}
+        <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="filter-group">
+    <label class="filter-label">Months (select up to 6)</label>
+    <select name="kpi_month" class="filter-select" multiple size="4" style="height:auto;min-width:200px;">
+      {% for m in available_months %}
+      {% with ym=m.year|stringformat:"s"|add:"-"|add:m.month|stringformat:"s" %}
+        <option value="{{ m.year }}-{{ m.month }}"
+          {% if ym in selected_months %}selected{% endif %}>
+          {% with mn=m.month %}
+            {% if mn == 1 %}Jan{% elif mn == 2 %}Feb{% elif mn == 3 %}Mar{% elif mn == 4 %}Apr{% elif mn == 5 %}May{% elif mn == 6 %}Jun{% elif mn == 7 %}Jul{% elif mn == 8 %}Aug{% elif mn == 9 %}Sep{% elif mn == 10 %}Oct{% elif mn == 11 %}Nov{% else %}Dec{% endif %}
+          {% endwith %}
+          {{ m.year }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+  <a href="{% url 'kpi_scorecard' %}" class="btn btn-sm btn-outline">Reset</a>
+  {% if selected_county %}<input type="hidden" name="kpi_county" value="{{ selected_county }}">{% endif %}
+</form>
+
+{% if not has_data %}
+<div class="empty-dashboard">
+  <div class="empty-icon">📊</div>
+  <h2>No KPI Data Available</h2>
+  <p>Upload a KE Monthly Report file to populate this scorecard.</p>
+  {% if is_uploader %}<a href="{% url 'kpi_upload' %}" class="btn btn-primary">⬆ Upload KPI Report</a>{% endif %}
+</div>
+
+{% else %}
+
+<!-- KPI SCORECARD TABLE -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">KPI Trends — {% if selected_subcounty %}{{ selected_subcounty }}{% elif selected_county %}{{ selected_county }}{% else %}Kenya{% endif %}</h3>
+      <p class="card-subtitle">🟢 ≥90% of target &nbsp;·&nbsp; 🟡 50–89% &nbsp;·&nbsp; 🔴 &lt;50% &nbsp;·&nbsp; Source: KE Monthly Report uploads</p>
+    </div>
+    <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print</button>
+  </div>
+  <div class="card-body no-pad">
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:800px;border:1px solid #E5E7EB;">
+      <colgroup>
+        <col style="width:16%">
+        <col style="width:11%">
+        {% for kc in kpi_columns %}<col>{% endfor %}
+        <col style="width:13%">
+      </colgroup>
+      <thead>
+        <tr style="background:#1B3A6B;">
+          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">Indicator</th>
+          <th style="padding:10px 10px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">Monthly Target</th>
+          {% for kc in kpi_columns %}
+          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ kc.label }}</th>
+          {% endfor %}
+          <th style="padding:10px 10px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">% Target Achieved</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+
+        {% if row.type == 'child_health' %}
+        <tr style="vertical-align:top;">
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;vertical-align:middle;">{{ row.label }}</td>
+          <td style="padding:10px 10px;text-align:left;font-weight:500;color:#475569;background:#F1F5F9;font-size:10px;border:2px solid white;">{{ row.target }}</td>
+          {% for cell in row.months %}
+          <td style="padding:8px 8px;border:2px solid white;vertical-align:top;
+            {% if cell.colour == 'green' %}background:#DCFCE7;{% elif cell.colour == 'yellow' %}background:#FEF9C3;{% elif cell.colour == 'red' %}background:#FEE2E2;{% else %}background:#F8FAFC;{% endif %}">
+            {% if cell.lines %}{% for lbl,val in cell.lines %}<div style="line-height:1.7;font-size:10px;"><span style="display:block;font-size:8px;text-transform:uppercase;letter-spacing:.03em;opacity:.6;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#94A3B8;">—</span>{% endif %}
+          </td>
+          {% endfor %}
+          {% with cm=row.months|last %}
+          <td style="padding:8px 10px;text-align:left;font-weight:700;font-size:11px;border:2px solid white;vertical-align:top;background:#F8FAFC;">
+            <div style="margin-bottom:6px;padding:4px 6px;border-radius:4px;
+              {% if cm.pct_target %}{% if cm.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cm.pct_target_label|default:"U5 Assessed" }}</span>
+              {% if cm.pct_target %}{{ cm.pct_target }}%{% else %}—{% endif %}
+            </div>
+            <div style="padding:4px 6px;border-radius:4px;
+              {% if cm.pct_target_2 %}{% if cm.pct_target_2 >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target_2 >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cm.pct_target_2_label|default:"Sick Children Avg" }}</span>
+              {% if cm.pct_target_2 %}{{ cm.pct_target_2 }}%{% else %}—{% endif %}
+            </div>
+          </td>
+          {% endwith %}
+        </tr>
+
+        {% else %}
+        <tr>
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
+          <td style="padding:10px 10px;text-align:center;font-weight:500;color:#475569;background:#F1F5F9;font-size:11px;border:2px solid white;">{{ row.target }}</td>
+          {% for cell in row.months %}
+          <td style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;vertical-align:{% if cell.lines %}top{% else %}middle{% endif %};
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cell.lines %}
+              {% for lbl,val in cell.lines %}<div style="line-height:1.6;font-size:10px;text-align:left;padding:2px 0;"><span style="display:block;font-size:8px;text-transform:uppercase;opacity:.65;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}
+            {% else %}{{ cell.display }}{% endif %}
+          </td>
+          {% endfor %}
+          {% with cm=row.months|last %}
+          <td style="padding:10px 10px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
+            {% if cm.pct_target %}{% if cm.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cm.pct_target %}{{ cm.pct_target }}%{% else %}—{% endif %}
+          </td>
+          {% endwith %}
+        </tr>
+        {% endif %}
+
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

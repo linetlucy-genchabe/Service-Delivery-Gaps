@@ -61,3 +61,13 @@ class UploadBatchForm(forms.ModelForm):
         if period_type == 'weekly' and not week_start:
             self.add_error('week_start_date', 'Week start date is required for weekly uploads.')
         return cleaned
+
+
+class KPIReportForm(forms.ModelForm):
+    class Meta:
+        from .models import KPIReport
+        model  = KPIReport
+        fields = ['file', 'report_month', 'report_year', 'notes']
+        widgets = {
+            'notes': forms.Textarea(attrs={'rows': 2}),
+        }

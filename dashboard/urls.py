@@ -30,7 +30,10 @@ urlpatterns = [
     # Sync dashboard
     path('gaps-compare/',          views.gaps_compare_view,     name='gaps_compare'),
     path('gaps-compare/download/', views.gaps_compare_download,  name='gaps_compare_download'),
-    path('scorecard/', views.scorecard_view, name='scorecard'),
+    path('scorecard/',             views.scorecard_view,         name='scorecard'),
+    path('kpi/',                   views.kpi_scorecard_view,     name='kpi_scorecard'),
+    path('kpi/upload/',            views.kpi_upload_view,        name='kpi_upload'),
+    path('kpi/delete/<int:pk>/',   views.kpi_delete_view,        name='kpi_delete'),
     path('download/inactive-chps/', views.download_inactive_chps, name='download_inactive_chps'),
     path('sync/',                          views.sync_dashboard_view,    name='sync_dashboard'),
     path('sync/upload/',                   views.sync_upload_view,       name='sync_upload'),
