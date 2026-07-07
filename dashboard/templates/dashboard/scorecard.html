@@ -1,22 +1,38 @@
 {% extends 'dashboard/base.html' %}
-{% block title %}Weekly Performance Scorecard{% endblock %}
+{% block title %}Performance Scorecard{% endblock %}
 {% block body_class %}scorecard-page{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-title">Weekly Performance Scorecard</h1>
+    <h1 class="page-title">Performance Scorecard</h1>
     <p class="page-subtitle">
-      {% if week_batches %}
-        Auto-detected: {{ week_batches|length }} week(s) shown
-        {% if selected_counties %} › {{ selected_counties|join:", " }}{% endif %}
-        {% if selected_subcounties %} › {{ selected_subcounties|join:", " }}{% endif %}
-        {% if selected_chus %} › {{ selected_chus|length }} CHU(s){% endif %}
+      {% if scorecard_mode == 'monthly' %}
+        Monthly view — {{ month_batches|length }} month(s) shown
+      {% elif week_batches %}
+        Weekly view — {{ week_batches|length }} week(s) shown
       {% else %}
         Upload CHW data to generate the scorecard automatically.
       {% endif %}
+      {% if selected_counties %} › {{ selected_counties|join:", " }}{% endif %}
+      {% if selected_subcounties %} › {{ selected_subcounties|join:", " }}{% endif %}
+      {% if selected_chus %} › {{ selected_chus|length }} CHU(s){% endif %}
     </p>
   </div>
+</div>
+
+<!-- VIEW TOGGLE -->
+<div style="display:flex;gap:0;margin-bottom:14px;border:1.5px solid #1B3A6B;border-radius:8px;overflow:hidden;width:fit-content;">
+  <a href="?mode=weekly{% for c in selected_counties %}&county={{ c }}{% endfor %}{% for sc in selected_subcounties %}&sub_county={{ sc }}{% endfor %}{% for chu in selected_chus %}&chu={{ chu }}{% endfor %}"
+     style="padding:8px 24px;font-size:13px;font-weight:600;text-decoration:none;
+     {% if scorecard_mode != 'monthly' %}background:#1B3A6B;color:white;{% else %}background:white;color:#1B3A6B;{% endif %}">
+    📅 Weekly View
+  </a>
+  <a href="?mode=monthly{% for c in selected_counties %}&county={{ c }}{% endfor %}{% for sc in selected_subcounties %}&sub_county={{ sc }}{% endfor %}{% for chu in selected_chus %}&chu={{ chu }}{% endfor %}"
+     style="padding:8px 24px;font-size:13px;font-weight:600;text-decoration:none;border-left:1.5px solid #1B3A6B;
+     {% if scorecard_mode == 'monthly' %}background:#1B3A6B;color:white;{% else %}background:white;color:#1B3A6B;{% endif %}">
+    🗓️ Monthly View
+  </a>
 </div>
 
 <style>
@@ -58,6 +74,7 @@
 <!-- FILTERS -->
 <div class="filter-bar">
   <form method="get" class="filter-form" id="scorecard-form">
+    <input type="hidden" name="mode" value="{{ scorecard_mode }}">
     {% if override_prev_month %}<input type="hidden" name="batch_prev_month" value="{{ override_prev_month }}">{% endif %}
     {% for w in override_weeks %}<input type="hidden" name="batch_week" value="{{ w }}">{% endfor %}
 
@@ -163,6 +180,127 @@
   </form>
 </details>
 
+{% if scorecard_mode == 'monthly' %}
+
+<!-- ======================== MONTHLY SCORECARD ======================== -->
+
+<!-- MONTHLY BATCH OVERRIDE -->
+<details style="background:white;border:1px solid #E5E7EB;border-radius:8px;padding:10px 16px;margin-bottom:10px;">
+  <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#1B3A6B;">⚙️ Override Monthly Batches</summary>
+  <form method="get" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+    <input type="hidden" name="mode" value="monthly">
+    {% for c in selected_counties %}<input type="hidden" name="county" value="{{ c }}">{% endfor %}
+    {% for sc in selected_subcounties %}<input type="hidden" name="sub_county" value="{{ sc }}">{% endfor %}
+    {% for chu in selected_chus %}<input type="hidden" name="chu" value="{{ chu }}">{% endfor %}
+    <div class="filter-group" style="min-width:300px;">
+      <label class="filter-label">Months to Show (up to 6, oldest first)</label>
+      <select name="batch_month" class="filter-select" multiple size="6" style="height:auto;">
+        {% for b in all_monthly_batches %}
+          <option value="{{ b.pk }}" {% if b.pk|stringformat:"s" in override_months %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+      <p style="font-size:11px;color:#6B7280;margin-top:4px;">Hold Ctrl/Cmd to select multiple. Leave empty to auto-detect last 6 months.</p>
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <a href="?mode=monthly{% for c in selected_counties %}&county={{ c }}{% endfor %}" class="btn btn-sm btn-outline">Reset to Auto</a>
+  </form>
+</details>
+
+{% if rows_monthly %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Monthly Performance Scorecard</h3>
+      <p class="card-subtitle">🟢 ≥90% of target &nbsp;·&nbsp; 🟡 50–89% of target &nbsp;·&nbsp; 🔴 &lt;50% of target &nbsp;·&nbsp; % Target Achieved = Most Recent Month ÷ Monthly Target × 100</p>
+    </div>
+    <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print / Save PDF</button>
+  </div>
+  <div class="card-body no-pad">
+    <div id="scorecard-scroll">
+    <table id="scorecard-table-monthly" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:900px;border:1px solid #E5E7EB;">
+      <colgroup>
+        <col style="width:15%">
+        <col style="width:11%">
+        {% for m in month_batches %}<col>{% endfor %}
+        <col style="width:13%">
+      </colgroup>
+      <thead>
+        <tr style="background:#1B3A6B;">
+          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">Indicator</th>
+          <th style="padding:10px 10px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">Monthly Target</th>
+          {% for m in month_batches %}
+          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ m.label }}</th>
+          {% endfor %}
+          <th style="padding:10px 10px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">% Target Achieved</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows_monthly %}
+
+        {% if row.type == 'child_health' %}
+        <tr style="vertical-align:top;">
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;vertical-align:middle;">{{ row.label }}</td>
+          <td style="padding:10px 10px;text-align:left;font-weight:500;color:#475569;background:#F1F5F9;font-size:10px;border:2px solid white;">{{ row.target }}</td>
+          {% for cell in row.months %}
+          <td style="padding:8px 8px;border:2px solid white;vertical-align:top;
+            {% if cell.colour == 'green' %}background:#DCFCE7;{% elif cell.colour == 'yellow' %}background:#FEF9C3;{% elif cell.colour == 'red' %}background:#FEE2E2;{% else %}background:#F8FAFC;{% endif %}">
+            {% if cell.lines %}{% for lbl,val in cell.lines %}<div style="line-height:1.7;font-size:10px;"><span style="display:block;font-size:8px;text-transform:uppercase;letter-spacing:.03em;opacity:.6;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}{% else %}<span style="color:#94A3B8;">—</span>{% endif %}
+          </td>
+          {% endfor %}
+          {% with cm=row.months|last %}
+          <td style="padding:8px 10px;text-align:left;font-weight:700;font-size:11px;border:2px solid white;vertical-align:top;background:#F8FAFC;">
+            <div style="margin-bottom:6px;padding:4px 6px;border-radius:4px;
+              {% if cm.pct_target %}{% if cm.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cm.pct_target_label|default:"U5 Assessed" }}</span>
+              {% if cm.pct_target %}{{ cm.pct_target }}%{% else %}—{% endif %}
+            </div>
+            <div style="padding:4px 6px;border-radius:4px;
+              {% if cm.pct_target_2 %}{% if cm.pct_target_2 >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target_2 >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F1F5F9;color:#94A3B8;font-weight:400;{% endif %}">
+              <span style="display:block;font-size:8px;text-transform:uppercase;opacity:.7;">{{ cm.pct_target_2_label|default:"Sick Children Avg" }}</span>
+              {% if cm.pct_target_2 %}{{ cm.pct_target_2 }}%{% else %}—{% endif %}
+            </div>
+          </td>
+          {% endwith %}
+        </tr>
+
+        {% else %}
+        <tr>
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
+          <td style="padding:10px 10px;text-align:center;font-weight:500;color:#475569;background:#F1F5F9;font-size:11px;border:2px solid white;">{{ row.target }}</td>
+          {% for cell in row.months %}
+          <td style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;vertical-align:{% if cell.lines %}top{% else %}middle{% endif %};
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cell.lines %}
+              {% for lbl,val in cell.lines %}<div style="line-height:1.6;font-size:10px;text-align:left;padding:2px 0;"><span style="display:block;font-size:8px;text-transform:uppercase;letter-spacing:.03em;opacity:.65;">{{ lbl }}</span><span style="font-weight:600;">{{ val }}</span></div>{% endfor %}
+            {% else %}{{ cell.display }}{% endif %}
+          </td>
+          {% endfor %}
+          {% with cm=row.months|last %}
+          <td style="padding:10px 10px;text-align:center;font-weight:700;font-size:13px;border:2px solid white;
+            {% if cm.pct_target %}{% if cm.pct_target >= 90 %}background:#BBF7D0;color:#14532D;{% elif cm.pct_target >= 50 %}background:#FEF08A;color:#713F12;{% else %}background:#FECACA;color:#7F1D1D;{% endif %}{% else %}background:#F8FAFC;color:#94A3B8;font-weight:400;{% endif %}">
+            {% if cm.pct_target %}{{ cm.pct_target }}%{% else %}—{% endif %}
+          </td>
+          {% endwith %}
+        </tr>
+        {% endif %}
+
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="empty-dashboard">
+  <div class="empty-icon">🗓️</div>
+  <h2>No Monthly Data Available</h2>
+  <p>Upload monthly CHW Detail reports to populate the monthly scorecard.</p>
+</div>
+{% endif %}
+
+{% else %}
+
+<!-- ======================== WEEKLY SCORECARD ======================== -->
 {% if rows %}
 <!-- SCORECARD TABLE -->
 <div class="card">
@@ -297,6 +435,8 @@
   <p>Upload CHW Detail data to generate the scorecard automatically.</p>
 </div>
 {% endif %}
+
+{% endif %}{# end scorecard_mode == monthly / else #}
 
 <div class="modal-overlay" id="def-modal" style="display:none;">
   <div class="modal">

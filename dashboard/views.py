@@ -1429,21 +1429,35 @@ def auto_detect_batches(county=None, sub_county=None, chu=None):
     }
 
 
+def auto_detect_monthly_batches():
+    """
+    Auto-detect up to 6 most recent monthly batches, oldest first.
+    Falls back to including weekly batches if no monthly uploads exist for a month.
+    """
+    monthly = list(UploadBatch.objects.filter(
+        period_type='monthly'
+    ).order_by('-year', '-month')[:6])
+    # Return oldest first
+    return list(reversed(monthly))
+
+
 def scorecard_view(request):
-    """Weekly performance scorecard view."""
-    # Multi-select: getlist returns [] if nothing selected
+    """Weekly and Monthly performance scorecard view."""
     selected_counties    = request.GET.getlist('county')
     selected_subcounties = request.GET.getlist('sub_county')
     selected_chus        = request.GET.getlist('chu')
 
+    # Toggle: weekly or monthly view
+    scorecard_mode = request.GET.get('mode', 'weekly')
+
     # Manual override batch selectors
     override_prev_month   = request.GET.get('batch_prev_month', '')
-    override_prev_week    = request.GET.get('batch_prev_week', '')
     override_current_week = request.GET.get('batch_current', '')
+    override_weeks        = request.GET.getlist('batch_week')
+    override_months       = request.GET.getlist('batch_month')  # for monthly view
 
-    override_weeks         = request.GET.getlist('batch_week')  # list of overridden week batch IDs, in order
-
-    all_batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    all_batches         = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    all_monthly_batches = UploadBatch.objects.filter(period_type='monthly').order_by('-year', '-month')
 
     # Auto-detect
     auto = auto_detect_batches()
@@ -1457,6 +1471,13 @@ def scorecard_view(request):
         batch_weeks = [b for b in batch_weeks if b is not None]
     else:
         batch_weeks = auto['weeks']
+
+    # Resolve monthly columns — up to 6 months oldest first
+    if override_months:
+        batch_months = [UploadBatch.objects.filter(pk=mid).first() for mid in override_months]
+        batch_months = [b for b in batch_months if b is not None]
+    else:
+        batch_months = auto_detect_monthly_batches()
 
     def get_chw_qs(batch):
         if batch is None:
@@ -1486,15 +1507,25 @@ def scorecard_view(request):
         m = compute_scorecard_metrics(get_chw_qs(b), get_sync_qs(b))
         week_columns.append({'batch': b, 'metrics': m})
 
-    # Current week = last (most recent) week column, used for % Target Achieved
-    metrics_current_week = week_columns[-1]['metrics'] if week_columns else None
-    batch_current_week   = week_columns[-1]['batch']   if week_columns else None
+    # Compute metrics for each monthly column
+    month_columns = []
+    for b in batch_months:
+        m = compute_scorecard_metrics(get_chw_qs(b), get_sync_qs(b))
+        month_columns.append({'batch': b, 'metrics': m})
 
-    # Build scorecard rows
-    rows = []
+    # Current week = last week column; current month = last month column
+    metrics_current_week  = week_columns[-1]['metrics']  if week_columns  else None
+    batch_current_week    = week_columns[-1]['batch']    if week_columns  else None
+    metrics_current_month = month_columns[-1]['metrics'] if month_columns else None
+    batch_current_month   = month_columns[-1]['batch']   if month_columns else None
+
+    # Build scorecard rows — both weekly and monthly use same indicators
+    rows_weekly  = []
+    rows_monthly = []
+
     for key, meta in SCORECARD_TARGETS.items():
-        target     = meta['target']
-        row_type   = meta.get('type', 'simple')
+        target   = meta['target']
+        row_type = meta.get('type', 'simple')
 
         def make_cell(metrics, key=key, target=target, meta=meta, row_type=row_type):
             if metrics is None:
@@ -1593,13 +1624,20 @@ def scorecard_view(request):
         else:
             target_display = f"{target}{meta['unit']}" if target is not None else '—'
 
-        rows.append({
+        base_row = {
             'key':    key,
             'label':  meta['label'],
             'target': target_display,
             'type':   row_type,
+        }
+        rows_weekly.append({
+            **base_row,
             'prev_month': make_cell(metrics_prev_month),
             'weeks':      [make_cell(wc['metrics']) for wc in week_columns],
+        })
+        rows_monthly.append({
+            **base_row,
+            'months': [make_cell(mc['metrics']) for mc in month_columns],
         })
 
     # Filter options from the most data-rich batch
@@ -1642,19 +1680,25 @@ def scorecard_view(request):
             })
 
     return render(request, 'dashboard/scorecard.html', {
-        'rows':               rows,
-        'all_batches':        all_batches,
-        'batch_prev_month':   batch_prev_month,
-        'week_batches':       [wc['batch'] for wc in week_columns],
-        'batch_current_week': batch_current_week,
-        'latest_batch':       latest_batch,
-        'override_prev_month':   override_prev_month,
-        'override_weeks':        override_weeks,
-        'filter_opts':           filter_opts,
-        'selected_counties':     selected_counties,
-        'selected_subcounties':  selected_subcounties,
-        'selected_chus':         selected_chus,
-        'inactive_chps':         inactive_chps,
+        'rows':                rows_weekly,
+        'rows_monthly':        rows_monthly,
+        'scorecard_mode':      scorecard_mode,
+        'all_batches':         all_batches,
+        'all_monthly_batches': all_monthly_batches,
+        'batch_prev_month':    batch_prev_month,
+        'week_batches':        [wc['batch'] for wc in week_columns],
+        'month_batches':       [mc['batch'] for mc in month_columns],
+        'batch_current_week':  batch_current_week,
+        'batch_current_month': batch_current_month,
+        'latest_batch':        batch_current_week or batch_current_month or batch_prev_month,
+        'override_prev_month': override_prev_month,
+        'override_weeks':      override_weeks,
+        'override_months':     override_months,
+        'filter_opts':         filter_opts,
+        'selected_counties':   selected_counties,
+        'selected_subcounties': selected_subcounties,
+        'selected_chus':       selected_chus,
+        'inactive_chps':       inactive_chps,
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
     })
 
