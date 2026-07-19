@@ -1,6 +1,40 @@
 {% extends 'dashboard/base.html' %}
 {% block title %}MOH Data Review{% endblock %}
 
+{% block extra_css %}
+<style>
+.multi-select-wrap { position:relative; display:inline-block; min-width:160px; }
+.multi-select-btn {
+  width:100%; padding:7px 32px 7px 10px; border:1.5px solid #D1D5DB;
+  border-radius:6px; background:white; cursor:pointer; font-size:13px;
+  color:#374151; text-align:left; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; position:relative;
+}
+.multi-select-btn::after {
+  content:'▾'; position:absolute; right:10px; top:50%;
+  transform:translateY(-50%); color:#6B7280; pointer-events:none;
+}
+.multi-select-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0;
+  min-width:100%; max-width:280px; background:white;
+  border:1.5px solid #D1D5DB; border-radius:8px;
+  box-shadow:0 4px 16px rgba(0,0,0,.1); z-index:200;
+  max-height:220px; overflow-y:auto;
+}
+.multi-select-dropdown.open { display:block; }
+.multi-select-option {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; cursor:pointer; font-size:13px; color:#374151;
+}
+.multi-select-option:hover { background:#F3F4F6; }
+.multi-select-option input[type=checkbox] { accent-color:#1B3A6B; width:14px; height:14px; flex-shrink:0; }
+.multi-select-footer { padding:8px 12px; border-top:1px solid #E5E7EB; display:flex; gap:8px; }
+.multi-select-footer button { flex:1; padding:5px 0; border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; border:none; }
+.ms-apply { background:#1B3A6B; color:white; }
+.ms-clear  { background:#F3F4F6; color:#374151; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <div>

@@ -2367,44 +2367,42 @@ def kpi_scorecard_view(request):
 # ===========================================================================
 
 MOH_INDICATORS = [
-    # (key, label, section, target, unit, higher_is_better)
-    ('section_workforce', '👥 Workforce', 'header', None, '', True),
-    ('active_chps',       'Active CHPs',              'workforce',  None, '',  True),
-    ('hh_coverage_pct',   'HH Coverage %',            'workforce',  85,   '%', True),
+    # (key, label, section, target, unit, higher_is_better, display_type)
+    ('section_workforce', '👥 Workforce',        'header',     None, '', True,  'header'),
+    ('active_chps',       'Active CHPs',          'workforce',  None, '',  True, 'simple'),
+    ('hh_coverage_pct',   'HH Coverage %',        'workforce',  85,   '%', True, 'simple'),
 
-    ('section_child',     '👶 Child Health', 'header', None, '', True),
-    ('u5_assessment_pct', 'U5 Children Assessed %',   'child',      100,  '%', True),
-    ('total_positive_diag','Positive Diagnoses (U5)', 'child',      None, '',  True),
-    ('fever_cases',       'Fever Cases',              'child',      None, '',  True),
-    ('fever_tested',      'Fever Tested (RDT)',       'child',      None, '',  True),
+    ('section_child',     '👶 Child Health',      'header',     None, '', True,  'header'),
+    ('u5_assessment_pct', 'U5 Children Assessed', 'child',      100,  '%', True, 'u5'),
+    ('total_positive_diag','Positive Diagnoses',  'child',      None, '',  True, 'pos_diag'),
+    ('fever_cases',       'Fever',                'child',      None, '',  False,'fever'),
 
-    ('section_iz',        '💉 Immunization', 'header', None, '', True),
-    ('iz_defaulters',     'IZ Defaulters',            'iz',         None, '',  False),
-    ('iz_followup_pct',   'IZ Defaulters Followed Up %', 'iz',     80,   '%', True),
+    ('section_iz',        '💉 Immunization',      'header',     None, '', True,  'header'),
+    ('iz_defaulters',     'IZ Defaulters',        'iz',         None, '',  False,'simple'),
+    ('iz_followup_pct',   'IZ Defaulters Followed Up %','iz',  80,   '%', True, 'simple'),
 
-    ('section_nutrition', '🥗 Nutrition', 'header', None, '', True),
-    ('mam_sam_total',     'MAM/SAM Cases',            'nutrition',  None, '',  False),
-    ('mam_sam_referred_pct','MAM/SAM Referred %',     'nutrition',  90,   '%', True),
+    ('section_nutrition', '🥗 Nutrition',         'header',     None, '', True,  'header'),
+    ('mam_sam_total',     'MAM/SAM Cases',        'nutrition',  None, '',  False,'simple'),
+    ('mam_sam_referred_pct','MAM/SAM Referred %', 'nutrition',  90,   '%', True, 'simple'),
 
-    ('section_maternal',  '🤱 Maternal Health', 'header', None, '', True),
-    ('pnc_48hr_pct',      'PNC 48hr On-time %',       'maternal',   85,   '%', True),
-    ('pnc_3_7d_pct',      'PNC 3-7d On-time %',       'maternal',   85,   '%', True),
-    ('preg_per_chp',      'Pregnancies Registered/CHP','maternal',  1,    '',  True),
-    ('facility_delivery_pct','Facility Delivery %',   'maternal',   80,   '%', True),
+    ('section_maternal',  '🤱 Maternal Health',   'header',     None, '', True,  'header'),
+    ('pnc_48hr_pct',      'PNC 48hr On-time',     'maternal',   85,   '%', True, 'pnc48'),
+    ('pnc_3_7d_pct',      'PNC 3-7d On-time',     'maternal',   85,   '%', True, 'pnc37'),
+    ('preg_per_chp',      'Pregnancies Reg/CHP',  'maternal',   1,    '',  True, 'simple'),
+    ('facility_delivery_pct','Facility Delivery %','maternal',  80,   '%', True, 'simple'),
 
-    ('section_fp',        '💊 Family Planning', 'header', None, '', True),
-    ('fp_wra_assessed',   'WRA Assessed',             'fp',         None, '',  True),
-    ('fp_new_users',      'FP New Users',             'fp',         None, '',  True),
-    ('fp_current_users',  'FP Current Users',         'fp',         None, '',  True),
+    ('section_fp',        '💊 Family Planning',   'header',     None, '', True,  'header'),
+    ('fp_wra_assessed',   'WRA Assessed',         'fp',         None, '',  True, 'fp_wra'),
+    ('fp_new_users',      'FP New Users',         'fp',         None, '',  True, 'fp_new'),
+    ('fp_current_users',  'FP Current Users',     'fp',         None, '',  True, 'simple'),
 
-    ('section_supervision','👀 Supervision', 'header', None, '', True),
-    ('supervision_pct',   '% CHPs Supervised',        'supervision',65,   '%', True),
+    ('section_supervision','👀 Supervision',      'header',     None, '', True,  'header'),
+    ('supervision_pct',   '% CHPs Supervised',    'supervision',65,   '%', True, 'simple'),
 
-    ('section_art',       '💊 ART', 'header', None, '', True),
-    ('art_defaulters',    'ART Defaulters',           'art',        None, '',  False),
-    ('art_traced',        'ART Traced & Referred',    'art',        None, '',  False),
+    ('section_art',       '💊 ART',               'header',     None, '', True,  'header'),
+    ('art_defaulters',    'ART Defaulters',       'art',        None, '',  False,'simple'),
+    ('art_traced',        'ART Traced & Referred','art',        None, '',  False,'simple'),
 ]
-
 DEFAULT_MOH_TARGETS = {
     'hh_coverage_pct':       85,
     'u5_assessment_pct':     100,
@@ -2471,22 +2469,40 @@ def compute_moh_metrics(chw_qs):
         'active_chps':          total_active,
         'total_chps':           total_all,
         'hh_coverage_pct':      pct(agg['hh_visits'], agg['reg_hhs']),
+        # U5 — pct + fraction
         'u5_assessment_pct':    pct(agg['u5_assessed'], agg['reg_u5']),
+        'u5_assessed_num':      agg['u5_assessed'] or 0,
+        'u5_registered':        agg['reg_u5'] or 0,
+        # Positive diagnoses + avg/CHP
         'total_positive_diag':  agg['pos_diag'],
+        'pos_diag_per_chp':     round(agg['pos_diag'] / total_active, 2) if agg['pos_diag'] and total_active else None,
+        # Fever — cases + tested + tested %
         'fever_cases':          agg['fever_cases'],
         'fever_tested':         agg['fever_tested'],
+        'fever_tested_pct':     pct(agg['fever_tested'], agg['fever_cases']),
+        # IZ
         'iz_defaulters':        agg['iz_def'],
         'iz_followup_pct':      pct(agg['iz_followup'], agg['iz_def']),
+        # Nutrition
         'mam_sam_total':        agg['mam_sam'],
         'mam_sam_referred_pct': pct(agg['mam_sam_ref'], agg['mam_sam']),
+        # PNC
         'pnc_48hr_pct':         pct(agg['pnc_48'], agg['deliveries']),
+        'pnc_48hr_num':         agg['pnc_48'] or 0,
         'pnc_3_7d_pct':         pct(agg['pnc_37'], agg['deliveries']),
+        'pnc_3_7d_num':         agg['pnc_37'] or 0,
+        'deliveries':           agg['deliveries'] or 0,
         'preg_per_chp':         round(agg['preg'] / total_active, 2) if agg['preg'] and total_active else None,
         'facility_delivery_pct':pct(agg['fac_del'], agg['deliveries']),
+        # FP — counts + percentages
         'fp_wra_assessed':      agg['fp_wra'],
+        'fp_wra_pct':           pct(agg['fp_wra'], agg['reg_hhs']),  # % of reg HHs
         'fp_new_users':         agg['fp_new'],
+        'fp_new_pct':           pct(agg['fp_new'], agg['fp_wra']),    # % of WRA assessed
         'fp_current_users':     agg['fp_cur'],
+        # Supervision
         'supervision_pct':      pct(active_qs.filter(supervised=True).count(), total_active),
+        # ART
         'art_defaulters':       None,
         'art_traced':           None,
     }
@@ -2636,8 +2652,8 @@ def moh_review_view(request):
         return f"{val:,}" if isinstance(val, int) else str(val)
 
     rows = []
-    for key, label, section, default_target, unit, hib in MOH_INDICATORS:
-        if section == 'header':
+    for key, label, section, default_target, unit, hib, display_type in MOH_INDICATORS:
+        if display_type == 'header':
             rows.append({'type': 'header', 'label': label, 'key': key})
             continue
 
@@ -2646,9 +2662,45 @@ def moh_review_view(request):
         for cm in col_metrics:
             m   = cm['metrics']
             val = m.get(key) if m else None
+
+            # Build rich display string based on type
+            if m is None or val is None:
+                display = '—'
+            elif display_type == 'u5':
+                num = m.get('u5_assessed_num', 0)
+                reg = m.get('u5_registered', 0)
+                display = f"{val}% ({num:,}/{reg:,})" if reg else f"{val}%"
+            elif display_type == 'pos_diag':
+                avg = m.get('pos_diag_per_chp')
+                display = f"{val:,} ({avg}/CHP)" if avg else f"{val:,}"
+            elif display_type == 'fever':
+                tested = m.get('fever_tested', 0)
+                tpct   = m.get('fever_tested_pct')
+                display = f"{val:,} cases, {tested:,} tested ({tpct}%)" if tpct else f"{val:,} cases"
+            elif display_type == 'pnc48':
+                num = m.get('pnc_48hr_num', 0)
+                den = m.get('deliveries', 0)
+                display = f"{val}% ({num:,}/{den:,})" if den else f"{val}%"
+            elif display_type == 'pnc37':
+                num = m.get('pnc_3_7d_num', 0)
+                den = m.get('deliveries', 0)
+                display = f"{val}% ({num:,}/{den:,})" if den else f"{val}%"
+            elif display_type == 'fp_wra':
+                wra_pct = m.get('fp_wra_pct')
+                display = f"{val:,} ({wra_pct}% of reg. HHs)" if wra_pct else f"{val:,}"
+            elif display_type == 'fp_new':
+                new_pct = m.get('fp_new_pct')
+                display = f"{val:,} ({new_pct}% of WRA)" if new_pct else f"{val:,}"
+            elif unit == '%':
+                display = f"{val}%"
+            elif isinstance(val, float):
+                display = f"{val:,.2f}" if val != int(val) else f"{int(val):,}"
+            else:
+                display = f"{val:,}" if isinstance(val, int) else str(val)
+
             cells.append({
                 'value':   val,
-                'display': fmt(val, unit),
+                'display': display,
                 'colour':  cell_colour(val, target, hib),
             })
 
