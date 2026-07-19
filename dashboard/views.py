@@ -2360,3 +2360,330 @@ def kpi_scorecard_view(request):
         'has_data':          bool(kpi_columns and report_ids),
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
     })
+
+
+# ===========================================================================
+# MOH DATA REVIEW
+# ===========================================================================
+
+MOH_INDICATORS = [
+    # (key, label, section, target, unit, higher_is_better)
+    ('section_workforce', '👥 Workforce', 'header', None, '', True),
+    ('active_chps',       'Active CHPs',              'workforce',  None, '',  True),
+    ('hh_coverage_pct',   'HH Coverage %',            'workforce',  85,   '%', True),
+
+    ('section_child',     '👶 Child Health', 'header', None, '', True),
+    ('u5_assessment_pct', 'U5 Children Assessed %',   'child',      100,  '%', True),
+    ('total_positive_diag','Positive Diagnoses (U5)', 'child',      None, '',  True),
+    ('fever_cases',       'Fever Cases',              'child',      None, '',  True),
+    ('fever_tested',      'Fever Tested (RDT)',       'child',      None, '',  True),
+
+    ('section_iz',        '💉 Immunization', 'header', None, '', True),
+    ('iz_defaulters',     'IZ Defaulters',            'iz',         None, '',  False),
+    ('iz_followup_pct',   'IZ Defaulters Followed Up %', 'iz',     80,   '%', True),
+
+    ('section_nutrition', '🥗 Nutrition', 'header', None, '', True),
+    ('mam_sam_total',     'MAM/SAM Cases',            'nutrition',  None, '',  False),
+    ('mam_sam_referred_pct','MAM/SAM Referred %',     'nutrition',  90,   '%', True),
+
+    ('section_maternal',  '🤱 Maternal Health', 'header', None, '', True),
+    ('pnc_48hr_pct',      'PNC 48hr On-time %',       'maternal',   85,   '%', True),
+    ('pnc_3_7d_pct',      'PNC 3-7d On-time %',       'maternal',   85,   '%', True),
+    ('preg_per_chp',      'Pregnancies Registered/CHP','maternal',  1,    '',  True),
+    ('facility_delivery_pct','Facility Delivery %',   'maternal',   80,   '%', True),
+
+    ('section_fp',        '💊 Family Planning', 'header', None, '', True),
+    ('fp_wra_assessed',   'WRA Assessed',             'fp',         None, '',  True),
+    ('fp_new_users',      'FP New Users',             'fp',         None, '',  True),
+    ('fp_current_users',  'FP Current Users',         'fp',         None, '',  True),
+
+    ('section_supervision','👀 Supervision', 'header', None, '', True),
+    ('supervision_pct',   '% CHPs Supervised',        'supervision',65,   '%', True),
+
+    ('section_art',       '💊 ART', 'header', None, '', True),
+    ('art_defaulters',    'ART Defaulters',           'art',        None, '',  False),
+    ('art_traced',        'ART Traced & Referred',    'art',        None, '',  False),
+]
+
+DEFAULT_MOH_TARGETS = {
+    'hh_coverage_pct':       85,
+    'u5_assessment_pct':     100,
+    'iz_followup_pct':       80,
+    'mam_sam_referred_pct':  90,
+    'pnc_48hr_pct':          85,
+    'pnc_3_7d_pct':          85,
+    'preg_per_chp':          1,
+    'facility_delivery_pct': 80,
+    'supervision_pct':       65,
+}
+
+QUARTER_MONTHS = {
+    'Q1': [1, 2, 3],
+    'Q2': [4, 5, 6],
+    'Q3': [7, 8, 9],
+    'Q4': [10, 11, 12],
+}
+
+MONTH_NAMES_FULL = {
+    1:'January',2:'February',3:'March',4:'April',5:'May',6:'June',
+    7:'July',8:'August',9:'September',10:'October',11:'November',12:'December'
+}
+
+
+def compute_moh_metrics(chw_qs):
+    """Compute MOH indicator values from a CHWRecord queryset."""
+    if chw_qs is None:
+        return None
+
+    active_qs = chw_qs.filter(is_active=True)
+    total_all  = chw_qs.count()
+    total_active = active_qs.count()
+
+    agg = active_qs.aggregate(
+        hh_visits=Sum('hh_visits'),
+        reg_hhs=Sum('registered_hhs'),
+        u5_assessed=Sum('num_u5_assessed'),
+        reg_u5=Sum('registered_children_u5'),
+        pos_diag=Sum('positive_diagnoses_u5'),
+        fever_cases=Sum('fever_cases'),
+        fever_tested=Sum('fever_tested_rdt'),
+        iz_def=Sum('iz_defaulters'),
+        iz_followup=Sum('iz_defaulters_followed'),
+        mam_sam=Sum('mam_sam_total'),
+        mam_sam_ref=Sum('mam_sam_referred'),
+        pnc_48=Sum('pnc_48hr_ontime'),
+        pnc_37=Sum('pnc_3_7d_ontime'),
+        deliveries=Sum('total_deliveries'),
+        fac_del=Sum('facility_deliveries'),
+        preg=Sum('pregnancies_registered'),
+        fp_wra=Sum('fp_wra_assessed'),
+        fp_new=Sum('fp_new_users'),
+        fp_cur=Sum('fp_current_users'),
+        sup_visits=Sum('supervision_visits'),
+    )
+
+    def pct(num, den):
+        if num and den and den > 0:
+            return round(num / den * 100, 1)
+        return None
+
+    return {
+        'active_chps':          total_active,
+        'total_chps':           total_all,
+        'hh_coverage_pct':      pct(agg['hh_visits'], agg['reg_hhs']),
+        'u5_assessment_pct':    pct(agg['u5_assessed'], agg['reg_u5']),
+        'total_positive_diag':  agg['pos_diag'],
+        'fever_cases':          agg['fever_cases'],
+        'fever_tested':         agg['fever_tested'],
+        'iz_defaulters':        agg['iz_def'],
+        'iz_followup_pct':      pct(agg['iz_followup'], agg['iz_def']),
+        'mam_sam_total':        agg['mam_sam'],
+        'mam_sam_referred_pct': pct(agg['mam_sam_ref'], agg['mam_sam']),
+        'pnc_48hr_pct':         pct(agg['pnc_48'], agg['deliveries']),
+        'pnc_3_7d_pct':         pct(agg['pnc_37'], agg['deliveries']),
+        'preg_per_chp':         round(agg['preg'] / total_active, 2) if agg['preg'] and total_active else None,
+        'facility_delivery_pct':pct(agg['fac_del'], agg['deliveries']),
+        'fp_wra_assessed':      agg['fp_wra'],
+        'fp_new_users':         agg['fp_new'],
+        'fp_current_users':     agg['fp_cur'],
+        'supervision_pct':      pct(active_qs.filter(supervised=True).count(), total_active),
+        'art_defaulters':       None,
+        'art_traced':           None,
+    }
+
+
+def aggregate_moh_batches(batches, counties, subcounties, chus):
+    """Aggregate CHWRecord data across multiple batches (for quarterly view)."""
+    from django.db.models import Sum
+    combined = {}
+
+    for b in batches:
+        qs = CHWRecord.objects.filter(batch=b)
+        if counties:    qs = qs.filter(county__in=counties)
+        if subcounties: qs = qs.filter(sub_county__in=subcounties)
+        if chus:        qs = qs.filter(community_health_unit__in=chus)
+        m = compute_moh_metrics(qs)
+        if m is None:
+            continue
+        for k, v in m.items():
+            if v is None:
+                continue
+            if k not in combined:
+                combined[k] = []
+            combined[k].append(v)
+
+    if not combined:
+        return None
+
+    # For counts: sum; for percentages: average (will be recalculated from raw if possible)
+    pct_keys = {'hh_coverage_pct','u5_assessment_pct','iz_followup_pct',
+                'mam_sam_referred_pct','pnc_48hr_pct','pnc_3_7d_pct',
+                'facility_delivery_pct','supervision_pct'}
+    result = {}
+    for k, vals in combined.items():
+        if k in pct_keys:
+            result[k] = round(sum(vals) / len(vals), 1)
+        elif k == 'preg_per_chp':
+            result[k] = round(sum(vals) / len(vals), 2)
+        elif k in ('active_chps', 'total_chps'):
+            result[k] = max(vals)  # use latest count not sum
+        else:
+            result[k] = sum(v for v in vals if isinstance(v, (int, float)))
+    return result
+
+
+@login_required
+def moh_review_view(request):
+    """MOH Data Review page."""
+    view_mode  = request.GET.get('view_mode', 'monthly')  # monthly or quarterly
+    counties   = request.GET.getlist('county')
+    subcounties= request.GET.getlist('sub_county')
+    chus       = request.GET.getlist('chu')
+
+    # Target overrides from POST
+    targets = dict(DEFAULT_MOH_TARGETS)
+    if request.method == 'POST' and 'save_targets' in request.POST:
+        for key in DEFAULT_MOH_TARGETS:
+            val = request.POST.get(f'target_{key}', '')
+            try:
+                targets[key] = float(val) if val else None
+            except ValueError:
+                pass
+        request.session['moh_targets'] = targets
+    elif 'moh_targets' in request.session:
+        targets.update(request.session['moh_targets'])
+
+    # Get all monthly batches ordered oldest first
+    all_monthly = list(UploadBatch.objects.filter(
+        period_type='monthly'
+    ).order_by('year', 'month'))
+
+    # Build columns
+    if view_mode == 'quarterly':
+        # Group available monthly batches by quarter/year
+        quarter_map = {}
+        for b in all_monthly:
+            for qname, months in QUARTER_MONTHS.items():
+                if b.month in months:
+                    key = f"{b.year}-{qname}"
+                    if key not in quarter_map:
+                        quarter_map[key] = {'label': f"{qname} {b.year}", 'batches': []}
+                    quarter_map[key]['batches'].append(b)
+
+        # Override: manually selected quarters
+        selected_quarters = request.GET.getlist('quarter')
+        if selected_quarters:
+            columns = [{'label': quarter_map[q]['label'],
+                        'batches': quarter_map[q]['batches'],
+                        'key': q}
+                       for q in selected_quarters if q in quarter_map]
+        else:
+            # Default last 4 quarters with data
+            all_quarters = sorted(quarter_map.keys())
+            columns = [{'label': quarter_map[q]['label'],
+                        'batches': quarter_map[q]['batches'],
+                        'key': q}
+                       for q in all_quarters[-4:]]
+
+        available_periods = [{'key': k, 'label': v['label']} for k, v in sorted(quarter_map.items())]
+        selected_periods  = selected_quarters
+
+    else:
+        # Monthly: default last 6
+        selected_months = request.GET.getlist('batch_month')
+        if selected_months:
+            batch_map = {str(b.pk): b for b in all_monthly}
+            columns = [{'label': batch_map[mid].label, 'batch': batch_map[mid]}
+                       for mid in selected_months if mid in batch_map]
+        else:
+            last6 = all_monthly[-6:]
+            columns = [{'label': b.label, 'batch': b} for b in last6]
+
+        available_periods = [{'key': str(b.pk), 'label': b.label} for b in all_monthly]
+        selected_periods  = selected_months
+
+    # Compute metrics per column
+    col_metrics = []
+    for col in columns:
+        if view_mode == 'quarterly':
+            m = aggregate_moh_batches(col['batches'], counties, subcounties, chus)
+        else:
+            qs = CHWRecord.objects.filter(batch=col['batch'])
+            if counties:    qs = qs.filter(county__in=counties)
+            if subcounties: qs = qs.filter(sub_county__in=subcounties)
+            if chus:        qs = qs.filter(community_health_unit__in=chus)
+            m = compute_moh_metrics(qs)
+        col_metrics.append({'label': col['label'], 'metrics': m})
+
+    # Build rows
+    def cell_colour(val, target, higher_is_better=True):
+        if val is None or target is None:
+            return 'grey'
+        ratio = val / target * 100 if target else 0
+        if higher_is_better:
+            if ratio >= 90:  return 'green'
+            if ratio >= 50:  return 'yellow'
+            return 'red'
+        else:
+            if ratio <= 110: return 'green'
+            if ratio <= 150: return 'yellow'
+            return 'red'
+
+    def fmt(val, unit):
+        if val is None: return '—'
+        if unit == '%': return f"{val}%"
+        if isinstance(val, float): return f"{val:,.2f}" if val != int(val) else f"{int(val):,}"
+        return f"{val:,}" if isinstance(val, int) else str(val)
+
+    rows = []
+    for key, label, section, default_target, unit, hib in MOH_INDICATORS:
+        if section == 'header':
+            rows.append({'type': 'header', 'label': label, 'key': key})
+            continue
+
+        target = targets.get(key, default_target)
+        cells  = []
+        for cm in col_metrics:
+            m   = cm['metrics']
+            val = m.get(key) if m else None
+            cells.append({
+                'value':   val,
+                'display': fmt(val, unit),
+                'colour':  cell_colour(val, target, hib),
+            })
+
+        rows.append({
+            'type':   'data',
+            'key':    key,
+            'label':  label,
+            'target': fmt(target, unit) if target is not None else 'TBD',
+            'unit':   unit,
+            'cells':  cells,
+        })
+
+    # Filter options from most recent monthly batch
+    filter_opts = {}
+    if all_monthly:
+        fqs = CHWRecord.objects.filter(batch=all_monthly[-1])
+        filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
+        if counties:
+            filter_opts['sub_counties'] = fqs.filter(county__in=counties).values_list(
+                'sub_county', flat=True).distinct().order_by('sub_county')
+        if subcounties:
+            filter_opts['chus'] = fqs.filter(sub_county__in=subcounties).values_list(
+                'community_health_unit', flat=True).distinct().order_by('community_health_unit')
+
+    return render(request, 'dashboard/moh_review.html', {
+        'rows':               rows,
+        'col_metrics':        col_metrics,
+        'view_mode':          view_mode,
+        'available_periods':  available_periods,
+        'selected_periods':   selected_periods,
+        'filter_opts':        filter_opts,
+        'selected_counties':  counties,
+        'selected_subcounties': subcounties,
+        'selected_chus':      chus,
+        'targets':            targets,
+        'has_data':           bool(all_monthly),
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+    })

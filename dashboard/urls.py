@@ -28,6 +28,7 @@ urlpatterns = [
     path('download/zero-positive/',    views.download_zero_positive,     name='download_zero_positive'),
     path('download/supervised-3plus/', views.download_supervised_3plus, name='download_supervised_3plus'),
     # Sync dashboard
+    path('moh-review/',            views.moh_review_view,        name='moh_review'),
     path('gaps-compare/',          views.gaps_compare_view,     name='gaps_compare'),
     path('gaps-compare/download/', views.gaps_compare_download,  name='gaps_compare_download'),
     path('scorecard/',             views.scorecard_view,         name='scorecard'),

@@ -1,0 +1,242 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}MOH Data Review{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">MOH Data Review</h1>
+    <p class="page-subtitle">
+      {% if view_mode == 'quarterly' %}Quarterly{% else %}Monthly{% endif %} performance review
+      {% if selected_counties %} · {{ selected_counties|join:", " }}{% endif %}
+      {% if selected_subcounties %} · {{ selected_subcounties|join:", " }}{% endif %}
+      {% if selected_chus %} · {{ selected_chus|length }} CHU(s){% endif %}
+    </p>
+  </div>
+  <button class="btn btn-sm btn-outline" onclick="document.getElementById('targets-panel').style.display=document.getElementById('targets-panel').style.display==='none'?'block':'none'">✏️ Edit Targets</button>
+</div>
+
+<!-- EDIT TARGETS PANEL -->
+<div id="targets-panel" style="display:none;background:white;border:1px solid #E5E7EB;border-radius:8px;padding:16px;margin-bottom:14px;">
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="save_targets" value="1">
+    <input type="hidden" name="view_mode" value="{{ view_mode }}">
+    {% for c in selected_counties %}<input type="hidden" name="county" value="{{ c }}">{% endfor %}
+    {% for sc in selected_subcounties %}<input type="hidden" name="sub_county" value="{{ sc }}">{% endfor %}
+    {% for chu in selected_chus %}<input type="hidden" name="chu" value="{{ chu }}">{% endfor %}
+    <h3 style="font-size:13px;font-weight:700;color:#1B3A6B;margin-bottom:12px;">Edit Monthly Targets</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+      {% for row in rows %}{% if row.type == 'data' and row.unit %}
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;">
+        <label style="font-size:10px;font-weight:600;color:#6B7280;text-transform:uppercase;">{{ row.label }}</label>
+        <input type="{% if row.unit == '%' %}number{% else %}number{% endif %}" step="0.1"
+               name="target_{{ row.key }}" value="{{ targets|default_if_none:row.key }}"
+               style="padding:6px 10px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;width:120px;">
+      </div>
+      {% endif %}{% endfor %}
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button type="submit" class="btn btn-sm btn-primary">💾 Save Targets</button>
+      <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('targets-panel').style.display='none'">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- VIEW MODE TOGGLE -->
+<div style="display:flex;gap:0;margin-bottom:14px;border:1.5px solid #1B3A6B;border-radius:8px;overflow:hidden;width:fit-content;">
+  <a href="?view_mode=monthly{% for c in selected_counties %}&county={{ c }}{% endfor %}{% for sc in selected_subcounties %}&sub_county={{ sc }}{% endfor %}{% for chu in selected_chus %}&chu={{ chu }}{% endfor %}"
+     style="padding:8px 24px;font-size:13px;font-weight:600;text-decoration:none;{% if view_mode != 'quarterly' %}background:#1B3A6B;color:white;{% else %}background:white;color:#1B3A6B;{% endif %}">
+    📅 Monthly
+  </a>
+  <a href="?view_mode=quarterly{% for c in selected_counties %}&county={{ c }}{% endfor %}{% for sc in selected_subcounties %}&sub_county={{ sc }}{% endfor %}{% for chu in selected_chus %}&chu={{ chu }}{% endfor %}"
+     style="padding:8px 24px;font-size:13px;font-weight:600;text-decoration:none;border-left:1.5px solid #1B3A6B;{% if view_mode == 'quarterly' %}background:#1B3A6B;color:white;{% else %}background:white;color:#1B3A6B;{% endif %}">
+    📊 Quarterly
+  </a>
+</div>
+
+<!-- FILTERS -->
+<div class="filter-bar">
+  <form method="get" class="filter-form" id="moh-form">
+    <input type="hidden" name="view_mode" value="{{ view_mode }}">
+    {% for p in selected_periods %}<input type="hidden" name="{% if view_mode == 'quarterly' %}quarter{% else %}batch_month{% endif %}" value="{{ p }}">{% endfor %}
+
+    {% if filter_opts.counties %}
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <div class="multi-select-wrap" id="ms-county">
+        <button type="button" class="multi-select-btn" onclick="toggleMohMs('ms-county')">
+          {% if selected_counties %}{{ selected_counties|join:", " }}{% else %}All Counties{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-county-dd">
+          {% for c in filter_opts.counties %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="county" value="{{ c }}" {% if c in selected_counties %}checked{% endif %}>{{ c }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMohMs('ms-county')">Clear</button>
+            <button type="button" class="ms-apply" onclick="document.getElementById('moh-form').submit()">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if filter_opts.sub_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <div class="multi-select-wrap" id="ms-subcounty">
+        <button type="button" class="multi-select-btn" onclick="toggleMohMs('ms-subcounty')">
+          {% if selected_subcounties %}{{ selected_subcounties|join:", " }}{% else %}All Sub-Counties{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-subcounty-dd">
+          {% for sc in filter_opts.sub_counties %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="sub_county" value="{{ sc }}" {% if sc in selected_subcounties %}checked{% endif %}>{{ sc }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMohMs('ms-subcounty')">Clear</button>
+            <button type="button" class="ms-apply" onclick="document.getElementById('moh-form').submit()">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if filter_opts.chus %}
+    <div class="filter-group">
+      <label class="filter-label">Community Health Unit</label>
+      <div class="multi-select-wrap" id="ms-chu">
+        <button type="button" class="multi-select-btn" onclick="toggleMohMs('ms-chu')">
+          {% if selected_chus %}{{ selected_chus|length }} CHU(s){% else %}All CHUs{% endif %}
+        </button>
+        <div class="multi-select-dropdown" id="ms-chu-dd">
+          {% for chu in filter_opts.chus %}
+          <label class="multi-select-option">
+            <input type="checkbox" name="chu" value="{{ chu }}" {% if chu in selected_chus %}checked{% endif %}>{{ chu }}
+          </label>
+          {% endfor %}
+          <div class="multi-select-footer">
+            <button type="button" class="ms-clear" onclick="clearMohMs('ms-chu')">Clear</button>
+            <button type="button" class="ms-apply" onclick="document.getElementById('moh-form').submit()">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if selected_counties %}
+    <a href="?view_mode={{ view_mode }}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- PERIOD OVERRIDE -->
+<details style="background:white;border:1px solid #E5E7EB;border-radius:8px;padding:10px 16px;margin-bottom:10px;">
+  <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#1B3A6B;">⚙️ Override Periods</summary>
+  <form method="get" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+    <input type="hidden" name="view_mode" value="{{ view_mode }}">
+    {% for c in selected_counties %}<input type="hidden" name="county" value="{{ c }}">{% endfor %}
+    {% for sc in selected_subcounties %}<input type="hidden" name="sub_county" value="{{ sc }}">{% endfor %}
+    {% for chu in selected_chus %}<input type="hidden" name="chu" value="{{ chu }}">{% endfor %}
+    <div class="filter-group" style="min-width:260px;">
+      <label class="filter-label">{% if view_mode == 'quarterly' %}Select Quarters{% else %}Select Months{% endif %} (hold Ctrl/Cmd)</label>
+      <select name="{% if view_mode == 'quarterly' %}quarter{% else %}batch_month{% endif %}" class="filter-select" multiple size="5" style="height:auto;">
+        {% for p in available_periods %}
+        <option value="{{ p.key }}" {% if p.key in selected_periods %}selected{% endif %}>{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+    <a href="?view_mode={{ view_mode }}{% for c in selected_counties %}&county={{ c }}{% endfor %}" class="btn btn-sm btn-outline">Reset</a>
+  </form>
+</details>
+
+{% if not has_data %}
+<div class="empty-dashboard">
+  <div class="empty-icon">📋</div>
+  <h2>No Monthly Data Available</h2>
+  <p>Upload monthly CHW Detail reports to populate the MOH Data Review.</p>
+</div>
+
+{% else %}
+
+<!-- DATA TABLE -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">MOH Data Review — {% if view_mode == 'quarterly' %}Quarterly{% else %}Monthly{% endif %} View</h3>
+      <p class="card-subtitle">🟢 ≥90% of target &nbsp;·&nbsp; 🟡 50–89% &nbsp;·&nbsp; 🔴 &lt;50% &nbsp;·&nbsp; Grey = no target set</p>
+    </div>
+    <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print</button>
+  </div>
+  <div class="card-body no-pad">
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:800px;border:1px solid #E5E7EB;">
+      <colgroup>
+        <col style="width:20%">
+        <col style="width:10%">
+        {% for cm in col_metrics %}<col>{% endfor %}
+      </colgroup>
+      <thead>
+        <tr style="background:#1B3A6B;">
+          <th style="padding:10px 12px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">Indicator</th>
+          <th style="padding:10px 12px;text-align:center;color:white;font-size:11px;font-weight:700;border:2px solid white;">Target</th>
+          {% for cm in col_metrics %}
+          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ cm.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% if row.type == 'header' %}
+        <tr>
+          <td colspan="{{ col_metrics|length|add:2 }}"
+              style="padding:8px 12px;background:#1B3A6B;color:white;font-size:11px;font-weight:700;border:2px solid white;letter-spacing:.05em;">
+            {{ row.label }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td style="padding:10px 12px;font-weight:500;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
+          <td style="padding:10px 12px;text-align:center;font-weight:600;color:#475569;background:#F1F5F9;font-size:11px;border:2px solid white;">{{ row.target }}</td>
+          {% for cell in row.cells %}
+          <td style="padding:10px 10px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;
+            {% if cell.colour == 'green' %}background:#DCFCE7;color:#166534;{% elif cell.colour == 'yellow' %}background:#FEF9C3;color:#854D0E;{% elif cell.colour == 'red' %}background:#FEE2E2;color:#991B1B;{% else %}background:#F8FAFC;color:#6B7280;{% endif %}">
+            {{ cell.display }}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleMohMs(id) {
+  const dd = document.getElementById(id + '-dd');
+  document.querySelectorAll('.multi-select-dropdown').forEach(el => {
+    if (el.id !== id + '-dd') el.classList.remove('open');
+  });
+  dd.classList.toggle('open');
+}
+function clearMohMs(id) {
+  document.querySelectorAll('#' + id + '-dd input[type=checkbox]').forEach(cb => cb.checked = false);
+  const btn = document.querySelector('#' + id + ' .multi-select-btn');
+  if (btn) btn.textContent = id === 'ms-county' ? 'All Counties' : id === 'ms-subcounty' ? 'All Sub-Counties' : 'All CHUs';
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.multi-select-wrap')) {
+    document.querySelectorAll('.multi-select-dropdown').forEach(el => el.classList.remove('open'));
+  }
+});
+</script>
+{% endblock %}
