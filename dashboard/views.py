@@ -2739,3 +2739,467 @@ def moh_review_view(request):
         'has_data':           bool(all_monthly),
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
     })
+
+
+# ===========================================================================
+# PERFORMANCE ACCELERATION SCORECARD
+# ===========================================================================
+
+PA_SCORECARD_TARGETS = {
+    'cumulative_active_chps': {'label': 'Cumulative Active CHPs',     'target': None, 'unit': '',  'hib': True},
+    'weekly_sync_rate':       {'label': 'Weekly Sync Rates/Active CHPs','target':None, 'unit': '',  'hib': True},
+    'hh_coverage':            {'label': 'HH Coverage',                'target': 85,   'unit': '%', 'hib': True},
+    'child_health':           {'label': 'Child Health Indicators',     'target': None, 'unit': '',  'hib': True},
+    'iccm_referrals':         {'label': 'ICCM Referrals',             'target': 90,   'unit': '%', 'hib': True},
+    'u2_referrals':           {'label': 'U2 Months Referrals',        'target': 90,   'unit': '%', 'hib': True},
+    'iz_completed':           {'label': 'IZ Completed Referrals',     'target': 95,   'unit': '%', 'hib': True},
+    'skilled_deliveries':     {'label': 'Skilled Deliveries',         'target': 95,   'unit': '%', 'hib': True},
+    'pnc_48hr':               {'label': '48 hrs. ON TIME PNC',        'target': 85,   'unit': '%', 'hib': True},
+    'pnc_3_7d':               {'label': '3–7 days PNC',               'target': 85,   'unit': '%', 'hib': True},
+    'preg_per_chp':           {'label': 'Preg Reg/CHP',               'target': 1.0,  'unit': '',  'hib': True},
+    'preg_visits_vs_active':  {'label': 'Preg Visits vs Active Preg', 'target': 95,   'unit': '%', 'hib': True},
+    'wra_assessed':           {'label': 'WRAs (18-49) Assessed',      'target': 90,   'unit': '%', 'hib': True},
+    'dash_utilization':       {'label': 'CHAs Dashboard Utilization', 'target': 70,   'unit': '%', 'hib': True},
+    'supervision':            {'label': '% CHPs Supervised',          'target': 65,   'unit': '%', 'hib': True},
+}
+
+
+def compute_pa_metrics(chw_qs, sync_qs=None):
+    """Compute PA scorecard metrics from CHWRecord queryset."""
+    if chw_qs is None:
+        return None
+
+    active_qs    = chw_qs.filter(is_active=True)
+    total_active = active_qs.count()
+    total_all    = chw_qs.count()
+
+    agg = active_qs.aggregate(
+        hh_visits    = Sum('hh_visits'),
+        reg_hhs      = Sum('registered_hhs'),
+        u5_assessed  = Sum('num_u5_assessed'),
+        reg_u5       = Sum('registered_children_u5'),
+        pos_diag     = Sum('positive_diagnoses_u5'),
+        mam_sam      = Sum('mam_sam_total'),
+        iccm_ref     = Sum('iccm_referrals_total'),
+        iccm_comp    = Sum('iccm_referral_followup'),
+        u2_ref       = Sum('iccm_referrals_u2mo'),
+        u2_comp      = Sum('iccm_completed_referrals_u2mo'),
+        iz_def       = Sum('iz_defaulters'),
+        iz_comp      = Sum('iz_defaulters_completed'),
+        fac_del      = Sum('facility_deliveries'),
+        total_del    = Sum('total_deliveries'),
+        pnc_48       = Sum('pnc_48hr_ontime'),
+        pnc_37       = Sum('pnc_3_7d_ontime'),
+        preg_reg     = Sum('pregnancies_registered'),
+        preg_visited = Sum('pregnancies_visited'),
+        active_preg  = Sum('active_pregnancies'),
+        wra_18_49    = Sum('fp_wra_assessed_18_49'),
+        reg_wra      = Sum('registered_hhs'),  # proxy for WRA denominator
+    )
+
+    def pct(n, d):
+        if n and d and d > 0:
+            return round(n / d * 100, 1)
+        return None
+
+    # Sync rate from sync_qs if available
+    sync_rate = None
+    sync_count = None
+    if sync_qs is not None:
+        synced = sync_qs.filter(days_synced__gte=1).count()
+        total_sync = sync_qs.count()
+        if total_sync > 0:
+            sync_rate  = round(synced / total_sync * 100, 1)
+            sync_count = synced
+
+    u5_pct = pct(agg['u5_assessed'], agg['reg_u5'])
+
+    return {
+        'cumulative_active_chps': total_active,
+        'total_chps':             total_all,
+        'weekly_sync_rate':       sync_rate,
+        'sync_count':             sync_count,
+        'hh_coverage':            pct(agg['hh_visits'], agg['reg_hhs']),
+        'hh_visits':              agg['hh_visits'] or 0,
+        'reg_hhs':                agg['reg_hhs'] or 0,
+        # child health
+        'u5_assessed':            agg['u5_assessed'] or 0,
+        'reg_u5':                 agg['reg_u5'] or 0,
+        'u5_pct':                 u5_pct,
+        'pos_diag':               agg['pos_diag'] or 0,
+        'pos_diag_per_chp':       round(agg['pos_diag'] / total_active, 2) if agg['pos_diag'] and total_active else None,
+        'mam_sam':                agg['mam_sam'] or 0,
+        # iCCM
+        'iccm_ref_total':         agg['iccm_ref'] or 0,
+        'iccm_ref_comp':          agg['iccm_comp'] or 0,
+        'iccm_referrals':         pct(agg['iccm_comp'], agg['iccm_ref']),
+        # U2
+        'u2_ref_total':           agg['u2_ref'] or 0,
+        'u2_ref_comp':            agg['u2_comp'] or 0,
+        'u2_referrals':           pct(agg['u2_comp'], agg['u2_ref']),
+        # IZ
+        'iz_defaulters':          agg['iz_def'] or 0,
+        'iz_completed':           pct(agg['iz_comp'], agg['iz_def']),
+        'iz_comp_num':            agg['iz_comp'] or 0,
+        # Deliveries
+        'skilled_deliveries':     pct(agg['fac_del'], agg['total_del']),
+        'fac_del':                agg['fac_del'] or 0,
+        'total_del':              agg['total_del'] or 0,
+        # PNC
+        'pnc_48hr':               pct(agg['pnc_48'], agg['total_del']),
+        'pnc_48_num':             agg['pnc_48'] or 0,
+        'pnc_3_7d':               pct(agg['pnc_37'], agg['total_del']),
+        'pnc_37_num':             agg['pnc_37'] or 0,
+        # Preg
+        'preg_per_chp':           round(agg['preg_reg'] / total_active, 2) if agg['preg_reg'] and total_active else None,
+        'preg_reg':               agg['preg_reg'] or 0,
+        'preg_visits_vs_active':  pct(agg['preg_visited'], agg['active_preg']),
+        'preg_visited':           agg['preg_visited'] or 0,
+        'active_preg':            agg['active_preg'] or 0,
+        # WRA
+        'wra_assessed':           pct(agg['wra_18_49'], agg['reg_wra']),
+        'wra_18_49':              agg['wra_18_49'] or 0,
+        'reg_wra':                agg['reg_wra'] or 0,
+        # Supervision
+        'supervision':            pct(active_qs.filter(supervised=True).count(), total_active),
+        'supervised_count':       active_qs.filter(supervised=True).count(),
+        # Dash utilization — filled externally
+        'dash_utilization':       None,
+    }
+
+
+def get_dash_util(county, sub_county, report):
+    """Get dashboard utilization % for a given geo from a DashUtilReport."""
+    if report is None:
+        return None
+    from .models import DashUtilDataPoint
+    dp = DashUtilDataPoint.objects.filter(
+        report=report,
+        county__iexact=county if county else '',
+        sub_county__iexact=sub_county if sub_county else '',
+    ).first()
+    return dp.utilization_pct if dp else None
+
+
+def make_pa_cell(metrics, key, target, hib=True, util_pct=None):
+    """Build a cell dict for the PA scorecard."""
+    if metrics is None:
+        return {'display': '—', 'colour': 'grey', 'pct_target': None}
+
+    def colour(val, tgt, hib=True):
+        if val is None or tgt is None:
+            return 'grey'
+        r = val / tgt * 100 if tgt else 0
+        if hib:
+            return 'green' if r >= 90 else 'yellow' if r >= 50 else 'red'
+        else:
+            return 'green' if r <= 110 else 'yellow' if r <= 150 else 'red'
+
+    def pct_target(val, tgt):
+        if val is None or tgt is None:
+            return None
+        return round(val / tgt * 100, 1)
+
+    m = metrics
+
+    if key == 'cumulative_active_chps':
+        total = m.get('total_chps', 0) or 0
+        val   = m.get('cumulative_active_chps', 0) or 0
+        pct   = round(val / total * 100, 1) if total else None
+        disp  = f"{val:,}/{total:,} ({pct}%)" if pct else f"{val:,}"
+        return {'display': disp, 'colour': colour(pct, 100), 'pct_target': pct}
+
+    elif key == 'weekly_sync_rate':
+        val  = m.get('weekly_sync_rate')
+        cnt  = m.get('sync_count')
+        tot  = m.get('cumulative_active_chps', 0) or 0
+        disp = f"{cnt:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, 100), 'pct_target': val}
+
+    elif key == 'hh_coverage':
+        val  = m.get('hh_coverage')
+        vis  = m.get('hh_visits', 0)
+        reg  = m.get('reg_hhs', 0)
+        disp = f"{val}% ({vis:,})" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'child_health':
+        u5p  = m.get('u5_pct')
+        au5  = m.get('u5_assessed', 0)
+        ru5  = m.get('reg_u5', 0)
+        pd_  = m.get('pos_diag', 0)
+        pdpc = m.get('pos_diag_per_chp')
+        mam  = m.get('mam_sam', 0)
+        lines = [
+            f"U5 Assessed – {au5:,}/{ru5:,} ({u5p}%)" if u5p else "U5 Assessed – —",
+            f"PD – {pdpc}" if pdpc else "PD – —",
+            f"MAM/SAM – {mam:,}",
+        ]
+        return {'display': '\n'.join(lines), 'lines': lines,
+                'colour': colour(u5p, 100), 'pct_target': pct_target(u5p, 100)}
+
+    elif key == 'iccm_referrals':
+        val  = m.get('iccm_referrals')
+        comp = m.get('iccm_ref_comp', 0)
+        tot  = m.get('iccm_ref_total', 0)
+        disp = f"{comp:,}/{tot:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'u2_referrals':
+        val  = m.get('u2_referrals')
+        comp = m.get('u2_ref_comp', 0)
+        tot  = m.get('u2_ref_total', 0)
+        disp = f"{comp:,}/{tot:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'iz_completed':
+        val  = m.get('iz_completed')
+        comp = m.get('iz_comp_num', 0)
+        tot  = m.get('iz_defaulters', 0)
+        disp = f"{comp:,}/{tot:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'skilled_deliveries':
+        val  = m.get('skilled_deliveries')
+        fd   = m.get('fac_del', 0)
+        td   = m.get('total_del', 0)
+        disp = f"{fd:,}/{td:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'pnc_48hr':
+        val  = m.get('pnc_48hr')
+        num  = m.get('pnc_48_num', 0)
+        td   = m.get('total_del', 0)
+        disp = f"{num:,}/{td:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'pnc_3_7d':
+        val  = m.get('pnc_3_7d')
+        num  = m.get('pnc_37_num', 0)
+        td   = m.get('total_del', 0)
+        disp = f"{num:,}/{td:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'preg_per_chp':
+        val  = m.get('preg_per_chp')
+        num  = m.get('preg_reg', 0)
+        disp = f"{num:,} ({val})" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'preg_visits_vs_active':
+        val  = m.get('preg_visits_vs_active')
+        vis  = m.get('preg_visited', 0)
+        act  = m.get('active_preg', 0)
+        disp = f"{vis:,}/{act:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'wra_assessed':
+        val  = m.get('wra_assessed')
+        num  = m.get('wra_18_49', 0)
+        reg  = m.get('reg_wra', 0)
+        disp = f"{num:,}/{reg:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'dash_utilization':
+        val  = util_pct
+        disp = f"{val}%" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    elif key == 'supervision':
+        val  = m.get('supervision')
+        cnt  = m.get('supervised_count', 0)
+        tot  = m.get('cumulative_active_chps', 0)
+        disp = f"{cnt:,}/{tot:,} ({val}%)" if val is not None else '—'
+        return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
+
+    return {'display': '—', 'colour': 'grey', 'pct_target': None}
+
+
+@login_required
+def pa_scorecard_view(request):
+    """Performance Acceleration Scorecard."""
+    from .models import DashUtilReport
+
+    selected_counties    = request.GET.getlist('county')
+    selected_subcounties = request.GET.getlist('sub_county')
+    selected_chus        = request.GET.getlist('chu')
+
+    override_prev_month = request.GET.get('batch_prev_month', '')
+    override_weeks      = request.GET.getlist('batch_week')
+
+    all_batches  = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    all_monthly  = UploadBatch.objects.filter(period_type='monthly').order_by('-year', '-month')
+
+    # Auto-detect
+    auto = auto_detect_batches()
+    batch_prev_month = UploadBatch.objects.filter(pk=override_prev_month).first() if override_prev_month else auto['prev_month']
+
+    if override_weeks:
+        batch_weeks = [UploadBatch.objects.filter(pk=wid).first() for wid in override_weeks if wid]
+        batch_weeks = [b for b in batch_weeks if b]
+    else:
+        batch_weeks = auto['weeks']
+
+    # Dashboard utilization reports
+    util_reports = list(DashUtilReport.objects.all().order_by('-year', '-month', '-week'))
+
+    # Find matching util report for each batch
+    def find_util_report(batch):
+        if not util_reports:
+            return None
+        if batch.period_type == 'monthly':
+            for r in util_reports:
+                if r.period_type == 'monthly' and r.year == batch.year and r.month == batch.month:
+                    return r
+        else:
+            if batch.week_start_date:
+                for r in util_reports:
+                    if r.period_type == 'weekly' and r.week_start_date and abs((r.week_start_date - batch.week_start_date).days) <= 7:
+                        return r
+        return util_reports[0] if util_reports else None
+
+    def get_chw_qs(batch):
+        if batch is None:
+            return None
+        qs = CHWRecord.objects.filter(batch=batch)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
+        return qs
+
+    def get_sync_qs(chw_batch):
+        sync_batch = find_matching_sync_batch(chw_batch)
+        if not sync_batch:
+            return None
+        qs = CHPSyncRecord.objects.filter(batch=sync_batch)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
+        return qs
+
+    # Determine geo for util lookup
+    util_county    = selected_counties[0]    if len(selected_counties) == 1    else ''
+    util_subcounty = selected_subcounties[0] if len(selected_subcounties) == 1 else ''
+
+    # Compute previous month column
+    metrics_prev_month = compute_pa_metrics(get_chw_qs(batch_prev_month), get_sync_qs(batch_prev_month)) if batch_prev_month else None
+    util_prev          = find_util_report(batch_prev_month) if batch_prev_month else None
+    util_pct_prev      = get_dash_util(util_county, util_subcounty, util_prev)
+    if metrics_prev_month:
+        metrics_prev_month['dash_utilization'] = util_pct_prev
+
+    # Compute weekly columns
+    week_columns = []
+    for b in batch_weeks:
+        m = compute_pa_metrics(get_chw_qs(b), get_sync_qs(b))
+        ur = find_util_report(b)
+        up = get_dash_util(util_county, util_subcounty, ur)
+        if m:
+            m['dash_utilization'] = up
+        week_columns.append({'batch': b, 'metrics': m})
+
+    metrics_current = week_columns[-1]['metrics'] if week_columns else None
+
+    # Build rows
+    rows = []
+    for key, meta in PA_SCORECARD_TARGETS.items():
+        target = meta['target']
+        prev_cell = make_pa_cell(metrics_prev_month, key, target, meta['hib'])
+        week_cells = [make_pa_cell(wc['metrics'], key, target, meta['hib']) for wc in week_columns]
+
+        # % Monthly target achieved from most recent week
+        last_cell = week_cells[-1] if week_cells else {'pct_target': None}
+        pt = last_cell.get('pct_target')
+        if pt is not None:
+            pct_colour = 'green' if pt >= 90 else 'yellow' if pt >= 50 else 'red'
+        else:
+            pct_colour = 'grey'
+
+        rows.append({
+            'key':        key,
+            'label':      meta['label'],
+            'target':     f"{target}{meta['unit']}" if target is not None else 'TBD',
+            'prev_month': prev_cell,
+            'weeks':      week_cells,
+            'pct_target': pt,
+            'pct_colour': pct_colour,
+        })
+
+    # Filter options
+    filter_opts  = {}
+    filter_batch = batch_weeks[-1] if batch_weeks else batch_prev_month
+    if filter_batch:
+        fqs = CHWRecord.objects.filter(batch=filter_batch)
+        filter_opts['counties'] = fqs.values_list('county', flat=True).distinct().order_by('county')
+        if selected_counties:
+            filter_opts['sub_counties'] = fqs.filter(county__in=selected_counties).values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        if selected_subcounties:
+            filter_opts['chus'] = fqs.filter(sub_county__in=selected_subcounties).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+
+    return render(request, 'dashboard/pa_scorecard.html', {
+        'rows':               rows,
+        'batch_prev_month':   batch_prev_month,
+        'week_batches':       [wc['batch'] for wc in week_columns],
+        'all_batches':        all_batches,
+        'all_monthly':        all_monthly,
+        'util_reports':       util_reports,
+        'override_prev_month': override_prev_month,
+        'override_weeks':     override_weeks,
+        'filter_opts':        filter_opts,
+        'selected_counties':  selected_counties,
+        'selected_subcounties': selected_subcounties,
+        'selected_chus':      selected_chus,
+        'has_data':           bool(batch_weeks or batch_prev_month),
+        'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+    })
+
+
+@login_required
+def dash_util_upload_view(request):
+    """Upload Dashboard Utilization Report."""
+    from .models import DashUtilReport
+    from .dash_util_parser import parse_dash_util_report
+
+    reports = DashUtilReport.objects.all()
+    success = error = None
+
+    if request.method == 'POST':
+        f           = request.FILES.get('file')
+        period_type = request.POST.get('period_type', 'weekly')
+        period_label = request.POST.get('period_label', '')
+        year        = request.POST.get('year', '')
+        month       = request.POST.get('month', '') or None
+        week        = request.POST.get('week', '') or None
+        week_start  = request.POST.get('week_start_date', '') or None
+
+        if f and period_label and year:
+            from datetime import date as date_cls
+            report = DashUtilReport(
+                file=f, period_type=period_type, period_label=period_label,
+                year=int(year),
+                month=int(month) if month else None,
+                week=int(week) if week else None,
+                week_start_date=date_cls.fromisoformat(week_start) if week_start else None,
+                uploaded_by=request.user,
+            )
+            report.save()
+            rows, errors = parse_dash_util_report(report)
+            if errors:
+                error = f"Uploaded with warnings: {'; '.join(errors[:3])}"
+            else:
+                success = f"Dashboard Utilization Report uploaded — {rows} data points parsed."
+        else:
+            error = "Please fill all required fields."
+
+    return render(request, 'dashboard/dash_util_upload.html', {
+        'reports': reports, 'success': success, 'error': error,
+        'is_uploader': is_uploader(request.user),
+    })
+
+
+@login_required
+def dash_util_delete_view(request, pk):
+    from .models import DashUtilReport
+    if request.method == 'POST':
+        get_object_or_404(DashUtilReport, pk=pk).delete()
+    return redirect('dash_util_upload')

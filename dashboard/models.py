@@ -342,3 +342,48 @@ class KPIDataPoint(models.Model):
     def __str__(self):
         geo = f"{self.county}/{self.sub_county}" if self.sub_county else (self.county or 'Kenya')
         return f"{geo} – {self.metric_key} – {self.month}/{self.year}: {self.value}"
+
+
+# ===========================================================================
+# Dashboard Utilization Models
+# ===========================================================================
+
+class DashUtilReport(models.Model):
+    """Uploaded Dashboard Utilization Report (weekly or monthly)."""
+    PERIOD_CHOICES = [('weekly', 'Weekly'), ('monthly', 'Monthly')]
+    file         = models.FileField(upload_to='dash_util/')
+    period_type  = models.CharField(max_length=10, choices=PERIOD_CHOICES)
+    period_label = models.CharField(max_length=50, help_text='e.g. July 2026 or 2026-W34')
+    year         = models.IntegerField()
+    month        = models.IntegerField(null=True, blank=True)
+    week         = models.IntegerField(null=True, blank=True, help_text='ISO week number')
+    week_start_date = models.DateField(null=True, blank=True)
+    uploaded_by  = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    uploaded_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-year', '-month', '-week']
+
+    def __str__(self):
+        return f"Dash Util {self.period_label}"
+
+    @property
+    def label(self):
+        return self.period_label
+
+
+class DashUtilDataPoint(models.Model):
+    """One utilization % for a given county/sub-county from a report."""
+    report      = models.ForeignKey(DashUtilReport, on_delete=models.CASCADE, related_name='data_points')
+    county      = models.CharField(max_length=100, blank=True, db_index=True)
+    sub_county  = models.CharField(max_length=100, blank=True, db_index=True)
+    active_users = models.IntegerField(null=True, blank=True)
+    total_users  = models.IntegerField(null=True, blank=True)
+    utilization_pct = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['report', 'county', 'sub_county']
+
+    def __str__(self):
+        geo = f"{self.county}/{self.sub_county}" if self.sub_county else self.county
+        return f"{geo} – {self.utilization_pct}% [{self.report}]"

@@ -1,0 +1,106 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Upload Dashboard Utilization Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Upload Dashboard Utilization Report</h1>
+    <p class="page-subtitle">Upload the weekly or monthly Dashboard Utilization Excel file.</p>
+  </div>
+  <a href="{% url 'pa_scorecard' %}" class="btn btn-outline">← PA Scorecard</a>
+</div>
+
+{% if success %}<div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#166534;">✅ {{ success }}</div>{% endif %}
+{% if error %}<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#991B1B;">⚠️ {{ error }}</div>{% endif %}
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header"><h3 class="card-title">Upload New Report</h3></div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:14px;">
+      {% csrf_token %}
+      <div class="filter-group">
+        <label class="filter-label">Report File (.xlsx) <span style="color:var(--red)">*</span></label>
+        <input type="file" name="file" accept=".xlsx" required style="padding:6px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;">
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div class="filter-group" style="flex:1;min-width:140px;">
+          <label class="filter-label">Period Type <span style="color:var(--red)">*</span></label>
+          <select name="period_type" class="filter-select" required onchange="toggleWeekMonth(this.value)">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="filter-group" style="flex:1;min-width:140px;">
+          <label class="filter-label">Period Label <span style="color:var(--red)">*</span></label>
+          <input type="text" name="period_label" placeholder="e.g. Aug WK3 2026 or July 2026" class="filter-select" required>
+        </div>
+        <div class="filter-group" style="flex:1;min-width:100px;">
+          <label class="filter-label">Year <span style="color:var(--red)">*</span></label>
+          <input type="number" name="year" value="2026" min="2024" max="2030" class="filter-select" required>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;" id="monthly-fields">
+        <div class="filter-group" style="flex:1;">
+          <label class="filter-label">Month (monthly reports)</label>
+          <select name="month" class="filter-select">
+            <option value="">—</option>
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;" id="weekly-fields">
+        <div class="filter-group" style="flex:1;">
+          <label class="filter-label">Week Start Date (weekly reports)</label>
+          <input type="date" name="week_start_date" class="filter-select">
+        </div>
+        <div class="filter-group" style="flex:1;">
+          <label class="filter-label">ISO Week Number</label>
+          <input type="number" name="week" min="1" max="53" class="filter-select" placeholder="e.g. 34">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">⬆ Upload & Parse</button>
+    </form>
+  </div>
+</div>
+
+{% if reports %}
+<div class="section-label" style="margin-top:24px;">📁 Uploaded Reports</div>
+<div class="card">
+  <div class="card-body no-pad">
+    <table class="data-table">
+      <thead><tr><th>Report</th><th>Type</th><th>Uploaded</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td><strong>{{ r }}</strong></td>
+          <td>{{ r.get_period_type_display }}</td>
+          <td class="zero">{{ r.uploaded_at|date:"d M Y H:i" }}</td>
+          <td>
+            <form method="post" action="{% url 'dash_util_delete' r.pk %}" onsubmit="return confirm('Delete this report?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none;cursor:pointer;">🗑 Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleWeekMonth(val) {
+  document.getElementById('weekly-fields').style.display = val === 'weekly' ? 'flex' : 'none';
+  document.getElementById('monthly-fields').style.display = val === 'monthly' ? 'flex' : 'none';
+}
+toggleWeekMonth('weekly');
+</script>
+{% endblock %}
