@@ -38,9 +38,17 @@
     {% if user.is_authenticated %}
       <a href="{% url 'dashboard' %}" class="btn btn-ghost-sm">Gaps Dashboard</a>
       <a href="{% url 'gaps_compare' %}" class="btn btn-ghost-sm">Gaps Compare</a>
-      <a href="{% url 'scorecard' %}" class="btn btn-ghost-sm">Scorecard</a>
-      <a href="{% url 'pa_scorecard' %}" class="btn btn-ghost-sm">Performance Acceleration</a>
-      <a href="{% url 'moh_review' %}" class="btn btn-ghost-sm">MOH Review</a>
+      <div class="nav-dropdown" style="position:relative;display:inline-block;">
+        <button class="btn btn-ghost-sm nav-dropdown-btn" onclick="toggleNavDd(this)" style="cursor:pointer;">
+          📊 Scorecards ▾
+        </button>
+        <div class="nav-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;background:white;border:1.5px solid #E5E7EB;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;min-width:220px;padding:6px 0;">
+          <a href="{% url 'scorecard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">📅 Scorecard</a>
+          <a href="{% url 'pa_scorecard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">🚀 Performance Acceleration</a>
+          <a href="{% url 'moh_review' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">🏥 MOH Review</a>
+          <a href="{% url 'kpi_scorecard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">📊 KPI Trends</a>
+        </div>
+      </div>
       <a href="{% url 'sync_dashboard' %}" class="btn btn-ghost-sm">Sync Dashboard</a>
       <a href="{% url 'sync_compare' %}" class="btn btn-ghost-sm">Sync Compare</a>
       {% if is_uploader %}
@@ -100,6 +108,19 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.warn('SW registration failed:', err));
   });
 }
+</script>
+<script>
+function toggleNavDd(btn) {
+  const menu = btn.nextElementSibling;
+  const isOpen = menu.style.display === 'block';
+  document.querySelectorAll('.nav-dropdown-menu').forEach(m => m.style.display = 'none');
+  menu.style.display = isOpen ? 'none' : 'block';
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.nav-dropdown')) {
+    document.querySelectorAll('.nav-dropdown-menu').forEach(m => m.style.display = 'none');
+  }
+});
 </script>
 </body>
 </html>
