@@ -3205,13 +3205,46 @@ def dash_util_delete_view(request, pk):
     return redirect('dash_util_upload')
 
 
+
 @login_required
 def pa_scorecard_pptx(request):
-    """Generate and download PA scorecard as PPTX."""
-    import json, subprocess, os, tempfile
-    from django.http import FileResponse, HttpResponse
+    """Generate and download PA scorecard as PPTX using python-pptx."""
+    import io, re
+    from django.http import HttpResponse
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
 
-    # Reuse exact same logic as pa_scorecard_view to get rows
+    def rgb(h):
+        return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
+
+    NAVY='1B3A6B'; WHITE='FFFFFF'
+    GREEN='DCFCE7'; GREEN_T='166534'
+    YELLOW='FEF9C3'; YELLOW_T='854D0E'
+    RED='FEE2E2'; RED_T='991B1B'
+    GREY='F8FAFC'; GREY_T='6B7280'
+    GREY_H='EEF2F8'; GREY_TGT='F1F5F9'
+    PCT_GRN='BBF7D0'; PCT_GRN_T='14532D'
+    PCT_YLW='FEF08A'; PCT_YLW_T='713F12'
+    PCT_RED='FECACA'; PCT_RED_T='7F1D1D'
+
+    def cell_bg_txt(colour):
+        return {'green':(GREEN,GREEN_T),'yellow':(YELLOW,YELLOW_T),'red':(RED,RED_T)}.get(colour,(GREY,GREY_T))
+
+    def pct_bg_txt(colour):
+        return {'green':(PCT_GRN,PCT_GRN_T),'yellow':(PCT_YLW,PCT_YLW_T),'red':(PCT_RED,PCT_RED_T)}.get(colour,(GREY,GREY_T))
+
+    def shorten(label):
+        if not label: return ''
+        label = str(label)
+        if 'Monthly' in label or 'monthly' in label:
+            m = re.search(r'([A-Za-z]+)\s+\d{4}', label)
+            return m.group(1) if m else label[:8]
+        m = re.search(r'(\d+)\s+([A-Za-z]+)\s+\d{4}', label)
+        return (m.group(2)[:3] + ' WK') if m else label[:10]
+
+    # Recompute rows
     selected_counties    = request.GET.getlist('county')
     selected_subcounties = request.GET.getlist('sub_county')
     selected_chus        = request.GET.getlist('chu')
@@ -3221,18 +3254,15 @@ def pa_scorecard_pptx(request):
     from .models import DashUtilReport
     auto = auto_detect_batches()
     batch_prev_month = UploadBatch.objects.filter(pk=override_prev_month).first() if override_prev_month else auto['prev_month']
-    if override_weeks:
-        batch_weeks = [UploadBatch.objects.filter(pk=wid).first() for wid in override_weeks if wid]
-        batch_weeks = [b for b in batch_weeks if b]
-    else:
-        batch_weeks = auto['weeks']
+    batch_weeks = [UploadBatch.objects.filter(pk=wid).first() for wid in override_weeks if wid] if override_weeks else auto['weeks']
+    batch_weeks = [b for b in batch_weeks if b]
 
-    util_reports = list(DashUtilReport.objects.all().order_by('-year', '-month', '-week'))
+    util_reports   = list(DashUtilReport.objects.all().order_by('-year','-month','-week'))
     util_county    = selected_counties[0]    if len(selected_counties) == 1    else ''
     util_subcounty = selected_subcounties[0] if len(selected_subcounties) == 1 else ''
 
     def get_chw_qs(batch):
-        if batch is None: return None
+        if not batch: return None
         qs = CHWRecord.objects.filter(batch=batch)
         if selected_counties:    qs = qs.filter(county__in=selected_counties)
         if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
@@ -3251,82 +3281,115 @@ def pa_scorecard_pptx(request):
         if not util_reports or not batch: return None
         if batch.period_type == 'monthly':
             for r in util_reports:
-                if r.period_type == 'monthly' and r.year == batch.year and r.month == batch.month:
-                    return r
-        else:
-            if batch.week_start_date:
-                for r in util_reports:
-                    if r.period_type == 'weekly' and r.week_start_date and abs((r.week_start_date - batch.week_start_date).days) <= 7:
-                        return r
+                if r.period_type == 'monthly' and r.year == batch.year and r.month == batch.month: return r
+        elif batch.week_start_date:
+            for r in util_reports:
+                if r.period_type == 'weekly' and r.week_start_date and abs((r.week_start_date - batch.week_start_date).days) <= 7: return r
         return util_reports[0] if util_reports else None
 
     metrics_pm = compute_pa_metrics(get_chw_qs(batch_prev_month), get_sync_qs(batch_prev_month)) if batch_prev_month else None
-    if metrics_pm:
-        metrics_pm['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(batch_prev_month))
+    if metrics_pm: metrics_pm['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(batch_prev_month))
 
     week_cols = []
     for b in batch_weeks:
         m = compute_pa_metrics(get_chw_qs(b), get_sync_qs(b))
-        if m:
-            m['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(b))
+        if m: m['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(b))
         week_cols.append({'batch': b, 'metrics': m})
 
-    metrics_current = week_cols[-1]['metrics'] if week_cols else None
-
-    rows_data = []
+    rows = []
     for key, meta in PA_SCORECARD_TARGETS.items():
         target = meta['target']
-        pm_cell = make_pa_cell(metrics_pm, key, target, meta['hib'])
+        pm_cell  = make_pa_cell(metrics_pm, key, target, meta['hib'])
         wk_cells = [make_pa_cell(wc['metrics'], key, target, meta['hib']) for wc in week_cols]
-        last = wk_cells[-1] if wk_cells else {'pct_target': None}
+        last = wk_cells[-1] if wk_cells else {}
         pt = last.get('pct_target')
         pc = 'green' if pt and pt >= 90 else 'yellow' if pt and pt >= 50 else 'red' if pt else 'grey'
+        rows.append({'key':key,'label':meta['label'],'target':f"{target}{meta['unit']}" if target is not None else 'TBD',
+                     'prev_month':pm_cell,'weeks':wk_cells,'pct_target':pt,'pct_colour':pc})
 
-        rows_data.append({
-            'key':        key,
-            'label':      meta['label'],
-            'target':     f"{target}{meta['unit']}" if target is not None else 'TBD',
-            'prev_month': {
-                'display': pm_cell.get('display', '—'),
-                'colour':  pm_cell.get('colour', 'grey'),
-                'lines':   pm_cell.get('lines', []),
-            },
-            'weeks': [{
-                'display': c.get('display', '—'),
-                'colour':  c.get('colour', 'grey'),
-                'lines':   c.get('lines', []),
-            } for c in wk_cells],
-            'pct_target': pt,
-            'pct_colour': pc,
-        })
+    # Build PPTX
+    prs = Presentation()
+    prs.slide_width  = Inches(13.3)
+    prs.slide_height = Inches(7.5)
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
 
-    # Build title
+    MARGIN = Inches(0.12)
+    W_TOTAL = prs.slide_width  - MARGIN * 2
+    H_TOTAL = prs.slide_height - MARGIN * 2
+    N_WEEKS = len(week_cols)
+
+    W_IND  = Inches(1.5);  W_TGT = Inches(0.82);  W_PCT = Inches(0.92)
+    W_DATA = int((W_TOTAL - W_IND - W_TGT - W_PCT) / (1 + N_WEEKS))
+    col_ws = [W_IND, W_TGT] + [W_DATA] * (1 + N_WEEKS) + [W_PCT]
+
+    H_HDR   = Inches(0.42)
+    H_AVAIL = H_TOTAL - H_HDR
+    child_idx = next((i for i,r in enumerate(rows) if r['key']=='child_health'), -1)
+    n_norm    = len(rows) - (1 if child_idx>=0 else 0)
+    H_NORM    = int(H_AVAIL / (n_norm + 2.2))
+    row_hs    = [int(H_NORM*2.2) if r['key']=='child_health' else H_NORM for r in rows]
+
+    xs = [MARGIN]
+    for w in col_ws[:-1]: xs.append(xs[-1]+w)
+    ys = [MARGIN+H_HDR]
+    for h in row_hs[:-1]: ys.append(ys[-1]+h)
+
+    def add_cell(x, y, w, h, text, bg, txt_color, bold=True,
+                 font_size=8, align=PP_ALIGN.CENTER, lines=None):
+        shape = slide.shapes.add_shape(1, x, y, w, h)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = rgb(bg)
+        shape.line.color.rgb = rgb(WHITE)
+        shape.line.width = Pt(1.2)
+        tf = shape.text_frame
+        tf.word_wrap = True
+        if lines:
+            for i, line in enumerate(lines):
+                p = tf.paragraphs[i] if i==0 else tf.add_paragraph()
+                p.alignment = PP_ALIGN.LEFT
+                run = p.add_run()
+                run.text = line; run.font.size=Pt(font_size-0.5)
+                run.font.color.rgb=rgb(txt_color); run.font.bold=(i==0); run.font.name='Calibri'
+        else:
+            p = tf.paragraphs[0]; p.alignment = align
+            run = p.add_run()
+            run.text = str(text) if text else ''
+            run.font.size=Pt(font_size); run.font.color.rgb=rgb(txt_color)
+            run.font.bold=bold; run.font.name='Calibri'
+
+    # Header
     geo_parts = selected_subcounties or selected_counties or ['Kenya']
-    title = ' / '.join(geo_parts) + '\nIndicator'
+    h_texts = ['/'.join(geo_parts)+'\nIndicator','Monthly\nTarget',
+               shorten(batch_prev_month.label if batch_prev_month else 'Prev Month')]
+    h_texts += [shorten(wc['batch'].label) for wc in week_cols]
+    h_texts += ['% of Monthly\nTarget Achieved']
+    for ci,(hx,hw,ht) in enumerate(zip(xs,col_ws,h_texts)):
+        add_cell(hx,MARGIN,hw,H_HDR,ht,NAVY,WHITE,bold=True,font_size=8,
+                 align=PP_ALIGN.LEFT if ci==0 else PP_ALIGN.CENTER)
 
-    payload = json.dumps({
-        'title':            title,
-        'rows':             rows_data,
-        'prev_month_label': batch_prev_month.label if batch_prev_month else 'Previous Month',
-        'week_labels':      [wc['batch'].label for wc in week_cols],
-    })
+    # Data rows
+    for ri,(row,ry,rh) in enumerate(zip(rows,ys,row_hs)):
+        is_child = row['key']=='child_health'
+        add_cell(xs[0],ry,col_ws[0],rh,row['label'],GREY_H,NAVY,bold=True,font_size=7.5,align=PP_ALIGN.LEFT)
+        add_cell(xs[1],ry,col_ws[1],rh,row['target'],GREY_TGT,'374151',bold=True,font_size=7.5)
+        all_cells = [row['prev_month']] + row['weeks']
+        for ci,cell in enumerate(all_cells):
+            col_i = ci+2
+            bg,txt = cell_bg_txt(cell.get('colour','grey'))
+            lines  = cell.get('lines') if is_child and cell.get('lines') else None
+            disp   = '' if is_child else cell.get('display','')
+            add_cell(xs[col_i],ry,col_ws[col_i],rh,disp,bg,txt,bold=True,
+                     font_size=6.5 if is_child else 7.5,align=PP_ALIGN.CENTER,lines=lines)
+        bg,txt = pct_bg_txt(row['pct_colour'])
+        pct_ci = len(col_ws)-1
+        add_cell(xs[pct_ci],ry,col_ws[pct_ci],rh,
+                 f"{row['pct_target']}%" if row['pct_target'] else '',
+                 bg,txt,bold=True,font_size=8)
 
-    # Run Node.js script
-    script_path = os.path.join(os.path.dirname(__file__), 'pa_pptx.js')
-    try:
-        result = subprocess.run(
-            ['node', script_path],
-            input=payload, capture_output=True, text=True, timeout=30
-        )
-        if result.returncode != 0 or result.stdout.strip() != 'OK':
-            return HttpResponse(f"PPTX generation failed: {result.stderr}", status=500)
-    except Exception as e:
-        return HttpResponse(f"PPTX generation error: {e}", status=500)
-
-    filename = f"PA_Scorecard_{'_'.join(geo_parts)}.pptx".replace(' ', '_')
-    response = FileResponse(
-        open('/tmp/pa_scorecard.pptx', 'rb'),
-        content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation'
-    )
+    buf = io.BytesIO()
+    prs.save(buf); buf.seek(0)
+    filename = f"PA_Scorecard_{'_'.join(geo_parts)}.pptx".replace(' ','_')
+    response = HttpResponse(buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
