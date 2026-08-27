@@ -32,6 +32,7 @@
   {% if is_uploader %}
   <a href="{% url 'dash_util_upload' %}" class="btn btn-sm btn-outline">⬆ Upload Dashboard Util</a>
   {% endif %}
+  <a href="{% url 'pa_scorecard_pptx' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-primary">⬇ Download PPTX</a>
 </div>
 
 <!-- FILTERS -->

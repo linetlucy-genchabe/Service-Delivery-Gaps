@@ -30,6 +30,7 @@ urlpatterns = [
     # Sync dashboard
     path('moh-review/',            views.moh_review_view,        name='moh_review'),
     path('pa-scorecard/',          views.pa_scorecard_view,      name='pa_scorecard'),
+    path('pa-scorecard/download/', views.pa_scorecard_pptx,      name='pa_scorecard_pptx'),
     path('dash-util/upload/',      views.dash_util_upload_view,  name='dash_util_upload'),
     path('dash-util/delete/<int:pk>/', views.dash_util_delete_view, name='dash_util_delete'),
     path('gaps-compare/',          views.gaps_compare_view,     name='gaps_compare'),

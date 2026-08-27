@@ -3203,3 +3203,130 @@ def dash_util_delete_view(request, pk):
     if request.method == 'POST':
         get_object_or_404(DashUtilReport, pk=pk).delete()
     return redirect('dash_util_upload')
+
+
+@login_required
+def pa_scorecard_pptx(request):
+    """Generate and download PA scorecard as PPTX."""
+    import json, subprocess, os, tempfile
+    from django.http import FileResponse, HttpResponse
+
+    # Reuse exact same logic as pa_scorecard_view to get rows
+    selected_counties    = request.GET.getlist('county')
+    selected_subcounties = request.GET.getlist('sub_county')
+    selected_chus        = request.GET.getlist('chu')
+    override_prev_month  = request.GET.get('batch_prev_month', '')
+    override_weeks       = request.GET.getlist('batch_week')
+
+    from .models import DashUtilReport
+    auto = auto_detect_batches()
+    batch_prev_month = UploadBatch.objects.filter(pk=override_prev_month).first() if override_prev_month else auto['prev_month']
+    if override_weeks:
+        batch_weeks = [UploadBatch.objects.filter(pk=wid).first() for wid in override_weeks if wid]
+        batch_weeks = [b for b in batch_weeks if b]
+    else:
+        batch_weeks = auto['weeks']
+
+    util_reports = list(DashUtilReport.objects.all().order_by('-year', '-month', '-week'))
+    util_county    = selected_counties[0]    if len(selected_counties) == 1    else ''
+    util_subcounty = selected_subcounties[0] if len(selected_subcounties) == 1 else ''
+
+    def get_chw_qs(batch):
+        if batch is None: return None
+        qs = CHWRecord.objects.filter(batch=batch)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        if selected_chus:        qs = qs.filter(community_health_unit__in=selected_chus)
+        return qs
+
+    def get_sync_qs(b):
+        sb = find_matching_sync_batch(b)
+        if not sb: return None
+        qs = CHPSyncRecord.objects.filter(batch=sb)
+        if selected_counties:    qs = qs.filter(county__in=selected_counties)
+        if selected_subcounties: qs = qs.filter(sub_county__in=selected_subcounties)
+        return qs
+
+    def find_util(batch):
+        if not util_reports or not batch: return None
+        if batch.period_type == 'monthly':
+            for r in util_reports:
+                if r.period_type == 'monthly' and r.year == batch.year and r.month == batch.month:
+                    return r
+        else:
+            if batch.week_start_date:
+                for r in util_reports:
+                    if r.period_type == 'weekly' and r.week_start_date and abs((r.week_start_date - batch.week_start_date).days) <= 7:
+                        return r
+        return util_reports[0] if util_reports else None
+
+    metrics_pm = compute_pa_metrics(get_chw_qs(batch_prev_month), get_sync_qs(batch_prev_month)) if batch_prev_month else None
+    if metrics_pm:
+        metrics_pm['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(batch_prev_month))
+
+    week_cols = []
+    for b in batch_weeks:
+        m = compute_pa_metrics(get_chw_qs(b), get_sync_qs(b))
+        if m:
+            m['dash_utilization'] = get_dash_util(util_county, util_subcounty, find_util(b))
+        week_cols.append({'batch': b, 'metrics': m})
+
+    metrics_current = week_cols[-1]['metrics'] if week_cols else None
+
+    rows_data = []
+    for key, meta in PA_SCORECARD_TARGETS.items():
+        target = meta['target']
+        pm_cell = make_pa_cell(metrics_pm, key, target, meta['hib'])
+        wk_cells = [make_pa_cell(wc['metrics'], key, target, meta['hib']) for wc in week_cols]
+        last = wk_cells[-1] if wk_cells else {'pct_target': None}
+        pt = last.get('pct_target')
+        pc = 'green' if pt and pt >= 90 else 'yellow' if pt and pt >= 50 else 'red' if pt else 'grey'
+
+        rows_data.append({
+            'key':        key,
+            'label':      meta['label'],
+            'target':     f"{target}{meta['unit']}" if target is not None else 'TBD',
+            'prev_month': {
+                'display': pm_cell.get('display', '—'),
+                'colour':  pm_cell.get('colour', 'grey'),
+                'lines':   pm_cell.get('lines', []),
+            },
+            'weeks': [{
+                'display': c.get('display', '—'),
+                'colour':  c.get('colour', 'grey'),
+                'lines':   c.get('lines', []),
+            } for c in wk_cells],
+            'pct_target': pt,
+            'pct_colour': pc,
+        })
+
+    # Build title
+    geo_parts = selected_subcounties or selected_counties or ['Kenya']
+    title = ' / '.join(geo_parts) + '\nIndicator'
+
+    payload = json.dumps({
+        'title':            title,
+        'rows':             rows_data,
+        'prev_month_label': batch_prev_month.label if batch_prev_month else 'Previous Month',
+        'week_labels':      [wc['batch'].label for wc in week_cols],
+    })
+
+    # Run Node.js script
+    script_path = os.path.join(os.path.dirname(__file__), 'pa_pptx.js')
+    try:
+        result = subprocess.run(
+            ['node', script_path],
+            input=payload, capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0 or result.stdout.strip() != 'OK':
+            return HttpResponse(f"PPTX generation failed: {result.stderr}", status=500)
+    except Exception as e:
+        return HttpResponse(f"PPTX generation error: {e}", status=500)
+
+    filename = f"PA_Scorecard_{'_'.join(geo_parts)}.pptx".replace(' ', '_')
+    response = FileResponse(
+        open('/tmp/pa_scorecard.pptx', 'rb'),
+        content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
