@@ -61,7 +61,19 @@ def _str(val):
 
 def parse_chw_file(batch, file_obj):
     try:
-        df = pd.read_excel(file_obj, engine='openpyxl')
+        # Read all sheets — handle both single-sheet and multi-sheet files
+        xl = pd.read_excel(file_obj, engine='openpyxl', sheet_name=None)
+        if len(xl) == 1:
+            df = list(xl.values())[0]
+        else:
+            # Combine all sheets — filter to sheets that have the required columns
+            frames = []
+            for sheet_name, sheet_df in xl.items():
+                if 'County' in sheet_df.columns and 'CHW Name' in sheet_df.columns:
+                    frames.append(sheet_df)
+            if not frames:
+                return 0, ["No valid sheets found with required columns"]
+            df = pd.concat(frames, ignore_index=True)
     except Exception as e:
         return 0, [f"Could not read CHW file: {e}"]
 
@@ -123,8 +135,8 @@ def parse_chw_file(batch, file_obj):
                 fever_tested_rdt=_int(row.get('Fever Tested (RDT)', 0)),
                 iccm_referrals_total=_int(row.get('iCCM Referrals Total') or row.get('Referrals Total (iCCM)', 0)),
                 iccm_referral_followup=_int(row.get('iCCM Referral Follow-up Completed') or row.get('Referral Follow-up Completed', 0)),
-                iccm_referrals_u2mo=_int(row.get('iCCM Referrals U2mo', 0)),
-                iccm_completed_referrals_u2mo=_int(row.get('iCCM Completed Referrals U2mo', 0)),
+                iccm_referrals_u2mo=_int(row.get('iCCM Referrals U2mo', row.get('Referrals U2mo', 0))),
+                iccm_completed_referrals_u2mo=_int(row.get('iCCM Completed Referrals U2mo', row.get('Completed Referrals U2mo', 0))),
                 u1_positive_diagnoses=_int(row.get('U1 Positive Diagnoses', 0)),
                 u1_treated_visits=_int(row.get('U1 Treated Visits', 0)),
                 u1_sick_assessments=_int(row.get('U1 Sick Assessments', 0)),
@@ -178,7 +190,17 @@ def parse_chw_file(batch, file_obj):
 
 def parse_supervision_file(batch, file_obj):
     try:
-        df = pd.read_excel(file_obj, engine='openpyxl')
+        xl = pd.read_excel(file_obj, engine='openpyxl', sheet_name=None)
+        if len(xl) == 1:
+            df = list(xl.values())[0]
+        else:
+            frames = []
+            for sheet_name, sheet_df in xl.items():
+                if 'County' in sheet_df.columns and 'CHV Name' in sheet_df.columns:
+                    frames.append(sheet_df)
+            if not frames:
+                return 0, ["No valid sheets found with required columns"]
+            df = pd.concat(frames, ignore_index=True)
     except Exception as e:
         return 0, [f"Could not read Supervision file: {e}"]
 
@@ -424,7 +446,17 @@ def parse_sync_file(batch, file_obj):
     """
     from .models import CHPSyncRecord
     try:
-        df = pd.read_excel(file_obj, engine='openpyxl')
+        xl = pd.read_excel(file_obj, engine='openpyxl', sheet_name=None)
+        if len(xl) == 1:
+            df = list(xl.values())[0]
+        else:
+            frames = []
+            for sheet_name, sheet_df in xl.items():
+                if 'County' in sheet_df.columns and 'CHP Name' in sheet_df.columns:
+                    frames.append(sheet_df)
+            if not frames:
+                return 0, ["No valid sheets found with required columns"]
+            df = pd.concat(frames, ignore_index=True)
     except Exception as e:
         return 0, [f"Could not read Sync file: {e}"]
 
