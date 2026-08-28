@@ -3237,14 +3237,14 @@ def pa_scorecard_pptx(request):
         return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
 
     NAVY='1B3A6B'; WHITE='FFFFFF'
-    GREEN='007A3D'; GREEN_T='FFFFFF'
-    YELLOW='FFE066'; YELLOW_T='000000'
-    RED='CC0000'; RED_T='FFFFFF'
+    GREEN='00B050'; GREEN_T='FFFFFF'
+    YELLOW='FFFF00'; YELLOW_T='000000'
+    RED='FF0000'; RED_T='FFFFFF'
     GREY='D3D3D3'; GREY_T='000000'
     GREY_H='D3D3D3'; GREY_TGT='D3D3D3'
-    PCT_GRN='007A3D'; PCT_GRN_T='FFFFFF'
-    PCT_YLW='FFE066'; PCT_YLW_T='000000'
-    PCT_RED='CC0000'; PCT_RED_T='FFFFFF'
+    PCT_GRN='00B050'; PCT_GRN_T='FFFFFF'
+    PCT_YLW='FFFF00'; PCT_YLW_T='000000'
+    PCT_RED='FF0000'; PCT_RED_T='FFFFFF'
 
     def cell_bg_txt(colour):
         return {'green':(GREEN,GREEN_T),'yellow':(YELLOW,YELLOW_T),'red':(RED,RED_T)}.get(colour,(GREY,GREY_T))
