@@ -3237,14 +3237,14 @@ def pa_scorecard_pptx(request):
         return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
 
     NAVY='1B3A6B'; WHITE='FFFFFF'
-    GREEN='00A650'; GREEN_T='FFFFFF'
-    YELLOW='FFD700'; YELLOW_T='000000'
-    RED='FF0000'; RED_T='FFFFFF'
-    GREY='D3D3D3'; GREY_T='000000'   # no-data cells
-    GREY_H='D3D3D3'; GREY_TGT='D3D3D3'  # indicator + target columns
-    PCT_GRN='00A650'; PCT_GRN_T='FFFFFF'
-    PCT_YLW='FFD700'; PCT_YLW_T='000000'
-    PCT_RED='FF0000'; PCT_RED_T='FFFFFF'
+    GREEN='007A3D'; GREEN_T='FFFFFF'
+    YELLOW='FFE066'; YELLOW_T='000000'
+    RED='CC0000'; RED_T='FFFFFF'
+    GREY='D3D3D3'; GREY_T='000000'
+    GREY_H='D3D3D3'; GREY_TGT='D3D3D3'
+    PCT_GRN='007A3D'; PCT_GRN_T='FFFFFF'
+    PCT_YLW='FFE066'; PCT_YLW_T='000000'
+    PCT_RED='CC0000'; PCT_RED_T='FFFFFF'
 
     def cell_bg_txt(colour):
         return {'green':(GREEN,GREEN_T),'yellow':(YELLOW,YELLOW_T),'red':(RED,RED_T)}.get(colour,(GREY,GREY_T))
@@ -3314,6 +3314,7 @@ def pa_scorecard_pptx(request):
         week_cols.append({'batch': b, 'metrics': m})
 
     rows = []
+    ref_metrics = (week_cols[-1]['metrics'] if week_cols else None) or metrics_pm or {}
     for key, meta in PA_SCORECARD_TARGETS.items():
         target = meta['target']
         pm_cell  = make_pa_cell(metrics_pm, key, target, meta['hib'])
@@ -3321,7 +3322,27 @@ def pa_scorecard_pptx(request):
         last = wk_cells[-1] if wk_cells else {}
         pt = last.get('pct_target')
         pc = 'green' if pt and pt >= 90 else 'yellow' if pt and pt >= 50 else 'red' if pt else 'grey'
-        rows.append({'key':key,'label':meta['label'],'target':f"{target}{meta['unit']}" if target is not None else 'TBD',
+
+        # Dynamic target display matching web view
+        if key == 'cumulative_active_chps':
+            total = ref_metrics.get('total_chps', 0) or 0
+            target_display = str(total) if total else 'TBD'
+        elif key == 'weekly_sync_rate':
+            total = ref_metrics.get('total_chps', 0) or 0
+            target_display = str(total) if total else 'TBD'
+        elif key == 'hh_coverage':
+            reg_hhs = ref_metrics.get('reg_hhs', 0) or 0
+            target_display = f"85% ({reg_hhs:,})" if reg_hhs else '85%'
+        elif key == 'child_health':
+            ru5 = ref_metrics.get('reg_u5', 0) or 0
+            target_display = f"U5 Assessed – {ru5:,}\nPD – 10\nMAM/SAM" if ru5 else 'TBD'
+        elif key == 'wra_assessed':
+            reg_hhs = ref_metrics.get('reg_hhs', 0) or 0
+            target_display = f"90% ({reg_hhs:,})" if reg_hhs else '90%'
+        else:
+            target_display = f"{target}{meta['unit']}" if target is not None else 'TBD'
+
+        rows.append({'key':key,'label':meta['label'],'target':target_display,
                      'prev_month':pm_cell,'weeks':wk_cells,'pct_target':pt,'pct_colour':pc})
 
     # Build PPTX
