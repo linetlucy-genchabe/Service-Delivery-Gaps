@@ -61,16 +61,22 @@ def _str(val):
 
 def parse_chw_file(batch, file_obj):
     try:
-        # Read all sheets — handle both single-sheet and multi-sheet files
         xl = pd.read_excel(file_obj, engine='openpyxl', sheet_name=None)
-        if len(xl) == 1:
+        sheet_names = list(xl.keys())
+
+        # If there's an 'All Counties' or similar combined sheet, use it alone
+        combined_sheet = None
+        for name in sheet_names:
+            if name.lower().replace(' ', '') in ('allcounties', 'all_counties', 'combined', 'all'):
+                combined_sheet = name
+                break
+
+        if combined_sheet:
+            df = xl[combined_sheet]
+        elif len(xl) == 1:
             df = list(xl.values())[0]
         else:
-            # Combine all sheets — filter to sheets that have the required columns
-            frames = []
-            for sheet_name, sheet_df in xl.items():
-                if 'County' in sheet_df.columns and 'CHW Name' in sheet_df.columns:
-                    frames.append(sheet_df)
+            frames = [s for s in xl.values() if 'County' in s.columns and 'CHW Name' in s.columns]
             if not frames:
                 return 0, ["No valid sheets found with required columns"]
             df = pd.concat(frames, ignore_index=True)
