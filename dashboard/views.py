@@ -3393,3 +3393,65 @@ def pa_scorecard_pptx(request):
         content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@login_required
+def admin_reprocess_view(request):
+    """Temporary admin endpoint to reprocess all batches on Railway."""
+    if not request.user.is_staff:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Staff only.")
+
+    from .parsers import parse_chw_file, parse_supervision_file
+    from django.utils.timezone import now
+
+    results = []
+    batches = UploadBatch.objects.all().order_by('year', 'month', 'week_start_date')
+
+    for batch in batches:
+        batch_results = {'label': batch.label, 'chw': None, 'sup': None, 'errors': []}
+
+        # Reprocess CHW file
+        if batch.chw_file:
+            try:
+                CHWRecord.objects.filter(batch=batch).delete()
+                batch.chw_file.seek(0)
+                rows, errors = parse_chw_file(batch, batch.chw_file)
+                batch_results['chw'] = f"{rows} rows"
+                if errors:
+                    batch_results['errors'] += errors[:3]
+            except Exception as e:
+                batch_results['errors'].append(f"CHW error: {e}")
+
+        # Reprocess supervision file
+        if batch.supervision_file:
+            try:
+                from .models import SupervisionRecord
+                SupervisionRecord.objects.filter(batch=batch).delete()
+                batch.supervision_file.seek(0)
+                rows, errors = parse_supervision_file(batch, batch.supervision_file)
+                batch_results['sup'] = f"{rows} rows"
+                if errors:
+                    batch_results['errors'] += errors[:3]
+            except Exception as e:
+                batch_results['errors'].append(f"Supervision error: {e}")
+
+        # Recompute indicators
+        try:
+            from .parsers import compute_indicators
+            compute_indicators(batch)
+        except Exception as e:
+            batch_results['errors'].append(f"Indicators error: {e}")
+
+        results.append(batch_results)
+
+    # Render simple HTML result
+    html = '<html><body style="font-family:monospace;padding:20px;">'
+    html += f'<h2>Reprocess Results — {now().strftime("%Y-%m-%d %H:%M:%S")}</h2>'
+    html += f'<p>Processed {len(results)} batches</p><table border="1" cellpadding="6">'
+    html += '<tr><th>Batch</th><th>CHW Rows</th><th>Supervision Rows</th><th>Errors</th></tr>'
+    for r in results:
+        err_str = '<br>'.join(r['errors']) if r['errors'] else '✅ OK'
+        html += f"<tr><td>{r['label']}</td><td>{r['chw'] or '—'}</td><td>{r['sup'] or '—'}</td><td>{err_str}</td></tr>"
+    html += '</table><br><a href="/">← Back to Dashboard</a></body></html>'
+    return HttpResponse(html)

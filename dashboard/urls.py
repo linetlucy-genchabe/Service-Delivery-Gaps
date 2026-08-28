@@ -28,6 +28,7 @@ urlpatterns = [
     path('download/zero-positive/',    views.download_zero_positive,     name='download_zero_positive'),
     path('download/supervised-3plus/', views.download_supervised_3plus, name='download_supervised_3plus'),
     # Sync dashboard
+    path('admin-reprocess/',       views.admin_reprocess_view,   name='admin_reprocess'),
     path('moh-review/',            views.moh_review_view,        name='moh_review'),
     path('pa-scorecard/',          views.pa_scorecard_view,      name='pa_scorecard'),
     path('pa-scorecard/download/', views.pa_scorecard_pptx,      name='pa_scorecard_pptx'),
