@@ -2783,6 +2783,8 @@ def compute_pa_metrics(chw_qs, sync_qs=None):
         reg_u5       = Sum('registered_children_u5'),
         pos_diag     = Sum('positive_diagnoses_u5'),
         mam_sam      = Sum('mam_sam_total'),
+        mam_sam_ref  = Sum('mam_sam_referred'),
+        mam_sam_comp = Sum('mam_sam_referral_completed'),
         iccm_ref     = Sum('iccm_referrals_total'),
         iccm_comp    = Sum('iccm_referral_followup'),
         u2_ref       = Sum('iccm_referrals_u2mo'),
@@ -2832,6 +2834,8 @@ def compute_pa_metrics(chw_qs, sync_qs=None):
         'pos_diag':               agg['pos_diag'] or 0,
         'pos_diag_per_chp':       round(agg['pos_diag'] / total_active, 2) if agg['pos_diag'] and total_active else None,
         'mam_sam':                agg['mam_sam'] or 0,
+        'mam_sam_referred':       agg['mam_sam_ref'] or 0,
+        'mam_sam_completed':      agg['mam_sam_comp'] or 0,
         # iCCM
         'iccm_ref_total':         agg['iccm_ref'] or 0,
         'iccm_ref_comp':          agg['iccm_comp'] or 0,
