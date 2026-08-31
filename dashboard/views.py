@@ -2449,6 +2449,7 @@ def compute_moh_metrics(chw_qs):
         iz_followup=Sum('iz_defaulters_followed'),
         mam_sam=Sum('mam_sam_total'),
         mam_sam_ref=Sum('mam_sam_referred'),
+        mam_sam_comp=Sum('mam_sam_referral_completed'),
         pnc_48=Sum('pnc_48hr_ontime'),
         pnc_37=Sum('pnc_3_7d_ontime'),
         deliveries=Sum('total_deliveries'),
@@ -2485,6 +2486,8 @@ def compute_moh_metrics(chw_qs):
         'iz_followup_pct':      pct(agg['iz_followup'], agg['iz_def']),
         # Nutrition
         'mam_sam_total':        agg['mam_sam'],
+        'mam_sam_referred':     agg['mam_sam_ref'] or 0,
+        'mam_sam_completed':    agg['mam_sam_comp'] or 0,
         'mam_sam_referred_pct': pct(agg['mam_sam_ref'], agg['mam_sam']),
         # PNC
         'pnc_48hr_pct':         pct(agg['pnc_48'], agg['deliveries']),
@@ -2929,11 +2932,14 @@ def make_pa_cell(metrics, key, target, hib=True, util_pct=None):
         ru5  = m.get('reg_u5', 0)
         pd_  = m.get('pos_diag', 0)
         pdpc = m.get('pos_diag_per_chp')
-        mam  = m.get('mam_sam', 0)
+        mam_comp = m.get('mam_sam_completed', 0)
+        mam_ref  = m.get('mam_sam_referred', 0)
+        mam_pct  = round(mam_comp / mam_ref * 100, 1) if mam_ref else None
+        mam_disp = f"MAM/SAM – {mam_comp:,}/{mam_ref:,} ({mam_pct}%)" if mam_pct is not None else f"MAM/SAM – {mam_ref:,}"
         lines = [
             f"U5 Assessed – {au5:,}/{ru5:,} ({u5p}%)" if u5p else "U5 Assessed – —",
             f"PD – {pdpc}" if pdpc else "PD – —",
-            f"MAM/SAM – {mam:,}",
+            mam_disp,
         ]
         return {'display': '\n'.join(lines), 'lines': lines,
                 'colour': colour(u5p, 100), 'pct_target': pct_target(u5p, 100)}
