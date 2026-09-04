@@ -453,7 +453,18 @@ def parse_sync_file(batch, file_obj):
     from .models import CHPSyncRecord
     try:
         xl = pd.read_excel(file_obj, engine='openpyxl', sheet_name=None)
-        if len(xl) == 1:
+        sheet_names = list(xl.keys())
+
+        # Use combined sheet if available to avoid duplicates
+        combined_sheet = None
+        for name in sheet_names:
+            if name.lower().replace(' ', '') in ('allcounties', 'all_counties', 'combined', 'all'):
+                combined_sheet = name
+                break
+
+        if combined_sheet:
+            df = xl[combined_sheet]
+        elif len(xl) == 1:
             df = list(xl.values())[0]
         else:
             frames = []
