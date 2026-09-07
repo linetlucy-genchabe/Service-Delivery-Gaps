@@ -2959,55 +2959,70 @@ def make_pa_cell(metrics, key, target, hib=True, util_pct=None):
         val  = m.get('u2_referrals')
         comp = m.get('u2_ref_comp', 0)
         tot  = m.get('u2_ref_total', 0)
-        disp = f"{comp:,}/{tot:,} ({val}%)" if val is not None else '—'
+        if tot == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val = val or 0
+        disp = f"{comp:,}/{tot:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'iz_completed':
         val  = m.get('iz_completed')
         comp = m.get('iz_comp_num', 0)
         tot  = m.get('iz_defaulters', 0)
-        disp = f"{comp:,}/{tot:,} ({val}%)" if val is not None else '—'
+        if tot == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val = val or 0
+        disp = f"{comp:,}/{tot:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'skilled_deliveries':
         val  = m.get('skilled_deliveries')
         fd   = m.get('fac_del', 0)
         td   = m.get('total_del', 0)
-        disp = f"{fd:,}/{td:,} ({val}%)" if val is not None else '—'
+        if td == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val = val or 0
+        disp = f"{fd:,}/{td:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'pnc_48hr':
         val  = m.get('pnc_48hr')
         num  = m.get('pnc_48_num', 0)
         td   = m.get('total_del', 0)
-        disp = f"{num:,}/{td:,} ({val}%)" if val is not None else '—'
+        if td == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val = val or 0
+        disp = f"{num:,}/{td:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'pnc_3_7d':
         val  = m.get('pnc_3_7d')
         num  = m.get('pnc_37_num', 0)
         td   = m.get('total_del', 0)
-        disp = f"{num:,}/{td:,} ({val}%)" if val is not None else '—'
+        if td == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val = val or 0
+        disp = f"{num:,}/{td:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'preg_per_chp':
         val  = m.get('preg_per_chp')
         num  = m.get('preg_reg', 0)
-        disp = f"{num:,} ({val})" if val is not None else '—'
+        val  = val or 0
+        disp = f"{num:,} ({val})"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'preg_visits_vs_active':
         val  = m.get('preg_visits_vs_active')
         vis  = m.get('preg_visited', 0)
         act  = m.get('active_preg', 0)
-        disp = f"{vis:,}/{act:,} ({val}%)" if val is not None else '—'
+        if act == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val  = val or 0
+        disp = f"{vis:,}/{act:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'wra_assessed':
         val  = m.get('wra_assessed')
         num  = m.get('wra_18_49', 0)
         reg  = m.get('reg_wra', 0)
-        disp = f"{num:,}/{reg:,} ({val}%)" if val is not None else '—'
+        if reg == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        val  = val or 0
+        disp = f"{num:,}/{reg:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'dash_utilization':
@@ -3016,10 +3031,11 @@ def make_pa_cell(metrics, key, target, hib=True, util_pct=None):
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     elif key == 'supervision':
-        val  = m.get('supervision')
+        val  = m.get('supervision') or 0
         cnt  = m.get('supervised_count', 0)
         tot  = m.get('cumulative_active_chps', 0)
-        disp = f"{cnt:,}/{tot:,} ({val}%)" if val is not None else '—'
+        if tot == 0: return {'display': '—', 'colour': 'grey', 'pct_target': None}
+        disp = f"{cnt:,}/{tot:,} ({val}%)"
         return {'display': disp, 'colour': colour(val, target), 'pct_target': pct_target(val, target)}
 
     return {'display': '—', 'colour': 'grey', 'pct_target': None}
