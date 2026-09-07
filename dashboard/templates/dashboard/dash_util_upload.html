@@ -13,77 +13,90 @@
 {% if success %}<div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#166534;">✅ {{ success }}</div>{% endif %}
 {% if error %}<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 16px;margin-bottom:16px;color:#991B1B;">⚠️ {{ error }}</div>{% endif %}
 
+{% with inp="width:100%;padding:8px 10px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;color:#374151;background:white;" %}
 <div class="card" style="max-width:640px;">
   <div class="card-header"><h3 class="card-title">Upload New Report</h3></div>
   <div class="card-body">
-    <form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:14px;">
+    <form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:16px;">
       {% csrf_token %}
-      <div class="filter-group">
-        <label class="filter-label">Report File (.xlsx) <span style="color:var(--red)">*</span></label>
-        <input type="file" name="file" accept=".xlsx" required style="padding:6px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;">
+
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Report File (.xlsx) *</label>
+        <input type="file" name="file" accept=".xlsx" required style="{{ inp }}">
       </div>
+
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Period Type *</label>
+        <div style="display:flex;gap:20px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="radio" name="period_type" value="weekly" checked onchange="toggleWeekMonth('weekly')"> Weekly
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+            <input type="radio" name="period_type" value="monthly" onchange="toggleWeekMonth('monthly')"> Monthly
+          </label>
+        </div>
+      </div>
+
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div class="filter-group" style="flex:1;min-width:140px;">
-          <label class="filter-label">Period Type <span style="color:var(--red)">*</span></label>
-          <select name="period_type" class="filter-select" required onchange="toggleWeekMonth(this.value)">
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
+        <div style="flex:2;min-width:200px;">
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Period Label *</label>
+          <input type="text" name="period_label" placeholder="e.g. Sep WK1 2026 or August 2026" required style="{{ inp }}">
         </div>
-        <div class="filter-group" style="flex:1;min-width:140px;">
-          <label class="filter-label">Period Label <span style="color:var(--red)">*</span></label>
-          <input type="text" name="period_label" placeholder="e.g. Aug WK3 2026 or July 2026" class="filter-select" required>
-        </div>
-        <div class="filter-group" style="flex:1;min-width:100px;">
-          <label class="filter-label">Year <span style="color:var(--red)">*</span></label>
-          <input type="number" name="year" value="2026" min="2024" max="2030" class="filter-select" required>
+        <div style="flex:1;min-width:100px;">
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Year *</label>
+          <input type="number" name="year" value="2026" min="2024" max="2030" required style="{{ inp }}">
         </div>
       </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;" id="monthly-fields">
-        <div class="filter-group" style="flex:1;">
-          <label class="filter-label">Month (monthly reports)</label>
-          <select name="month" class="filter-select">
-            <option value="">—</option>
-            <option value="1">January</option><option value="2">February</option>
-            <option value="3">March</option><option value="4">April</option>
-            <option value="5">May</option><option value="6">June</option>
-            <option value="7">July</option><option value="8">August</option>
-            <option value="9">September</option><option value="10">October</option>
-            <option value="11">November</option><option value="12">December</option>
-          </select>
+
+      <div id="weekly-fields">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Week Start Date</label>
+            <input type="date" name="week_start_date" style="{{ inp }}">
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">ISO Week Number</label>
+            <input type="number" name="week" min="1" max="53" placeholder="e.g. 36" style="{{ inp }}">
+          </div>
         </div>
       </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;" id="weekly-fields">
-        <div class="filter-group" style="flex:1;">
-          <label class="filter-label">Week Start Date (weekly reports)</label>
-          <input type="date" name="week_start_date" class="filter-select">
-        </div>
-        <div class="filter-group" style="flex:1;">
-          <label class="filter-label">ISO Week Number</label>
-          <input type="number" name="week" min="1" max="53" class="filter-select" placeholder="e.g. 34">
-        </div>
+
+      <div id="monthly-fields" style="display:none;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Month</label>
+        <select name="month" style="{{ inp }}">
+          <option value="">— Select Month —</option>
+          <option value="1">January</option><option value="2">February</option>
+          <option value="3">March</option><option value="4">April</option>
+          <option value="5">May</option><option value="6">June</option>
+          <option value="7">July</option><option value="8">August</option>
+          <option value="9">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
       </div>
-      <button type="submit" class="btn btn-primary">⬆ Upload & Parse</button>
+
+      <button type="submit" class="btn btn-primary" style="margin-top:4px;">⬆ Upload & Parse</button>
     </form>
   </div>
 </div>
+{% endwith %}
 
 {% if reports %}
 <div class="section-label" style="margin-top:24px;">📁 Uploaded Reports</div>
 <div class="card">
   <div class="card-body no-pad">
     <table class="data-table">
-      <thead><tr><th>Report</th><th>Type</th><th>Uploaded</th><th>Action</th></tr></thead>
+      <thead><tr><th>Report</th><th>Type</th><th>Uploaded</th><th>Data Points</th><th>Action</th></tr></thead>
       <tbody>
         {% for r in reports %}
         <tr>
           <td><strong>{{ r }}</strong></td>
           <td>{{ r.get_period_type_display }}</td>
           <td class="zero">{{ r.uploaded_at|date:"d M Y H:i" }}</td>
+          <td class="zero">{{ r.data_points.count }}</td>
           <td>
-            <form method="post" action="{% url 'dash_util_delete' r.pk %}" onsubmit="return confirm('Delete this report?')">
+            <form method="post" action="{% url 'dash_util_delete' r.pk %}" onsubmit="return confirm('Delete this report and all its data?')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none;cursor:pointer;">🗑 Delete</button>
+              <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none;cursor:pointer;padding:4px 10px;border-radius:4px;">🗑 Delete</button>
             </form>
           </td>
         </tr>
@@ -98,9 +111,8 @@
 {% block extra_js %}
 <script>
 function toggleWeekMonth(val) {
-  document.getElementById('weekly-fields').style.display = val === 'weekly' ? 'flex' : 'none';
-  document.getElementById('monthly-fields').style.display = val === 'monthly' ? 'flex' : 'none';
+  document.getElementById('weekly-fields').style.display  = val === 'weekly'  ? 'block' : 'none';
+  document.getElementById('monthly-fields').style.display = val === 'monthly' ? 'block' : 'none';
 }
-toggleWeekMonth('weekly');
 </script>
 {% endblock %}
