@@ -77,10 +77,10 @@
 <div class="category-nav">
   <button class="cat-btn active" data-section="workforce">👥 Workforce</button>
   <button class="cat-btn" data-section="supervision">🔍 Supervision</button>
-  <button class="cat-btn" data-section="performance">⚠️ Performance</button>
+  <button class="cat-btn" data-section="hiht">🎯 HIHT</button>
+  <button class="cat-btn" data-section="childhealth">🧒 Child Health</button>
   <button class="cat-btn" data-section="maternal">🤱 Maternal Health</button>
   <button class="cat-btn" data-section="fp">💊 Family Planning</button>
-  <button class="cat-btn" data-section="nutrition">🥗 Nutrition</button>
   <button class="cat-btn" data-section="immunization">💉 Immunization</button>
 </div>
 
@@ -158,9 +158,51 @@
   </div>
 </div>
 
-<!-- PERFORMANCE -->
-<div class="cat-section" id="section-performance">
-  <div class="section-label">⚠️ Performance Gaps</div>
+<!-- HIHT -->
+<div class="cat-section" id="section-hiht">
+  <div class="section-label">🎯 High Impact Health Touches (HIHT)</div>
+  <div class="cards-grid">
+    <div class="stat-card navy">
+      <div class="stat-value">{{ hiht_summary.total_hihts_per_chw|default:"—" }}</div>
+      <div class="stat-label">Total HIHTs / CHW</div>
+      <div class="stat-sub">{{ hiht_summary.total_hihts }} total HIHTs across {{ hiht_summary.active_all }} active CHWs</div>
+      <button class="definition-btn" data-def="Total HIHTs per CHW: A proxy measure of CHW impact, combining 12 highly effective CHW activities across Maternal, iCCM, Nutrition, Immunization and Family Planning that are proven to save lives and reduce disease burden. Total HIHTs ÷ 1-month active CHWs.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ hiht_summary.non_fp_hihts_per_chw|default:"—" }}</div>
+      <div class="stat-label">Non-FP HIHTs / CHW</div>
+      <div class="stat-sub">{{ hiht_summary.non_fp_hihts }} touches across the 11 non-FP activities</div>
+      <button class="definition-btn" data-def="Non-FP HIHTs per CHW: The 11 HIHT activities outside Family Planning (Maternal, iCCM, Nutrition referral completion, Immunization referral completion), divided by all 1-month active CHWs.">View definition</button>
+    </div>
+    <div class="stat-card navy">
+      <div class="stat-value">{{ hiht_summary.fp_hihts_per_chw|default:"—" }}</div>
+      <div class="stat-label">FP HIHTs / CHW</div>
+      <div class="stat-sub">{{ hiht_summary.fp_hihts }} unique WRA reached who took up a method, ÷ {{ hiht_summary.active_fp }} FP-active CHWs</div>
+      <button class="definition-btn" data-def="FP HIHTs per CHW: Unique WRA (15-49) reached who take up a family planning method, divided by 1-month active CHWs who did at least one FP assessment (a different, smaller denominator than the other 11 activities).">View definition</button>
+    </div>
+  </div>
+
+  <div class="hiht-breakdown-controls" style="display:flex;gap:8px;align-items:center;margin:16px 0 8px;">
+    <span style="font-size:13px;color:var(--text-muted)">Break down by:</span>
+    <button class="btn btn-sm btn-outline hiht-level-btn active" data-level="sub_county">Sub-County</button>
+    <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chu">Community Health Unit</button>
+    <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chp">CHP</button>
+    <a id="hiht-download-link" href="{% url 'download_hiht_breakdown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&level=sub_county" class="btn btn-sm btn-outline" style="margin-left:auto">⬇ Download CSV</a>
+  </div>
+  <div id="hiht-breakdown-container"><div class="table-loading">Loading…</div></div>
+
+  <div class="section-label" style="margin-top:24px">📈 HIHT Trend (last 6 monthly reports)</div>
+  <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">Based on monthly uploads only — weekly batches are partial-period snapshots and are excluded here to keep the trend comparable month to month.</p>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <button class="btn btn-sm btn-outline hiht-trend-level-btn active" data-level="county">By County</button>
+    <button class="btn btn-sm btn-outline hiht-trend-level-btn" data-level="sub_county">By Sub-County</button>
+  </div>
+  <div id="hiht-trend-container"><div class="table-loading">Loading…</div></div>
+</div>
+
+<!-- CHILD HEALTH -->
+<div class="cat-section" id="section-childhealth">
+  <div class="section-label">🧒 Child Health</div>
   <div class="cards-grid">
     <div class="stat-card {% if indicators.high_hh_low_u5_count == 0 %}green{% elif indicators.high_hh_low_u5_count < 100 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.high_hh_low_u5_count }}</div>
@@ -172,7 +214,7 @@
       <div class="stat-value">{{ indicators.high_u5_low_pos_count }}</div>
       <div class="stat-label">High U5 Assessment, Zero Positive Diagnoses</div>
       <div class="stat-sub">CHPs assessing ≥80% of U5 children (≥10 assessed) but recording zero positive diagnoses</div>
-      <button class="definition-btn" data-def="High U5 Assessment but Zero Positive Diagnoses: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded absolutely zero positive diagnoses (malaria, pneumonia, diarrhea). This is a data quality flag — it is statistically unusual to assess many children and find none sick. The CHP may need support in recognizing and documenting illness correctly.">View definition</button>
+      <button class="definition-btn" data-def="High U5 Assessment but Zero Positive Diagnoses: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded absolutely zero positive diagnoses (malaria, pneumonia, diarrhea). This is a data quality flag — it is statistically unusual to assess many children and find none sick. The CHP may need support in recognizing and documenting illness correctly. Includes the CHP's iCCM Assessments count for context.">View definition</button>
     </div>
     <div class="stat-card {% if indicators.low_iccm_count == 0 %}green{% elif indicators.low_iccm_count < 100 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.low_iccm_count }}</div>
@@ -185,6 +227,24 @@
       <div class="stat-label">Zero Positive Diagnoses</div>
       <div class="stat-sub">Active CHPs with zero positive U5 diagnoses recorded this period</div>
       <button class="definition-btn" data-def="Zero Positive Diagnoses: Active CHPs who recorded zero positive diagnoses for Under-5 children this period. While some CHPs may genuinely have no sick children, a high count across an area likely indicates CHPs are not completing assessments properly or not recording positive findings.">View definition</button>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-value">{{ indicators.muac_screened }}</div>
+      <div class="stat-label">MUAC Screened</div>
+      <div class="stat-sub">Children screened for malnutrition using arm circumference</div>
+      <button class="definition-btn" data-def="MUAC Screened: Children screened using Mid-Upper Arm Circumference (MUAC) — the standard tool for detecting acute malnutrition. CHPs categorise children as well-nourished, at risk (MAM), or severely malnourished (SAM).">View definition</button>
+    </div>
+    <div class="stat-card {% if indicators.mam_referral_rate >= 80 %}green{% elif indicators.mam_referral_rate >= 50 %}yellow{% else %}red{% endif %}">
+      <div class="stat-value">{{ indicators.mam_referral_rate }}%</div>
+      <div class="stat-label">MAM/SAM Referral Rate</div>
+      <div class="stat-sub">{{ indicators.mam_sam_referred }} of {{ indicators.mam_sam_total }} malnourished children referred to facility</div>
+      <button class="definition-btn" data-def="MAM/SAM Referral Rate: The percentage of children identified with Moderate (MAM) or Severe (SAM) Acute Malnutrition who were referred to a health facility for therapeutic feeding. A low rate means malnourished children are not getting treatment.">View definition</button>
+    </div>
+    <div class="stat-card navy">
+      <div class="stat-value">{{ indicators.mam_sam_total }}</div>
+      <div class="stat-label">MAM/SAM Cases Identified</div>
+      <div class="stat-sub">Children identified with moderate or severe acute malnutrition</div>
+      <button class="definition-btn" data-def="MAM/SAM Cases: The total number of children identified as having Moderate Acute Malnutrition (MAM) or Severe Acute Malnutrition (SAM) based on MUAC screening. These children require immediate nutritional support and referral.">View definition</button>
     </div>
   </div>
 </div>
@@ -269,30 +329,6 @@
   </div>
 </div>
 
-<!-- NUTRITION -->
-<div class="cat-section" id="section-nutrition">
-  <div class="section-label">🥗 Nutrition</div>
-  <div class="cards-grid">
-    <div class="stat-card cyan">
-      <div class="stat-value">{{ indicators.muac_screened }}</div>
-      <div class="stat-label">MUAC Screened</div>
-      <div class="stat-sub">Children screened for malnutrition using arm circumference</div>
-      <button class="definition-btn" data-def="MUAC Screened: Children screened using Mid-Upper Arm Circumference (MUAC) — the standard tool for detecting acute malnutrition. CHPs categorise children as well-nourished, at risk (MAM), or severely malnourished (SAM).">View definition</button>
-    </div>
-    <div class="stat-card {% if indicators.mam_referral_rate >= 80 %}green{% elif indicators.mam_referral_rate >= 50 %}yellow{% else %}red{% endif %}">
-      <div class="stat-value">{{ indicators.mam_referral_rate }}%</div>
-      <div class="stat-label">MAM/SAM Referral Rate</div>
-      <div class="stat-sub">{{ indicators.mam_sam_referred }} of {{ indicators.mam_sam_total }} malnourished children referred to facility</div>
-      <button class="definition-btn" data-def="MAM/SAM Referral Rate: The percentage of children identified with Moderate (MAM) or Severe (SAM) Acute Malnutrition who were referred to a health facility for therapeutic feeding. A low rate means malnourished children are not getting treatment.">View definition</button>
-    </div>
-    <div class="stat-card navy">
-      <div class="stat-value">{{ indicators.mam_sam_total }}</div>
-      <div class="stat-label">MAM/SAM Cases Identified</div>
-      <div class="stat-sub">Children identified with moderate or severe acute malnutrition</div>
-      <button class="definition-btn" data-def="MAM/SAM Cases: The total number of children identified as having Moderate Acute Malnutrition (MAM) or Severe Acute Malnutrition (SAM) based on MUAC screening. These children require immediate nutritional support and referral.">View definition</button>
-    </div>
-  </div>
-</div>
 
 <!-- IMMUNIZATION -->
 <div class="cat-section" id="section-immunization">
@@ -320,8 +356,9 @@
 <div class="drilldown-cat-nav">
   <button class="dd-cat-btn active" data-ddcat="dd-workforce">👥 Workforce</button>
   <button class="dd-cat-btn" data-ddcat="dd-supervision">🔍 Supervision</button>
-  <button class="dd-cat-btn" data-ddcat="dd-performance">⚠️ Performance</button>
+  <button class="dd-cat-btn" data-ddcat="dd-childhealth">🧒 Child Health</button>
   <button class="dd-cat-btn" data-ddcat="dd-maternal">🤱 Maternal Health</button>
+  <button class="dd-cat-btn" data-ddcat="dd-immunization">💉 Immunization</button>
 </div>
 
 <!-- WORKFORCE drill-down -->
@@ -382,13 +419,14 @@
   </div>
 </div>
 
-<!-- PERFORMANCE drill-down -->
-<div class="dd-cat-panel" id="dd-performance">
+<!-- CHILD HEALTH drill-down -->
+<div class="dd-cat-panel" id="dd-childhealth">
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="u5-high-hh">Good HH, Low U5 Assessment <span class="tab-count">{{ indicators.high_hh_low_u5_count }}</span></button>
     <button class="tab-btn" data-tab="u5-high-u5">High U5, Zero Diagnoses <span class="tab-count">{{ indicators.high_u5_low_pos_count }}</span></button>
     <button class="tab-btn" data-tab="low-iccm">Low iCCM Assessments <span class="tab-count">{{ indicators.low_iccm_count }}</span></button>
     <button class="tab-btn" data-tab="zero-positive">Zero Positive Diagnoses <span class="tab-count">{{ indicators.zero_positive_count }}</span></button>
+    <button class="tab-btn" data-tab="mam-sam">MAM/SAM Referrals <span class="tab-count">{{ indicators.mam_sam_total }}</span></button>
   </div>
   <div class="tab-panel active" id="tab-u5-high-hh">
     <div class="card"><div class="card-header">
@@ -414,6 +452,12 @@
       <a href="{% url 'download_zero_positive' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="zero-positive-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
+  <div class="tab-panel" id="tab-mam-sam">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">MAM/SAM Cases and Referral Status</h3><p class="card-subtitle">Children identified with acute malnutrition, whether they were referred, and whether the referral was completed — by CHU and CHP.</p></div>
+      <a href="{% url 'download_mam_sam' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="mam-sam-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
 </div>
 
 <!-- MATERNAL drill-down -->
@@ -421,6 +465,10 @@
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="anc-gap">ANC Gap <span class="tab-count">{{ indicators.anc_gap_chps }}</span></button>
     <button class="tab-btn" data-tab="zero-pregnancies">Zero Active Pregnancies <span class="tab-count">{{ indicators.zero_pregnancies_count }}</span></button>
+    <button class="tab-btn" data-tab="home-deliveries">Home Deliveries</button>
+    <button class="tab-btn" data-tab="pnc-48-missed">PNC 48hr Missed</button>
+    <button class="tab-btn" data-tab="pnc-37-missed">PNC 3-7d Missed</button>
+    <button class="tab-btn" data-tab="pnc-status">PNC Completion Status</button>
   </div>
   <div class="tab-panel active" id="tab-anc-gap">
     <div class="card"><div class="card-header">
@@ -433,6 +481,57 @@
       <div><h3 class="card-title">Active CHPs With Zero Active Pregnancies</h3><p class="card-subtitle">CHPs with no active pregnancies registered — may indicate missed registrations.</p></div>
       <a href="{% url 'download_zero_pregnancies' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="zero-pregnancies-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-home-deliveries">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">Home Deliveries, by CHP</h3><p class="card-subtitle">CHPs with at least one delivery this period that was not a facility delivery.</p></div>
+      <a href="{% url 'download_maternal_drilldown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&view=home_deliveries" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="home-deliveries-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-pnc-48-missed">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">PNC 48hr Visit Missed, by CHP</h3><p class="card-subtitle">CHPs whose deliveries did not all receive the 48-hour postnatal visit.</p></div>
+      <a href="{% url 'download_maternal_drilldown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&view=pnc_48hr_missed" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="pnc-48-missed-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-pnc-37-missed">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">PNC 3-7 Day Visit Missed, by CHP</h3><p class="card-subtitle">CHPs whose deliveries did not all receive the 3–7 day postnatal visit.</p></div>
+      <a href="{% url 'download_maternal_drilldown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&view=pnc_3_7d_missed" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="pnc-37-missed-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-pnc-status">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">PNC Completion Status, by CHP</h3><p class="card-subtitle">Which CHPs completed both PNC visits, only one, or neither, for their deliveries this period.</p></div>
+      <a href="{% url 'download_maternal_drilldown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&view=pnc_status" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="pnc-status-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+</div>
+
+<!-- IMMUNIZATION drill-down -->
+<div class="dd-cat-panel" id="dd-immunization">
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="iz-all">All Defaulters</button>
+    <button class="tab-btn" data-tab="iz-not-referred">Not Referred</button>
+    <button class="tab-btn" data-tab="iz-not-completed">Referred, Not Completed</button>
+  </div>
+  <div class="tab-panel active" id="tab-iz-all">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">IZ Defaulters, by CHP</h3><p class="card-subtitle">All immunization defaulters this period, whether followed up, and whether the follow-up was completed.</p></div>
+      <a href="{% url 'download_iz_defaulters' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="iz-all-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-iz-not-referred">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">IZ Defaulters Not Referred, by CHP</h3><p class="card-subtitle">Defaulters who were never followed up.</p></div>
+      <a href="{% url 'download_iz_defaulters' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="iz-not-referred-container"><div class="table-loading">Loading…</div></div></div></div></div>
+  </div>
+  <div class="tab-panel" id="tab-iz-not-completed">
+    <div class="card"><div class="card-header">
+      <div><h3 class="card-title">IZ Referrals Not Completed, by CHP</h3><p class="card-subtitle">Defaulters who were followed up but the referral was not completed.</p></div>
+      <a href="{% url 'download_iz_defaulters' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div><div class="card-body no-pad"><div class="table-scroll"><div id="iz-not-completed-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
 

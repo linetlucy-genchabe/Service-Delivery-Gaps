@@ -49,4 +49,17 @@ urlpatterns = [
     path('api/never-synced/',              views.api_never_synced,       name='api_never_synced'),
     path('download/never-synced/',         views.download_never_synced,  name='download_never_synced'),
     path('download/chu-sync/',             views.download_chu_sync,      name='download_chu_sync'),
+    # Child Health — MAM/SAM drill-down
+    path('api/mam-sam/',                   views.api_mam_sam,             name='api_mam_sam'),
+    path('download/mam-sam/',              views.download_mam_sam,        name='download_mam_sam'),
+    # Immunization drill-down
+    path('api/iz-defaulters/',             views.api_iz_defaulters,       name='api_iz_defaulters'),
+    path('download/iz-defaulters/',        views.download_iz_defaulters,  name='download_iz_defaulters'),
+    # Maternal Health drill-down
+    path('api/maternal-drilldown/',        views.api_maternal_drilldown,      name='api_maternal_drilldown'),
+    path('download/maternal-drilldown/',   views.download_maternal_drilldown, name='download_maternal_drilldown'),
+    # HIHT
+    path('api/hiht-breakdown/',            views.api_hiht_breakdown,      name='api_hiht_breakdown'),
+    path('download/hiht-breakdown/',       views.download_hiht_breakdown, name='download_hiht_breakdown'),
+    path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
 ]

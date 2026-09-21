@@ -154,6 +154,9 @@ def dashboard_view(request):
             sup_qs = sup_qs.filter(community_health_unit=selected_chu)
 
         indicators = compute_indicators(chw_qs, sup_qs, selected_batch.period_type)
+        hiht_summary = compute_hiht_for_queryset(chw_qs)
+    else:
+        hiht_summary = None
 
     context = {
         'batches': batches,
@@ -164,6 +167,7 @@ def dashboard_view(request):
         'selected_chu': selected_chu,
         'filter_options': filter_options,
         'indicators': indicators,
+        'hiht_summary': hiht_summary,
         'is_uploader': is_uploader(request.user),
     }
     return render(request, 'dashboard/dashboard.html', context)
@@ -454,6 +458,320 @@ def download_zero_positive(request):
     return response
 
 
+def _mam_sam_rows(qs):
+    rows = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area', 'chw_name',
+        'mam_sam_total', 'mam_sam_referred', 'mam_sam_referral_completed',
+    ).order_by('community_health_unit', 'chw_name'))
+    for r in rows:
+        total = r['mam_sam_total'] or 0
+        referred = r['mam_sam_referred'] or 0
+        completed = r['mam_sam_referral_completed'] or 0
+        r['not_referred'] = max(total - referred, 0)
+        if referred == 0:
+            r['referral_status'] = 'Not referred'
+        elif completed >= referred:
+            r['referral_status'] = 'Referred — completed'
+        else:
+            r['referral_status'] = 'Referred — not completed'
+    return rows
+
+
+def _iz_defaulter_rows(qs):
+    rows = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area', 'chw_name',
+        'iz_defaulters', 'iz_defaulters_followed', 'iz_defaulters_completed',
+    ).order_by('community_health_unit', 'chw_name'))
+    for r in rows:
+        defaulters = r['iz_defaulters'] or 0
+        followed = r['iz_defaulters_followed'] or 0
+        completed = r['iz_defaulters_completed'] or 0
+        r['not_followed'] = max(defaulters - followed, 0)
+        if followed == 0:
+            r['referral_status'] = 'Not referred'
+        elif completed >= followed:
+            r['referral_status'] = 'Referred — completed'
+        else:
+            r['referral_status'] = 'Referred — not completed'
+    return rows
+
+
+@login_required
+@require_GET
+def api_hiht_breakdown(request):
+    """
+    HIHT breakdown for the selected batch, grouped by the requested geography
+    level. Powers the HIHT tab's drill-down (sub-county -> CHU -> CHP).
+    """
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    level      = request.GET.get('level', 'sub_county')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    rows = compute_hiht_breakdown(qs, level=level)
+    summary = compute_hiht_for_queryset(qs)
+    return JsonResponse({'results': rows, 'count': len(rows), 'summary': summary})
+
+
+@login_required
+def download_hiht_breakdown(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    level      = request.GET.get('level', 'sub_county')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    rows = compute_hiht_breakdown(qs, level=level)
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="hiht_{level}_{batch.label}.csv"'
+    writer = csv.writer(response)
+    geo_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
+    writer.writerow([f.replace('_', ' ').title() for f in geo_fields] + [
+        'Non-FP HIHTs', 'FP HIHTs', 'Total HIHTs',
+        'Active CHWs (All)', 'Active CHWs (FP)',
+        'Non-FP HIHTs/CHW', 'FP HIHTs/CHW', 'Total HIHTs/CHW',
+    ])
+    for r in rows:
+        writer.writerow([r[f] for f in geo_fields] + [
+            r['non_fp_hihts'], r['fp_hihts'], r['total_hihts'],
+            r['active_all'], r['active_fp'],
+            r['non_fp_hihts_per_chw'], r['fp_hihts_per_chw'], r['total_hihts_per_chw'],
+        ])
+    return response
+
+
+@login_required
+@require_GET
+def api_hiht_trend(request):
+    """
+    Multi-month HIHT trend for the HIHT charts/heatmap: Total HIHTs/CHW per
+    geography (county or sub-county) across the last N monthly batches.
+    """
+    level = request.GET.get('level', 'sub_county')
+    county = request.GET.get('county', '')
+
+    batches = auto_detect_monthly_batches()
+    trend = compute_hiht_trend(level=level, batches=batches)
+
+    if county and level == 'sub_county':
+        trend['series'] = [s for s in trend['series'] if s['geo'].get('county') == county]
+
+    return JsonResponse(trend)
+
+
+def _maternal_delivery_rows(qs, view):
+    """
+    view: 'home_deliveries' | 'pnc_48hr_missed' | 'pnc_3_7d_missed' | 'pnc_status'
+    Built from per-CHP totals in the CHW Detail file (total_deliveries,
+    facility_deliveries, pnc_48hr_ontime, pnc_3_7d_ontime). These are period
+    totals per CHP, not per-delivery records, so "missed" here means the
+    CHP's totals show at least one delivery that did not get a facility
+    delivery / on-time PNC visit that period.
+    """
+    rows = list(qs.values(
+        'county', 'sub_county', 'community_health_unit', 'chp_area', 'chw_name',
+        'total_deliveries', 'facility_deliveries', 'pnc_48hr_ontime', 'pnc_3_7d_ontime',
+    ).order_by('community_health_unit', 'chw_name'))
+
+    results = []
+    for r in rows:
+        total = r['total_deliveries'] or 0
+        if total == 0:
+            continue
+        facility = r['facility_deliveries'] or 0
+        pnc48 = r['pnc_48hr_ontime'] or 0
+        pnc37 = r['pnc_3_7d_ontime'] or 0
+        r['home_deliveries']   = max(total - facility, 0)
+        r['pnc_48_missed']     = max(total - pnc48, 0)
+        r['pnc_37_missed']     = max(total - pnc37, 0)
+        if pnc48 >= total and pnc37 >= total:
+            r['pnc_status'] = 'Both PNC visits done'
+        elif pnc48 >= total or pnc37 >= total:
+            r['pnc_status'] = 'One PNC visit done'
+        else:
+            r['pnc_status'] = 'Neither PNC visit done'
+
+        if view == 'home_deliveries' and r['home_deliveries'] > 0:
+            results.append(r)
+        elif view == 'pnc_48hr_missed' and r['pnc_48_missed'] > 0:
+            results.append(r)
+        elif view == 'pnc_3_7d_missed' and r['pnc_37_missed'] > 0:
+            results.append(r)
+        elif view == 'pnc_status' and r['pnc_status'] != 'Both PNC visits done':
+            results.append(r)
+    return results
+
+
+@login_required
+@require_GET
+def api_maternal_drilldown(request):
+    """Maternal Health drill-down: home deliveries / PNC gaps, by CHP."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    view       = request.GET.get('view', 'home_deliveries')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, total_deliveries__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = _maternal_delivery_rows(qs, view)
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_maternal_drilldown(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    view       = request.GET.get('view', 'home_deliveries')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, total_deliveries__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    filenames = {
+        'home_deliveries':  'home_deliveries',
+        'pnc_48hr_missed':  'pnc_48hr_missed',
+        'pnc_3_7d_missed':  'pnc_3_7d_missed',
+        'pnc_status':       'pnc_completion_status',
+    }
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filenames.get(view, "maternal")}_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
+                     'Total Deliveries', 'Facility Deliveries', 'Home Deliveries',
+                     'PNC 48hr On-time', 'PNC 48hr Missed', 'PNC 3-7d On-time', 'PNC 3-7d Missed',
+                     'PNC Status'])
+    for r in _maternal_delivery_rows(qs, view):
+        writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
+                         r['chw_name'], r['total_deliveries'], r['facility_deliveries'], r['home_deliveries'],
+                         r['pnc_48hr_ontime'], r['pnc_48_missed'], r['pnc_3_7d_ontime'], r['pnc_37_missed'],
+                         r['pnc_status']])
+    return response
+
+
+@login_required
+@require_GET
+def api_iz_defaulters(request):
+    """Active CHPs with IZ defaulters this period, broken down by referral/completion status."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    status     = request.GET.get('status', '')  # '', 'not_referred', 'not_completed'
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, iz_defaulters__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = _iz_defaulter_rows(qs)
+    if status == 'not_referred':
+        data = [r for r in data if r['referral_status'] == 'Not referred']
+    elif status == 'not_completed':
+        data = [r for r in data if r['referral_status'] == 'Referred — not completed']
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_iz_defaulters(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, iz_defaulters__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="iz_defaulters_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
+                     'IZ Defaulters', 'Followed Up', 'Completed', 'Not Followed Up', 'Referral Status'])
+    for r in _iz_defaulter_rows(qs):
+        writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
+                         r['chw_name'], r['iz_defaulters'], r['iz_defaulters_followed'],
+                         r['iz_defaulters_completed'], r['not_followed'], r['referral_status']])
+    return response
+
+
+@login_required
+@require_GET
+def api_mam_sam(request):
+    """Active CHPs with MAM/SAM cases identified this period, and their referral status."""
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id, is_active=True, mam_sam_total__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = _mam_sam_rows(qs)
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_mam_sam(request):
+    batch_id   = request.GET.get('batch')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    qs = CHWRecord.objects.filter(batch=batch, is_active=True, mam_sam_total__gt=0)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="mam_sam_referrals_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
+                     'MAM/SAM Cases', 'Referred', 'Referral Completed', 'Not Referred', 'Referral Status'])
+    for r in _mam_sam_rows(qs):
+        writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
+                         r['chw_name'], r['mam_sam_total'], r['mam_sam_referred'],
+                         r['mam_sam_referral_completed'], r['not_referred'], r['referral_status']])
+    return response
+
+
 @login_required
 @require_GET
 def api_low_iccm(request):
@@ -685,7 +1003,7 @@ def download_u5_gap(request):
     rows = list(qs.values(
         'county', 'sub_county', 'community_health_unit', 'chp_area',
         'chw_name', 'registered_hhs', 'hh_visits',
-        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5'
+        'registered_children_u5', 'num_u5_assessed', 'positive_diagnoses_u5', 'iccm_assessments'
     ))
 
     results = []
@@ -707,7 +1025,7 @@ def download_u5_gap(request):
     else:
         filename = f'high_u5_zero_positive_diagnoses_{batch.label}.csv'
         headers  = ['County', 'Sub-County', 'Community Health Unit', 'CHP Area', 'CHP Name',
-                    'Registered U5', 'U5 Assessed', 'U5 Assessment Rate %', 'Positive Diagnoses']
+                    'Registered U5', 'U5 Assessed', 'U5 Assessment Rate %', 'iCCM Assessments', 'Positive Diagnoses']
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -722,7 +1040,7 @@ def download_u5_gap(request):
         else:
             writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['chp_area'],
                              r['chw_name'], r['registered_children_u5'], r['num_u5_assessed'],
-                             r['u5_rate_pct'], r['positive_diagnoses_u5']])
+                             r['u5_rate_pct'], r['iccm_assessments'], r['positive_diagnoses_u5']])
     return response
 
 
@@ -2873,6 +3191,164 @@ def compute_pa_metrics(chw_qs, sync_qs=None):
         # Dash utilization — filled externally
         'dash_utilization':       None,
     }
+
+
+# ===========================================================================
+# HIHT (High Impact Health Touches) calculations
+# ---------------------------------------------------------------------------
+# Per the Living Goods Indicator Handbook, HIHTs is a proxy measure of CHW
+# impact combining 12 highly effective CHW activities. The 11 non-FP
+# activities and the 1 FP activity use different active-CHW denominators.
+# Component list and per-CHW rates confirmed against the KE Monthly KPI
+# Report's own "<County>_HIHTs" sheets (Sep25–Jan26 figures cross-checked).
+# ===========================================================================
+
+# (aggregate field, output key) pairs for the 11 non-FP HIHT activities
+HIHT_NON_FP_COMPONENTS = [
+    ('pregnancies_registered',       'pregnancy_registrations'),
+    ('pregnancy_visits',             'pregnancy_visits'),
+    ('facility_deliveries',          'facility_deliveries'),
+    ('pnc_48hr_ontime',              'pnc_48hr'),
+    ('pnc_3_7d_ontime',              'pnc_3_7d'),
+    ('iccm_completed_referrals_u2mo','u2_completed_referrals'),
+    ('mam_sam_referral_completed',   'mam_sam_completed_referrals'),
+    ('iz_defaulters_completed',      'iz_completed_referrals'),
+]
+# Malaria/pneumonia/diarrhea "treated and/or referred" are each a sum of two
+# raw fields rather than a single column — handled separately below.
+HIHT_DISEASE_PAIRS = [
+    ('malaria_managed',   'malaria_referred',   'malaria_treated_or_referred'),
+    ('pneumonia_managed', 'pneumonia_referred', 'pneumonia_treated_or_referred'),
+    ('diarrhea_managed',  'diarrhea_referred',  'diarrhea_treated_or_referred'),
+]
+HIHT_FP_COMPONENT = ('fp_unique_new_users', 'fp_unique_users_method')
+
+
+def compute_hiht_for_queryset(chw_qs):
+    """
+    Compute HIHT totals, the 12 component counts, and the three active-CHW
+    denominators for a CHWRecord queryset (already scoped to one batch and
+    whatever geography filter is in play).
+    """
+    active_qs = chw_qs.filter(is_active=True)
+
+    agg_fields = {}
+    for field, _key in HIHT_NON_FP_COMPONENTS:
+        agg_fields[field] = Sum(field)
+    for f1, f2, _key in HIHT_DISEASE_PAIRS:
+        agg_fields[f1] = Sum(f1)
+        agg_fields[f2] = Sum(f2)
+    agg_fields[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
+    agg = active_qs.aggregate(**agg_fields)
+
+    components = {}
+    non_fp_total = 0
+    for field, key in HIHT_NON_FP_COMPONENTS:
+        val = agg.get(field) or 0
+        components[key] = val
+        non_fp_total += val
+    for f1, f2, key in HIHT_DISEASE_PAIRS:
+        val = (agg.get(f1) or 0) + (agg.get(f2) or 0)
+        components[key] = val
+        non_fp_total += val
+
+    fp_total = agg.get(HIHT_FP_COMPONENT[0]) or 0
+    components[HIHT_FP_COMPONENT[1]] = fp_total
+
+    total_active   = active_qs.count()
+    active_fp      = active_qs.filter(fp_assessments__gt=0).count()
+    active_iz      = active_qs.filter(iz_assessments__gt=0).count()
+
+    def rate(n, d):
+        return round(n / d, 2) if d else None
+
+    total_hihts = non_fp_total + fp_total
+
+    return {
+        'components':          components,
+        'non_fp_hihts':        non_fp_total,
+        'fp_hihts':            fp_total,
+        'total_hihts':         total_hihts,
+        'active_all':          total_active,
+        'active_fp':           active_fp,
+        'active_iz':           active_iz,
+        'non_fp_hihts_per_chw': rate(non_fp_total, total_active),
+        'fp_hihts_per_chw':     rate(fp_total, active_fp),
+        'total_hihts_per_chw':  rate(total_hihts, total_active),
+    }
+
+
+HIHT_GEO_LEVELS = {
+    'county':     ['county'],
+    'sub_county': ['county', 'sub_county'],
+    'chu':        ['county', 'sub_county', 'community_health_unit'],
+    'chp':        ['county', 'sub_county', 'community_health_unit', 'chw_name'],
+}
+
+
+def compute_hiht_breakdown(chw_qs, level='sub_county'):
+    """
+    HIHT metrics grouped by geography level ('county', 'sub_county', 'chu',
+    or 'chp'), sorted by Total HIHTs/CHW descending so the biggest drivers
+    (or the biggest drags) show up first.
+    """
+    group_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
+    combos = (chw_qs.filter(is_active=True)
+                    .values(*group_fields)
+                    .distinct()
+                    .order_by(*group_fields))
+
+    rows = []
+    for combo in combos:
+        filtered = chw_qs
+        for f in group_fields:
+            filtered = filtered.filter(**{f: combo[f]})
+        metrics = compute_hiht_for_queryset(filtered)
+        row = dict(combo)
+        row.update(metrics)
+        rows.append(row)
+
+    rows.sort(key=lambda r: (r['total_hihts_per_chw'] is None, -(r['total_hihts_per_chw'] or 0)))
+    return rows
+
+
+def compute_hiht_trend(level='county', batches=None):
+    """
+    Total HIHTs/CHW for each geography at `level` ('county' or 'sub_county'),
+    across a list of monthly UploadBatch objects (oldest first). Used for the
+    HIHT trend charts and the multi-month heatmap. Only monthly batches
+    should be passed in — weekly batches are partial-period snapshots and
+    would make the trend jagged and misleading.
+    """
+    if batches is None:
+        batches = auto_detect_monthly_batches()
+
+    group_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['county'])
+    period_labels = [b.label for b in batches]
+
+    # Collect every geography combo seen across all the batches, so a
+    # geography with no data in a given month still gets a row (blank cell).
+    geo_keys = {}
+    for batch in batches:
+        combos = (CHWRecord.objects.filter(batch=batch, is_active=True)
+                            .values(*group_fields).distinct())
+        for combo in combos:
+            key = tuple(combo[f] for f in group_fields)
+            geo_keys.setdefault(key, combo)
+
+    series = []
+    for key, combo in sorted(geo_keys.items()):
+        values = []
+        for batch in batches:
+            qs = CHWRecord.objects.filter(batch=batch)
+            for f in group_fields:
+                qs = qs.filter(**{f: combo[f]})
+            metrics = compute_hiht_for_queryset(qs)
+            values.append(metrics['total_hihts_per_chw'])
+        label = combo[group_fields[-1]] if combo[group_fields[-1]] else combo[group_fields[0]]
+        series.append({'label': label, 'geo': combo, 'values': values})
+
+    return {'periods': period_labels, 'series': series}
 
 
 def get_dash_util(county, sub_county, report):

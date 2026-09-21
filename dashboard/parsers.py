@@ -55,6 +55,20 @@ def _str(val):
     return str(val).strip()
 
 
+# Some source exports report Busia as two separate county values depending on
+# which implementing structure a CHP sits under ("Busia IS" / "Busia LS").
+# These should always be treated as one entity: Busia.
+COUNTY_ALIASES = {
+    'busia is': 'Busia',
+    'busia ls': 'Busia',
+}
+
+
+def _normalize_county(val):
+    name = _str(val)
+    return COUNTY_ALIASES.get(name.lower(), name)
+
+
 # ---------------------------------------------------------------------------
 # CHW Detail parser
 # ---------------------------------------------------------------------------
@@ -100,7 +114,7 @@ def parse_chw_file(batch, file_obj):
         try:
             record = CHWRecord(
                 batch=batch,
-                county=_str(row.get('County')),
+                county=_normalize_county(row.get('County')),
                 sub_county=_str(row.get('Sub-County')),
                 community_health_unit=_str(row.get('Community Health Unit')),
                 chp_area=_str(row.get('CHP Area')),
@@ -125,7 +139,7 @@ def parse_chw_file(batch, file_obj):
                 pnc_48hr_ontime=_int(row.get('PNC 48hr On-time', 0)),
                 pnc_3_7d_ontime=_int(row.get('PNC 3-7d On-time', 0)),
                 registered_children_u5=_int(row.get('Registered Children (U5)', 0)),
-                registered_children_u2=_int(row.get('Registered Children (U2)', 0)),
+                registered_children_u2=_int(row.get('Registered Children (U2)') or row.get('Registered Children (Under 2 Years)', 0)),
                 num_u5_assessed=_int(row.get('Number of U5 Children Assessed') or row.get('Unique Children Assessed (U5)') or row.get('Unique Children Assessed (U5 Assessment Form)') or row.get('Unique Children Assessed (All Services)', 0)),
                 iccm_assessments=_int(row.get('iCCM Assessments', 0)),
                 positive_diagnoses_u5=_int(row.get('Positive Diagnoses (U5)', 0)),
@@ -133,9 +147,14 @@ def parse_chw_file(batch, file_obj):
                 malaria_diagnosed=_int(row.get('Malaria Diagnosed', 0)),
                 pneumonia_diagnosed=_int(row.get('Pneumonia Diagnosed', 0)),
                 diarrhea_diagnosed=_int(row.get('Diarrhea Diagnosed', 0)),
-                malaria_managed=_int(row.get('Malaria Managed', 0)),
-                pneumonia_managed=_int(row.get('Pneumonia Managed', 0)),
-                diarrhea_managed=_int(row.get('Diarrhea Managed', 0)),
+                # 'Managed' and 'Treated' are the same concept under different column
+                # names depending on file version — accept either.
+                malaria_managed=_int(row.get('Malaria Managed') or row.get('Malaria Treated', 0)),
+                pneumonia_managed=_int(row.get('Pneumonia Managed') or row.get('Pneumonia Treated', 0)),
+                diarrhea_managed=_int(row.get('Diarrhea Managed') or row.get('Diarrhea Treated', 0)),
+                malaria_referred=_int(row.get('Malaria Referred', 0)),
+                pneumonia_referred=_int(row.get('Pneumonia Referred', 0)),
+                diarrhea_referred=_int(row.get('Diarrhea Referred', 0)),
                 danger_sign_referred=_int(row.get('Danger Sign Referred', 0)),
                 fever_cases=_int(row.get('Fever Cases', 0)),
                 fever_tested_rdt=_int(row.get('Fever Tested (RDT)', 0)),
@@ -238,7 +257,7 @@ def parse_supervision_file(batch, file_obj):
 
             record = SupervisionRecord(
                 batch=batch,
-                county=_str(row.get('County')),
+                county=_normalize_county(row.get('County')),
                 sub_county=_str(row.get('Sub-County')),
                 community_health_unit=_str(row.get('Community Health Unit')),
                 visit_date=visit_date,
@@ -507,7 +526,7 @@ def parse_sync_file(batch, file_obj):
 
             records.append(CHPSyncRecord(
                 batch=batch,
-                county=_str(row.get('County')),
+                county=_normalize_county(row.get('County')),
                 sub_county=_str(row.get('Sub-County')),
                 community_health_unit=_str(row.get('Community Unit')),
                 chp_name=_str(row.get('CHP Name')),

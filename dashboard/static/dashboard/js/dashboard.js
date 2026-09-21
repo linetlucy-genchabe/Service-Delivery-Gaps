@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
   initDefinitionModal();
 
   if (typeof HAS_BATCH !== 'undefined' && HAS_BATCH && typeof BATCH_ID !== 'undefined' && BATCH_ID) {
+    initHihtSection();
     // Option 3: Pre-fetch inactive CHPs in background immediately
     // Store result so it renders instantly when user clicks the tab
     prefetchTable('inactive-chps');
@@ -155,6 +156,14 @@ function loadTable(tab) {
     'low-iccm':           '/api/low-iccm/',
     'zero-positive':      '/api/zero-positive/',
     'same-day':           '/api/same-day-flags/',
+    'mam-sam':            '/api/mam-sam/',
+    'home-deliveries':    '/api/maternal-drilldown/?view=home_deliveries&',
+    'pnc-48-missed':      '/api/maternal-drilldown/?view=pnc_48hr_missed&',
+    'pnc-37-missed':      '/api/maternal-drilldown/?view=pnc_3_7d_missed&',
+    'pnc-status':         '/api/maternal-drilldown/?view=pnc_status&',
+    'iz-all':             '/api/iz-defaulters/',
+    'iz-not-referred':    '/api/iz-defaulters/?status=not_referred&',
+    'iz-not-completed':   '/api/iz-defaulters/?status=not_completed&',
   };
 
   const ep  = endpoints[tab];
@@ -188,6 +197,14 @@ function getContainer(tab) {
     'low-iccm':          'low-iccm-container',
     'zero-positive':     'zero-positive-container',
     'same-day':          'same-day-table-container',
+    'mam-sam':           'mam-sam-container',
+    'home-deliveries':   'home-deliveries-container',
+    'pnc-48-missed':     'pnc-48-missed-container',
+    'pnc-37-missed':     'pnc-37-missed-container',
+    'pnc-status':        'pnc-status-container',
+    'iz-all':            'iz-all-container',
+    'iz-not-referred':   'iz-not-referred-container',
+    'iz-not-completed':  'iz-not-completed-container',
   };
   return document.getElementById(map[tab]);
 }
@@ -211,6 +228,91 @@ function renderTable(tab, data) {
   else if (tab === 'low-iccm')          renderLowICCMTable(c, data.results);
   else if (tab === 'zero-positive')     renderZeroPositiveTable(c, data.results);
   else if (tab === 'same-day')          renderSameDayTable(c, data.results);
+  else if (tab === 'mam-sam')           renderMamSamTable(c, data.results);
+  else if (tab === 'home-deliveries')   renderMaternalTable(c, data.results, 'home_deliveries');
+  else if (tab === 'pnc-48-missed')     renderMaternalTable(c, data.results, 'pnc_48hr_missed');
+  else if (tab === 'pnc-37-missed')     renderMaternalTable(c, data.results, 'pnc_3_7d_missed');
+  else if (tab === 'pnc-status')        renderMaternalTable(c, data.results, 'pnc_status');
+  else if (tab === 'iz-all' || tab === 'iz-not-referred' || tab === 'iz-not-completed')
+                                          renderIzDefaultersTable(c, data.results);
+}
+
+// ── MAM/SAM referrals ────────────────────────────────────────
+function statusClass(status) {
+  if (status === 'Not referred') return 'bad';
+  if (status && status.indexOf('not completed') !== -1) return 'warn';
+  return 'good';
+}
+
+function renderMamSamTable(c, rows) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">MAM/SAM Cases</th><th class="num">Referred</th>
+    <th class="num">Referral Completed</th><th>Status</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.mam_sam_total||0}</td>
+      <td class="num">${r.mam_sam_referred||0}</td>
+      <td class="num">${r.mam_sam_referral_completed||0}</td>
+      <td class="${statusClass(r.referral_status)}">${esc(r.referral_status)}</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with MAM/SAM cases</div>`;
+  c.innerHTML = h;
+}
+
+// ── Maternal drill-down (home deliveries / PNC gaps / PNC status) ─────────
+function renderMaternalTable(c, rows, view) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">Total Deliveries</th><th class="num">Facility Deliveries</th>
+    <th class="num">Home Deliveries</th>
+    <th class="num">PNC 48hr Missed</th><th class="num">PNC 3-7d Missed</th><th>PNC Status</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.total_deliveries||0}</td>
+      <td class="num">${r.facility_deliveries||0}</td>
+      <td class="num ${r.home_deliveries>0?'bad':''}">${r.home_deliveries||0}</td>
+      <td class="num ${r.pnc_48_missed>0?'warn':''}">${r.pnc_48_missed||0}</td>
+      <td class="num ${r.pnc_37_missed>0?'warn':''}">${r.pnc_37_missed||0}</td>
+      <td class="${r.pnc_status==='Both PNC visits done'?'good':r.pnc_status==='Neither PNC visit done'?'bad':'warn'}">${esc(r.pnc_status)}</td></tr>`;
+  });
+  const labels = {
+    home_deliveries:  'CHP(s) with at least one home delivery',
+    pnc_48hr_missed:  'CHP(s) with a missed PNC 48hr visit',
+    pnc_3_7d_missed:  'CHP(s) with a missed PNC 3-7d visit',
+    pnc_status:       'CHP(s) not completing both PNC visits',
+  };
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} ${labels[view]||''}</div>`;
+  c.innerHTML = h;
+}
+
+// ── Immunization defaulters ────────────────────────────────────
+function renderIzDefaultersTable(c, rows) {
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
+    <th>CHP Area</th><th>CHP Name</th>
+    <th class="num">Defaulters</th><th class="num">Followed Up</th>
+    <th class="num">Completed</th><th>Status</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h += `<tr><td class="zero">${i+1}</td><td>${esc(r.county)}</td><td>${esc(r.sub_county)}</td>
+      <td><strong>${esc(r.community_health_unit)}</strong></td><td>${esc(r.chp_area)}</td>
+      <td>${esc(r.chw_name)}</td>
+      <td class="num">${r.iz_defaulters||0}</td>
+      <td class="num">${r.iz_defaulters_followed||0}</td>
+      <td class="num">${r.iz_defaulters_completed||0}</td>
+      <td class="${statusClass(r.referral_status)}">${esc(r.referral_status)}</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s)</div>`;
+  c.innerHTML = h;
 }
 
 // ── Inactive CHPs ─────────────────────────────────────────────
@@ -402,6 +504,7 @@ function renderU5HighU5Table(c, rows) {
     <th>#</th><th>County</th><th>Sub-County</th><th>Community Health Unit</th>
     <th>CHP Area</th><th>CHP Name</th>
     <th class="num">U5 Assessment Rate</th><th class="num">U5 Assessed</th>
+    <th class="num">iCCM Assessments</th>
     <th class="num">Positive Diagnoses</th>
   </tr></thead><tbody>`;
   rows.forEach((r, i) => {
@@ -410,6 +513,7 @@ function renderU5HighU5Table(c, rows) {
       <td>${esc(r.chw_name)}</td>
       <td class="num good">${r.u5_rate_pct}%</td>
       <td class="num">${r.num_u5_assessed}</td>
+      <td class="num">${r.iccm_assessments||0}</td>
       <td class="num ${r.positive_diagnoses_u5===0?'bad':'warn'}">${r.positive_diagnoses_u5}</td></tr>`;
   });
   h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} CHP(s) with high U5 assessment but fewer than 5 positive diagnoses</div>`;
@@ -453,4 +557,128 @@ function closeModal() { document.getElementById('def-modal').style.display = 'no
 function esc(str) {
   if (str == null) return '—';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// HIHT tab — geography breakdown + multi-month trend
+// ============================================================
+function initHihtSection() {
+  const levelBtns = document.querySelectorAll('.hiht-level-btn');
+  if (levelBtns.length) {
+    levelBtns.forEach(btn => {
+      btn.addEventListener('click', function () {
+        levelBtns.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        loadHihtBreakdown(this.dataset.level);
+      });
+    });
+    loadHihtBreakdown('sub_county');
+  }
+
+  const trendBtns = document.querySelectorAll('.hiht-trend-level-btn');
+  if (trendBtns.length) {
+    trendBtns.forEach(btn => {
+      btn.addEventListener('click', function () {
+        trendBtns.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        loadHihtTrend(this.dataset.level);
+      });
+    });
+    loadHihtTrend('county');
+  }
+}
+
+function loadHihtBreakdown(level) {
+  const c = document.getElementById('hiht-breakdown-container');
+  if (!c) return;
+  c.innerHTML = '<div class="table-loading">Loading…</div>';
+
+  const dl = document.getElementById('hiht-download-link');
+  if (dl) {
+    const params = new URLSearchParams({
+      batch: BATCH_ID || '', county: COUNTY || '',
+      sub_county: SUB_COUNTY || '', chu: CHU || '', level: level,
+    });
+    dl.href = '/download/hiht-breakdown/?' + params.toString();
+  }
+
+  const params = new URLSearchParams({
+    batch: BATCH_ID || '', county: COUNTY || '',
+    sub_county: SUB_COUNTY || '', chu: CHU || '', level: level,
+  });
+  fetch('/api/hiht-breakdown/?' + params.toString())
+    .then(r => r.json())
+    .then(data => renderHihtBreakdown(c, data.results, level))
+    .catch(() => { c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading HIHT breakdown.</div>'; });
+}
+
+function renderHihtBreakdown(c, rows, level) {
+  if (!rows || rows.length === 0) {
+    c.innerHTML = '<div class="table-empty">No data for this selection.</div>';
+    return;
+  }
+  const geoLabel = { county: 'County', sub_county: 'Sub-County', chu: 'Community Health Unit', chp: 'CHP' }[level] || 'Geography';
+  const geoField = { county: 'county', sub_county: 'sub_county', chu: 'community_health_unit', chp: 'chw_name' }[level] || 'county';
+
+  let h = `<table class="data-table"><thead><tr>
+    <th>#</th><th>${geoLabel}</th>
+    <th class="num">Non-FP HIHTs/CHW</th><th class="num">FP HIHTs/CHW</th>
+    <th class="num">Total HIHTs/CHW</th><th class="num">Total HIHTs</th><th class="num">Active CHWs</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const rate = r.total_hihts_per_chw;
+    const cls = rate == null ? '' : rate >= 8 ? 'good' : rate >= 4 ? 'warn' : 'bad';
+    h += `<tr><td class="zero">${i+1}</td><td><strong>${esc(r[geoField])}</strong></td>
+      <td class="num">${r.non_fp_hihts_per_chw ?? '—'}</td>
+      <td class="num">${r.fp_hihts_per_chw ?? '—'}</td>
+      <td class="num ${cls}">${rate ?? '—'}</td>
+      <td class="num">${r.total_hihts}</td>
+      <td class="num">${r.active_all}</td></tr>`;
+  });
+  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} ${geoLabel.toLowerCase()}(s), ranked by Total HIHTs/CHW</div>`;
+  c.innerHTML = h;
+}
+
+function loadHihtTrend(level) {
+  const c = document.getElementById('hiht-trend-container');
+  if (!c) return;
+  c.innerHTML = '<div class="table-loading">Loading…</div>';
+
+  const params = new URLSearchParams({ level: level, county: COUNTY || '' });
+  fetch('/api/hiht-trend/?' + params.toString())
+    .then(r => r.json())
+    .then(data => renderHihtTrend(c, data))
+    .catch(() => { c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading HIHT trend.</div>'; });
+}
+
+function renderHihtTrend(c, data) {
+  if (!data.periods || data.periods.length === 0 || !data.series || data.series.length === 0) {
+    c.innerHTML = '<div class="table-empty">Not enough monthly reports uploaded yet to show a trend.</div>';
+    return;
+  }
+  // Colour scale for the heatmap cells, relative to the overall min/max seen.
+  let allVals = [];
+  data.series.forEach(s => s.values.forEach(v => { if (v != null) allVals.push(v); }));
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  function cellColour(v) {
+    if (v == null) return '#f0f0f0';
+    const pct = max > min ? (v - min) / (max - min) : 0.5;
+    // red (low) -> yellow -> green (high)
+    const hue = 0 + pct * 120;
+    return `hsl(${hue}, 65%, 88%)`;
+  }
+
+  let h = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Geography</th>`;
+  data.periods.forEach(p => { h += `<th class="num">${esc(p)}</th>`; });
+  h += `</tr></thead><tbody>`;
+  data.series.forEach(s => {
+    h += `<tr><td><strong>${esc(s.label)}</strong></td>`;
+    s.values.forEach(v => {
+      h += `<td class="num" style="background:${cellColour(v)}">${v ?? '—'}</td>`;
+    });
+    h += `</tr>`;
+  });
+  h += `</tbody></table></div>
+    <div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">Total HIHTs/CHW per period. Greener = higher, redder = lower, relative to what's shown here.</div>`;
+  c.innerHTML = h;
 }
