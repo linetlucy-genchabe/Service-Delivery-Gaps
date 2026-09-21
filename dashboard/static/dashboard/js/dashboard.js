@@ -628,13 +628,23 @@ function loadHihtBreakdown(level) {
     .catch(() => { c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading HIHT breakdown.</div>'; });
 }
 
+// Chart.js instances for the HIHT tab — kept around so a re-render (level
+// switch, filter change) destroys the old chart before drawing a new one,
+// rather than stacking canvases on top of each other.
+let hihtBreakdownChart = null;
+let hihtTrendChart = null;
+const HIHT_TREND_COLORS = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#198754','#dc3545','#0dcaf0','#6c757d','#ffc107','#343a40','#adb5bd'];
+
 function renderHihtBreakdown(c, rows, level) {
   if (!rows || rows.length === 0) {
     c.innerHTML = '<div class="table-empty">No data for this selection.</div>';
+    if (hihtBreakdownChart) { hihtBreakdownChart.destroy(); hihtBreakdownChart = null; }
     return;
   }
   const geoLabel = { county: 'County', sub_county: 'Sub-County', chu: 'Community Health Unit', chp: 'CHP' }[level] || 'Geography';
   const geoField = { county: 'county', sub_county: 'sub_county', chu: 'community_health_unit', chp: 'chw_name' }[level] || 'county';
+
+  renderHihtBreakdownChart(rows, geoLabel, geoField);
 
   let h = `<table class="data-table"><thead><tr>
     <th>#</th><th>${geoLabel}</th>
@@ -655,6 +665,48 @@ function renderHihtBreakdown(c, rows, level) {
   c.innerHTML = h;
 }
 
+// Grouped bar chart of Non-FP / FP / Total HIHTs per CHW, so it's easy to
+// see at a glance which geographies are pulling the number up or down —
+// the table underneath still has every row and the CSV has the full detail.
+function renderHihtBreakdownChart(rows, geoLabel, geoField) {
+  const canvas = document.getElementById('hiht-breakdown-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const TOP_N = 20;
+  const top = rows.slice(0, TOP_N);
+  const labels = top.map(r => r[geoField]);
+
+  if (hihtBreakdownChart) hihtBreakdownChart.destroy();
+  hihtBreakdownChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Non-FP HIHTs/CHW', data: top.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: '#0d6efd' },
+        { label: 'FP HIHTs/CHW',     data: top.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: '#20c997' },
+        { label: 'Total HIHTs/CHW',  data: top.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: '#495057' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: rows.length > TOP_N
+            ? `Top ${TOP_N} of ${rows.length} ${geoLabel.toLowerCase()}(s), by Total HIHTs/CHW`
+            : `${geoLabel} comparison — HIHTs per CHW`,
+        },
+        legend: { position: 'bottom' },
+      },
+      scales: {
+        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 10 } } },
+        y: { beginAtZero: true, title: { display: true, text: 'HIHTs per CHW' } },
+      },
+    },
+  });
+}
+
 function loadHihtTrend(level) {
   const c = document.getElementById('hiht-trend-container');
   if (!c) return;
@@ -670,8 +722,12 @@ function loadHihtTrend(level) {
 function renderHihtTrend(c, data) {
   if (!data.periods || data.periods.length === 0 || !data.series || data.series.length === 0) {
     c.innerHTML = '<div class="table-empty">Not enough monthly reports uploaded yet to show a trend.</div>';
+    if (hihtTrendChart) { hihtTrendChart.destroy(); hihtTrendChart = null; }
     return;
   }
+
+  renderHihtTrendChart(data);
+
   // Colour scale for the heatmap cells, relative to the overall min/max seen.
   let allVals = [];
   data.series.forEach(s => s.values.forEach(v => { if (v != null) allVals.push(v); }));
@@ -697,4 +753,54 @@ function renderHihtTrend(c, data) {
   h += `</tbody></table></div>
     <div style="padding:8px 14px;font-size:12px;color:var(--text-muted)">Total HIHTs/CHW per period. Greener = higher, redder = lower, relative to what's shown here.</div>`;
   c.innerHTML = h;
+}
+
+// Line chart of Total HIHTs/CHW over the last monthly reports, so a rising
+// or falling trend per geography is visible at a glance. The heatmap table
+// above still has every geography and every period in full.
+function renderHihtTrendChart(data) {
+  const canvas = document.getElementById('hiht-trend-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const MAX_SERIES = 12;
+  let series = data.series;
+  let capped = false;
+  if (series.length > MAX_SERIES) {
+    capped = true;
+    series = [...series].sort((a, b) => {
+      const lastVal = (vals) => { for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] != null) return vals[i]; } return -Infinity; };
+      return lastVal(b.values) - lastVal(a.values);
+    }).slice(0, MAX_SERIES);
+  }
+
+  const datasets = series.map((s, i) => ({
+    label: s.label,
+    data: s.values,
+    borderColor: HIHT_TREND_COLORS[i % HIHT_TREND_COLORS.length],
+    backgroundColor: HIHT_TREND_COLORS[i % HIHT_TREND_COLORS.length],
+    spanGaps: true,
+    tension: 0.25,
+  }));
+
+  if (hihtTrendChart) hihtTrendChart.destroy();
+  hihtTrendChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels: data.periods, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: capped
+            ? `Top ${MAX_SERIES} of ${data.series.length}, by most recent Total HIHTs/CHW`
+            : 'Total HIHTs/CHW trend',
+        },
+        legend: { position: 'bottom' },
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Total HIHTs/CHW' } },
+      },
+    },
+  });
 }

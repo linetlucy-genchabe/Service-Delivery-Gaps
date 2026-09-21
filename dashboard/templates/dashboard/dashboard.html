@@ -189,6 +189,9 @@
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chp">CHP</button>
     <a id="hiht-download-link" href="{% url 'download_hiht_breakdown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&level=sub_county" class="btn btn-sm btn-outline" style="margin-left:auto">⬇ Download CSV</a>
   </div>
+  <div class="chart-card" style="margin-bottom:14px;">
+    <div style="height:340px"><canvas id="hiht-breakdown-chart"></canvas></div>
+  </div>
   <div id="hiht-breakdown-container"><div class="table-loading">Loading…</div></div>
 
   <div class="section-label" style="margin-top:24px">📈 HIHT Trend (last 6 monthly reports)</div>
@@ -196,6 +199,9 @@
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
     <button class="btn btn-sm btn-outline hiht-trend-level-btn active" data-level="county">By County</button>
     <button class="btn btn-sm btn-outline hiht-trend-level-btn" data-level="sub_county">By Sub-County</button>
+  </div>
+  <div class="chart-card" style="margin-bottom:14px;">
+    <div style="height:340px"><canvas id="hiht-trend-chart"></canvas></div>
   </div>
   <div id="hiht-trend-container"><div class="table-loading">Loading…</div></div>
 </div>
@@ -547,6 +553,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 const BATCH_ID   = "{{ selected_batch_id }}";
 const COUNTY     = "{{ selected_county }}";

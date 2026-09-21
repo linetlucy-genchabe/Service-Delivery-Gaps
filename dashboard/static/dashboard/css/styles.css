@@ -264,6 +264,14 @@ body {
 .data-table .bad  { color: var(--red); font-weight: 600; }
 .data-table .good { color: var(--green); font-weight: 600; }
 
+.chart-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 16px 16px 8px;
+}
+
 .table-loading { padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .table-empty   { padding: 32px; text-align: center; color: var(--green); font-size: 14px; font-weight: 600; }
 .table-scroll  { overflow-x: auto; max-height: 480px; overflow-y: auto; }
