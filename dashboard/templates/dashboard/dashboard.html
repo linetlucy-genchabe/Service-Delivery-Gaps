@@ -194,16 +194,7 @@
   </div>
   <div id="hiht-breakdown-container"><div class="table-loading">Loading…</div></div>
 
-  <div class="section-label" style="margin-top:24px">📈 HIHT Trend (last 6 monthly reports)</div>
-  <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">Based on monthly uploads only — weekly batches are partial-period snapshots and are excluded here to keep the trend comparable month to month.</p>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-    <button class="btn btn-sm btn-outline hiht-trend-level-btn active" data-level="county">By County</button>
-    <button class="btn btn-sm btn-outline hiht-trend-level-btn" data-level="sub_county">By Sub-County</button>
-  </div>
-  <div class="chart-card" style="margin-bottom:14px;">
-    <div style="height:340px"><canvas id="hiht-trend-chart"></canvas></div>
-  </div>
-  <div id="hiht-trend-container"><div class="table-loading">Loading…</div></div>
+  <p style="font-size:12px;color:var(--text-muted);margin-top:16px">Looking for the multi-month trend? It's now on its own page — <a href="{% url 'hiht_trends' %}">🎯 HIHT Trends</a>, under Scorecards.</p>
 </div>
 
 <!-- CHILD HEALTH -->

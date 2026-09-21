@@ -682,9 +682,11 @@ function renderHihtBreakdownChart(rows, geoLabel, geoField) {
     data: {
       labels,
       datasets: [
-        { label: 'Non-FP HIHTs/CHW', data: top.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: '#0d6efd' },
-        { label: 'FP HIHTs/CHW',     data: top.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: '#20c997' },
-        { label: 'Total HIHTs/CHW',  data: top.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: '#495057' },
+        // Same palette as the trend line chart below, so the two charts feel
+        // like one consistent set rather than two different color schemes.
+        { label: 'Non-FP HIHTs/CHW', data: top.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: HIHT_TREND_COLORS[0] },
+        { label: 'FP HIHTs/CHW',     data: top.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: HIHT_TREND_COLORS[2] },
+        { label: 'Total HIHTs/CHW',  data: top.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: HIHT_TREND_COLORS[4] },
       ],
     },
     options: {

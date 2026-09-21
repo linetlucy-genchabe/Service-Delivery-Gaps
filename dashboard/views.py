@@ -584,6 +584,39 @@ def api_hiht_trend(request):
     return JsonResponse(trend)
 
 
+@login_required
+def hiht_trends_view(request):
+    """
+    Dedicated HIHT Trends scorecard: Total HIHTs/CHW across the last 6
+    monthly reports, by county or by sub-county. Split out of the Gaps
+    Dashboard's HIHT tab (which now only shows the current-period summary
+    and breakdown) so multi-month trend lives alongside the other
+    scorecards.
+    """
+    selected_county    = request.GET.get('county', '')
+    selected_subcounty = request.GET.get('sub_county', '')
+
+    monthly_batches = auto_detect_monthly_batches()
+    counties     = []
+    sub_counties = []
+    if monthly_batches:
+        latest_qs = CHWRecord.objects.filter(batch=monthly_batches[-1])
+        counties = list(latest_qs.values_list('county', flat=True).distinct().order_by('county'))
+        if selected_county:
+            sub_counties = list(
+                latest_qs.filter(county=selected_county)
+                         .values_list('sub_county', flat=True).distinct().order_by('sub_county')
+            )
+
+    return render(request, 'dashboard/hiht_trends.html', {
+        'counties':            counties,
+        'sub_counties':        sub_counties,
+        'selected_county':     selected_county,
+        'selected_subcounty':  selected_subcounty,
+        'has_monthly_batches': bool(monthly_batches),
+    })
+
+
 def _maternal_delivery_rows(qs, view):
     """
     view: 'home_deliveries' | 'pnc_48hr_missed' | 'pnc_3_7d_missed' | 'pnc_status'

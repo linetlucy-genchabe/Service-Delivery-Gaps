@@ -62,4 +62,5 @@ urlpatterns = [
     path('api/hiht-breakdown/',            views.api_hiht_breakdown,      name='api_hiht_breakdown'),
     path('download/hiht-breakdown/',       views.download_hiht_breakdown, name='download_hiht_breakdown'),
     path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
+    path('hiht-trends/',                   views.hiht_trends_view,        name='hiht_trends'),
 ]

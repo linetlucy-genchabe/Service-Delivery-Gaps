@@ -1,0 +1,66 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}HIHT Trends · Service Delivery Gaps{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">🎯 HIHT Trends</h1>
+    <p class="page-subtitle">Total HIHTs/CHW across the last 6 monthly reports, by county or sub-county.</p>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="filter-bar">
+  <form method="get" id="hiht-trends-filter-form" class="filter-form">
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for c in counties %}
+          <option value="{{ c }}" {% if selected_county == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if selected_county %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in sub_counties %}
+          <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <a href="{% url 'hiht_trends' %}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+  </form>
+</div>
+
+{% if not has_monthly_batches %}
+  <div class="table-empty">No monthly reports uploaded yet — upload at least one monthly CHW Detail batch to see the HIHT trend.</div>
+{% else %}
+  <div class="section-label">📈 HIHT Trend (last 6 monthly reports)</div>
+  <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">Based on monthly uploads only — weekly batches are partial-period snapshots and are excluded here to keep the trend comparable month to month.</p>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <button class="btn btn-sm btn-outline hiht-trend-level-btn active" data-level="county">By County</button>
+    <button class="btn btn-sm btn-outline hiht-trend-level-btn" data-level="sub_county">By Sub-County</button>
+  </div>
+  <div class="chart-card" style="margin-bottom:14px;">
+    <div style="height:380px"><canvas id="hiht-trend-chart"></canvas></div>
+  </div>
+  <div id="hiht-trend-container"><div class="table-loading">Loading…</div></div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const COUNTY     = "{{ selected_county }}";
+const SUB_COUNTY = "{{ selected_subcounty }}";
+// initHihtSection() wires up both the breakdown level buttons and the trend
+// level buttons — on this page only the trend buttons (.hiht-trend-level-btn)
+// exist, so it just skips the breakdown half and loads the trend.
+document.addEventListener('DOMContentLoaded', initHihtSection);
+</script>
+{% endblock %}
