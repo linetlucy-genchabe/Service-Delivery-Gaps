@@ -584,24 +584,10 @@ function initHihtSection() {
     });
     loadHihtBreakdown(defaultLevel);
   }
-
-  const trendBtns = document.querySelectorAll('.hiht-trend-level-btn');
-  if (trendBtns.length) {
-    // Same idea for the trend heatmap: if a county is already selected up
-    // top, go straight to the sub-county trend for that county rather than
-    // the all-counties view.
-    let defaultTrendLevel = COUNTY ? 'sub_county' : 'county';
-
-    trendBtns.forEach(b => b.classList.toggle('active', b.dataset.level === defaultTrendLevel));
-    trendBtns.forEach(btn => {
-      btn.addEventListener('click', function () {
-        trendBtns.forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        loadHihtTrend(this.dataset.level);
-      });
-    });
-    loadHihtTrend(defaultTrendLevel);
-  }
+  // The multi-month trend (loadHihtTrend) lives on its own "HIHTs Trends"
+  // page now, with a single cascading county/sub-county/CHU filter bar
+  // instead of a separate level toggle here — see hiht_trends.html, which
+  // calls loadHihtTrend directly with the level implied by its filters.
 }
 
 function loadHihtBreakdown(level) {
@@ -714,7 +700,10 @@ function loadHihtTrend(level) {
   if (!c) return;
   c.innerHTML = '<div class="table-loading">Loading…</div>';
 
-  const params = new URLSearchParams({ level: level, county: COUNTY || '', sub_county: SUB_COUNTY || '' });
+  const params = new URLSearchParams({
+    level: level, county: COUNTY || '', sub_county: SUB_COUNTY || '',
+    chu: (typeof CHU !== 'undefined' && CHU) || '',
+  });
   fetch('/api/hiht-trend/?' + params.toString())
     .then(r => r.json())
     .then(data => renderHihtTrend(c, data))

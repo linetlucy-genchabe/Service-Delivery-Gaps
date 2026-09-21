@@ -5,7 +5,7 @@
 <div class="page-header">
   <div>
     <h1 class="page-title">🎯 HIHTs Trends</h1>
-    <p class="page-subtitle">Total HIHTs/CHW across the last 6 monthly reports, by county or sub-county.</p>
+    <p class="page-subtitle">Total HIHTs/CHW across the last 6 monthly reports.</p>
   </div>
 </div>
 
@@ -31,7 +31,20 @@
         {% endfor %}
       </select>
     </div>
-    <a href="{% url 'hiht_trends' %}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+    {% if selected_subcounty %}
+    <div class="filter-group">
+      <label class="filter-label">Community Health Unit</label>
+      <select name="chu" class="filter-select" onchange="this.form.submit()">
+        <option value="">All CHUs</option>
+        {% for c in chus %}
+          <option value="{{ c }}" {% if selected_chu == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if selected_county %}
+      <a href="{% url 'hiht_trends' %}" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
   </form>
 </div>
@@ -40,11 +53,13 @@
   <div class="table-empty">No monthly reports uploaded yet — upload at least one monthly CHW Detail batch to see the HIHT trend.</div>
 {% else %}
   <div class="section-label">📈 HIHT Trend (last 6 monthly reports)</div>
-  <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">Based on monthly uploads only — weekly batches are partial-period snapshots and are excluded here to keep the trend comparable month to month.</p>
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-    <button class="btn btn-sm btn-outline hiht-trend-level-btn active" data-level="county">By County</button>
-    <button class="btn btn-sm btn-outline hiht-trend-level-btn" data-level="sub_county">By Sub-County</button>
-  </div>
+  <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">
+    Based on monthly uploads only — weekly batches are partial-period snapshots and are excluded here to keep the trend comparable month to month.
+    {% if selected_chu %}Showing each CHP in {{ selected_chu }}.
+    {% elif selected_subcounty %}Showing each CHU in {{ selected_subcounty }}.
+    {% elif selected_county %}Showing each sub-county in {{ selected_county }}.
+    {% else %}Showing all counties — use the filters above to drill down to sub-county, CHU or CHP.{% endif %}
+  </p>
   <div class="chart-card" style="margin-bottom:14px;">
     <div style="height:380px"><canvas id="hiht-trend-chart"></canvas></div>
   </div>
@@ -56,11 +71,16 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-const COUNTY     = "{{ selected_county }}";
-const SUB_COUNTY = "{{ selected_subcounty }}";
-// initHihtSection() wires up both the breakdown level buttons and the trend
-// level buttons — on this page only the trend buttons (.hiht-trend-level-btn)
-// exist, so it just skips the breakdown half and loads the trend.
-document.addEventListener('DOMContentLoaded', initHihtSection);
+const COUNTY      = "{{ selected_county }}";
+const SUB_COUNTY  = "{{ selected_subcounty }}";
+const CHU         = "{{ selected_chu }}";
+const TREND_LEVEL = "{{ trend_level }}";
+// Wrapped in a function so "loadHihtTrend" is looked up only once this
+// callback actually runs (after dashboard.js, loaded further down the
+// page, has defined it) — referencing it directly here would throw before
+// dashboard.js even loads, since this block renders earlier in the page.
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof loadHihtTrend === 'function') loadHihtTrend(TREND_LEVEL);
+});
 </script>
 {% endblock %}

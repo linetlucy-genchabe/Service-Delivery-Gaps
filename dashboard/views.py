@@ -565,21 +565,20 @@ def api_hiht_trend(request):
     level      = request.GET.get('level', 'sub_county')
     county     = request.GET.get('county', '')
     sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
 
     batches = auto_detect_monthly_batches()
     trend = compute_hiht_trend(level=level, batches=batches)
 
-    # Respect whatever the dashboard's top-level filters are already scoped
-    # to, so switching to the HIHT tab doesn't reset the view back to
-    # "everything" — the person shouldn't have to re-pick the same
-    # county/sub-county a second time.
-    if level == 'county' and county:
+    # Respect whatever filters are already set, so the trend doesn't reset
+    # back to "everything" — narrow to whichever of county/sub-county/CHU
+    # the chosen level's geography actually carries.
+    if county:
         trend['series'] = [s for s in trend['series'] if s['geo'].get('county') == county]
-    elif level == 'sub_county':
-        if county:
-            trend['series'] = [s for s in trend['series'] if s['geo'].get('county') == county]
-        if sub_county:
-            trend['series'] = [s for s in trend['series'] if s['geo'].get('sub_county') == sub_county]
+    if sub_county:
+        trend['series'] = [s for s in trend['series'] if s['geo'].get('sub_county') == sub_county]
+    if chu:
+        trend['series'] = [s for s in trend['series'] if s['geo'].get('community_health_unit') == chu]
 
     return JsonResponse(trend)
 
@@ -588,17 +587,25 @@ def api_hiht_trend(request):
 def hiht_trends_view(request):
     """
     Dedicated HIHT Trends scorecard: Total HIHTs/CHW across the last 6
-    monthly reports, by county or by sub-county. Split out of the Gaps
-    Dashboard's HIHT tab (which now only shows the current-period summary
-    and breakdown) so multi-month trend lives alongside the other
-    scorecards.
+    monthly reports. Split out of the Gaps Dashboard's HIHT tab (which now
+    only shows the current-period summary and breakdown) so multi-month
+    trend lives alongside the other scorecards.
+
+    One cascading filter bar (county -> sub-county -> CHU) drives the whole
+    page — no separate "By County/By Sub-County" toggle. The trend
+    automatically drills to the level below whatever's filtered: nothing
+    selected shows counties compared to each other, picking a county shows
+    its sub-counties, picking a sub-county shows its CHUs, and picking a
+    CHU shows its CHPs.
     """
     selected_county    = request.GET.get('county', '')
     selected_subcounty = request.GET.get('sub_county', '')
+    selected_chu       = request.GET.get('chu', '')
 
     monthly_batches = auto_detect_monthly_batches()
     counties     = []
     sub_counties = []
+    chus         = []
     if monthly_batches:
         latest_qs = CHWRecord.objects.filter(batch=monthly_batches[-1])
         counties = list(latest_qs.values_list('county', flat=True).distinct().order_by('county'))
@@ -607,12 +614,29 @@ def hiht_trends_view(request):
                 latest_qs.filter(county=selected_county)
                          .values_list('sub_county', flat=True).distinct().order_by('sub_county')
             )
+        if selected_subcounty:
+            chus = list(
+                latest_qs.filter(county=selected_county, sub_county=selected_subcounty)
+                         .values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+            )
+
+    if selected_chu:
+        trend_level = 'chp'
+    elif selected_subcounty:
+        trend_level = 'chu'
+    elif selected_county:
+        trend_level = 'sub_county'
+    else:
+        trend_level = 'county'
 
     return render(request, 'dashboard/hiht_trends.html', {
         'counties':            counties,
         'sub_counties':        sub_counties,
+        'chus':                chus,
         'selected_county':     selected_county,
         'selected_subcounty':  selected_subcounty,
+        'selected_chu':        selected_chu,
+        'trend_level':         trend_level,
         'has_monthly_batches': bool(monthly_batches),
     })
 
