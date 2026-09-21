@@ -562,14 +562,24 @@ def api_hiht_trend(request):
     Multi-month HIHT trend for the HIHT charts/heatmap: Total HIHTs/CHW per
     geography (county or sub-county) across the last N monthly batches.
     """
-    level = request.GET.get('level', 'sub_county')
-    county = request.GET.get('county', '')
+    level      = request.GET.get('level', 'sub_county')
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
 
     batches = auto_detect_monthly_batches()
     trend = compute_hiht_trend(level=level, batches=batches)
 
-    if county and level == 'sub_county':
+    # Respect whatever the dashboard's top-level filters are already scoped
+    # to, so switching to the HIHT tab doesn't reset the view back to
+    # "everything" — the person shouldn't have to re-pick the same
+    # county/sub-county a second time.
+    if level == 'county' and county:
         trend['series'] = [s for s in trend['series'] if s['geo'].get('county') == county]
+    elif level == 'sub_county':
+        if county:
+            trend['series'] = [s for s in trend['series'] if s['geo'].get('county') == county]
+        if sub_county:
+            trend['series'] = [s for s in trend['series'] if s['geo'].get('sub_county') == sub_county]
 
     return JsonResponse(trend)
 

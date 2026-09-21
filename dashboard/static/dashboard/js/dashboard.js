@@ -565,6 +565,16 @@ function esc(str) {
 function initHihtSection() {
   const levelBtns = document.querySelectorAll('.hiht-level-btn');
   if (levelBtns.length) {
+    // Jump straight to the next drill-down level below whatever the
+    // top-level filters have already narrowed to, instead of always
+    // resetting to "Sub-County" and making the person re-pick what
+    // they already selected up top.
+    let defaultLevel = 'sub_county';
+    if (CHU) defaultLevel = 'chp';
+    else if (SUB_COUNTY) defaultLevel = 'chu';
+    else if (COUNTY) defaultLevel = 'sub_county';
+
+    levelBtns.forEach(b => b.classList.toggle('active', b.dataset.level === defaultLevel));
     levelBtns.forEach(btn => {
       btn.addEventListener('click', function () {
         levelBtns.forEach(b => b.classList.remove('active'));
@@ -572,11 +582,17 @@ function initHihtSection() {
         loadHihtBreakdown(this.dataset.level);
       });
     });
-    loadHihtBreakdown('sub_county');
+    loadHihtBreakdown(defaultLevel);
   }
 
   const trendBtns = document.querySelectorAll('.hiht-trend-level-btn');
   if (trendBtns.length) {
+    // Same idea for the trend heatmap: if a county is already selected up
+    // top, go straight to the sub-county trend for that county rather than
+    // the all-counties view.
+    let defaultTrendLevel = COUNTY ? 'sub_county' : 'county';
+
+    trendBtns.forEach(b => b.classList.toggle('active', b.dataset.level === defaultTrendLevel));
     trendBtns.forEach(btn => {
       btn.addEventListener('click', function () {
         trendBtns.forEach(b => b.classList.remove('active'));
@@ -584,7 +600,7 @@ function initHihtSection() {
         loadHihtTrend(this.dataset.level);
       });
     });
-    loadHihtTrend('county');
+    loadHihtTrend(defaultTrendLevel);
   }
 }
 
@@ -644,7 +660,7 @@ function loadHihtTrend(level) {
   if (!c) return;
   c.innerHTML = '<div class="table-loading">Loading…</div>';
 
-  const params = new URLSearchParams({ level: level, county: COUNTY || '' });
+  const params = new URLSearchParams({ level: level, county: COUNTY || '', sub_county: SUB_COUNTY || '' });
   fetch('/api/hiht-trend/?' + params.toString())
     .then(r => r.json())
     .then(data => renderHihtTrend(c, data))
