@@ -81,6 +81,11 @@
 
 {% else %}
 
+<!-- KPI TRENDS CHART -->
+<div class="chart-card" style="margin-bottom:14px;">
+  <div style="height:380px"><canvas id="kpi-trend-chart"></canvas></div>
+</div>
+
 <!-- KPI SCORECARD TABLE -->
 <div class="card">
   <div class="card-header">
@@ -167,4 +172,46 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% if has_data %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const canvas = document.getElementById('kpi-trend-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const labels = {{ trend_labels_json|safe }};
+  const series = {{ trend_series_json|safe }};
+  const colors = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#198754','#dc3545','#0dcaf0','#6c757d','#ffc107'];
+
+  new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: series.map((s, i) => ({
+        label: s.label,
+        data: s.values,
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length],
+        spanGaps: true,
+        tension: 0.25,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: { display: true, text: '% of Monthly Target Achieved, by indicator' },
+        legend: { position: 'bottom' },
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: '% of target' } },
+      },
+    },
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

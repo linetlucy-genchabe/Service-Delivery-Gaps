@@ -2708,6 +2708,16 @@ def kpi_scorecard_view(request):
             'months': [make_kpi_cell(kc['metrics']) for kc in kpi_columns],
         })
 
+    # % of target achieved, per indicator, per month — the same numbers the
+    # table's coloured cells are built from, reshaped for a trend chart so
+    # the rises/falls are visible at a glance instead of only as a colour.
+    trend_labels = [kc['label'] for kc in kpi_columns]
+    trend_series = [
+        {'label': row['label'], 'values': [cell.get('pct_target') for cell in row['months']]}
+        for row in rows
+        if any(cell.get('pct_target') is not None for cell in row['months'])
+    ]
+
     return render(request, 'dashboard/kpi_scorecard.html', {
         'rows':              rows,
         'kpi_columns':       kpi_columns,
@@ -2720,6 +2730,8 @@ def kpi_scorecard_view(request):
         'subcounties':       subcounties,
         'has_data':          bool(kpi_columns and report_ids),
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
+        'trend_labels_json': json.dumps(trend_labels),
+        'trend_series_json': json.dumps(trend_series),
     })
 
 
