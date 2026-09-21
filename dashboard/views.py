@@ -3286,28 +3286,79 @@ HIHT_GEO_LEVELS = {
 }
 
 
+def _hiht_breakdown_query(chw_qs, group_fields):
+    """
+    HIHT metrics grouped by `group_fields`, computed in a single grouped
+    query (conditional Sum/Count aggregation) rather than one query per
+    geography — the earlier per-geography-per-query approach was fine
+    against a handful of test rows but does not scale against a real
+    database with months of history and hundreds of CHUs/CHPs.
+    Returns a list of dicts: each group's geo fields plus its HIHT metrics.
+    """
+    active_qs = chw_qs.filter(is_active=True)
+
+    agg_kwargs = {}
+    for field, _key in HIHT_NON_FP_COMPONENTS:
+        agg_kwargs[field] = Sum(field)
+    for f1, f2, _key in HIHT_DISEASE_PAIRS:
+        agg_kwargs[f1] = Sum(f1)
+        agg_kwargs[f2] = Sum(f2)
+    agg_kwargs[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
+    agg_kwargs['active_all'] = Count('id')
+    agg_kwargs['active_fp']  = Count('id', filter=Q(fp_assessments__gt=0))
+    agg_kwargs['active_iz']  = Count('id', filter=Q(iz_assessments__gt=0))
+
+    grouped = (active_qs.values(*group_fields)
+                         .annotate(**agg_kwargs)
+                         .order_by(*group_fields))
+
+    def rate(n, d):
+        return round(n / d, 2) if d else None
+
+    rows = []
+    for combo in grouped:
+        components = {}
+        non_fp_total = 0
+        for field, key in HIHT_NON_FP_COMPONENTS:
+            val = combo.get(field) or 0
+            components[key] = val
+            non_fp_total += val
+        for f1, f2, key in HIHT_DISEASE_PAIRS:
+            val = (combo.get(f1) or 0) + (combo.get(f2) or 0)
+            components[key] = val
+            non_fp_total += val
+        fp_total = combo.get(HIHT_FP_COMPONENT[0]) or 0
+        components[HIHT_FP_COMPONENT[1]] = fp_total
+        total_active = combo['active_all']
+        active_fp    = combo['active_fp']
+        active_iz    = combo['active_iz']
+        total_hihts  = non_fp_total + fp_total
+
+        row = {f: combo[f] for f in group_fields}
+        row.update({
+            'components':           components,
+            'non_fp_hihts':         non_fp_total,
+            'fp_hihts':             fp_total,
+            'total_hihts':          total_hihts,
+            'active_all':           total_active,
+            'active_fp':            active_fp,
+            'active_iz':            active_iz,
+            'non_fp_hihts_per_chw': rate(non_fp_total, total_active),
+            'fp_hihts_per_chw':     rate(fp_total, active_fp),
+            'total_hihts_per_chw':  rate(total_hihts, total_active),
+        })
+        rows.append(row)
+    return rows
+
+
 def compute_hiht_breakdown(chw_qs, level='sub_county'):
     """
     HIHT metrics grouped by geography level ('county', 'sub_county', 'chu',
     or 'chp'), sorted by Total HIHTs/CHW descending so the biggest drivers
-    (or the biggest drags) show up first.
+    (or the biggest drags) show up first. One database query total.
     """
     group_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
-    combos = (chw_qs.filter(is_active=True)
-                    .values(*group_fields)
-                    .distinct()
-                    .order_by(*group_fields))
-
-    rows = []
-    for combo in combos:
-        filtered = chw_qs
-        for f in group_fields:
-            filtered = filtered.filter(**{f: combo[f]})
-        metrics = compute_hiht_for_queryset(filtered)
-        row = dict(combo)
-        row.update(metrics)
-        rows.append(row)
-
+    rows = _hiht_breakdown_query(chw_qs, group_fields)
     rows.sort(key=lambda r: (r['total_hihts_per_chw'] is None, -(r['total_hihts_per_chw'] or 0)))
     return rows
 
@@ -3318,7 +3369,8 @@ def compute_hiht_trend(level='county', batches=None):
     across a list of monthly UploadBatch objects (oldest first). Used for the
     HIHT trend charts and the multi-month heatmap. Only monthly batches
     should be passed in — weekly batches are partial-period snapshots and
-    would make the trend jagged and misleading.
+    would make the trend jagged and misleading. One query per batch (not per
+    geography per batch).
     """
     if batches is None:
         batches = auto_detect_monthly_batches()
@@ -3326,27 +3378,25 @@ def compute_hiht_trend(level='county', batches=None):
     group_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['county'])
     period_labels = [b.label for b in batches]
 
-    # Collect every geography combo seen across all the batches, so a
-    # geography with no data in a given month still gets a row (blank cell).
-    geo_keys = {}
+    # One grouped query per batch, keyed by the geography tuple.
+    per_batch = []
     for batch in batches:
-        combos = (CHWRecord.objects.filter(batch=batch, is_active=True)
-                            .values(*group_fields).distinct())
-        for combo in combos:
-            key = tuple(combo[f] for f in group_fields)
-            geo_keys.setdefault(key, combo)
+        rows = _hiht_breakdown_query(CHWRecord.objects.filter(batch=batch), group_fields)
+        per_batch.append({tuple(r[f] for f in group_fields): r for r in rows})
+
+    all_keys = set()
+    for d in per_batch:
+        all_keys.update(d.keys())
 
     series = []
-    for key, combo in sorted(geo_keys.items()):
+    for key in sorted(all_keys):
         values = []
-        for batch in batches:
-            qs = CHWRecord.objects.filter(batch=batch)
-            for f in group_fields:
-                qs = qs.filter(**{f: combo[f]})
-            metrics = compute_hiht_for_queryset(qs)
-            values.append(metrics['total_hihts_per_chw'])
-        label = combo[group_fields[-1]] if combo[group_fields[-1]] else combo[group_fields[0]]
-        series.append({'label': label, 'geo': combo, 'values': values})
+        for d in per_batch:
+            r = d.get(key)
+            values.append(r['total_hihts_per_chw'] if r else None)
+        geo = dict(zip(group_fields, key))
+        label = geo[group_fields[-1]] if geo[group_fields[-1]] else geo[group_fields[0]]
+        series.append({'label': label, 'geo': geo, 'values': values})
 
     return {'periods': period_labels, 'series': series}
 
