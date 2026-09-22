@@ -181,6 +181,23 @@ JAZZMIN_UI_TWEAKS = {
 
 import os
 
-# Static file cache busting via Railway environment variable
-# Set STATIC_VERSION in Railway Variables panel, increment on each deploy
-STATIC_VERSION = os.environ.get('STATIC_VERSION', '1')
+# Static file cache busting.
+#
+# This used to require someone to manually bump STATIC_VERSION in Railway's
+# Variables panel on every deploy — which is exactly the kind of easy-to-
+# forget step that was causing everyone to see stale pages/behaviour after
+# a deploy until they did a hard refresh (the service worker's cache-first
+# strategy for CSS/JS keeps serving whatever it last cached under that
+# ?v=... URL, forever, until the URL itself changes).
+#
+# Railway automatically injects RAILWAY_GIT_COMMIT_SHA (and similar) into
+# every deploy's environment with no configuration needed, so we use that
+# to bust the cache automatically on every single push — nobody has to
+# remember to touch a setting again. STATIC_VERSION can still be set
+# manually to override this (e.g. for local testing), but that's optional.
+STATIC_VERSION = (
+    os.environ.get('STATIC_VERSION')
+    or os.environ.get('RAILWAY_GIT_COMMIT_SHA', '')[:10]
+    or os.environ.get('RAILWAY_DEPLOYMENT_ID', '')
+    or '1'
+)

@@ -3,7 +3,11 @@
    Caches static assets for fast load; network-first for data
    ============================================================ */
 
-const CACHE_NAME = 'sd-gaps-v1';
+// __CACHE_VERSION__ is substituted with the current deploy's STATIC_VERSION
+// by the /sw.js view (see cha_dashboard/urls.py) — so every deploy gets a
+// brand new cache name, the old one is dropped on activate below, and
+// nobody has to hard-refresh to pick up a new release.
+const CACHE_NAME = 'sd-gaps-__CACHE_VERSION__';
 
 const STATIC_ASSETS = [
   '/static/dashboard/css/styles.css',
