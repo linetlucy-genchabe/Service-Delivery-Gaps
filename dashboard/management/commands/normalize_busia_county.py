@@ -25,15 +25,17 @@ blows up with an IntegrityError whenever a "Busia" row already exists for
 the same report/sub_county/metric/period as a "Busia IS"/"Busia LS" row
 (i.e. that data point already exists under the merged name) — which is
 exactly what happened on the first deploy of this command and crashed the
-app on every startup. So for those two models we go row by row: rename a
-row to 'Busia' when that's free, or just delete it as a redundant
-duplicate when a 'Busia' row already occupies that slot.
+app on every startup. So for those two models we work out, in Python,
+which aliased rows are free to rename and which collide with an existing
+'Busia' row (or with each other), then apply each group with one bulk
+query instead of one query per row — the first version did a per-row
+save()/IntegrityError round trip, which took ~90 seconds over ~10,000
+rows and pushed gunicorn's startup past the healthcheck timeout.
 
 Usage:
     python manage.py normalize_busia_county
 """
 from django.core.management.base import BaseCommand
-from django.db import IntegrityError, transaction
 
 from dashboard.models import (
     CHWRecord, SupervisionRecord, CHPSyncRecord,
@@ -45,9 +47,13 @@ BUSIA_ALIASES = ['Busia IS', 'Busia LS', 'busia is', 'busia ls', 'BUSIA IS', 'BU
 # Models with no unique constraint on county — a plain bulk update is safe.
 SIMPLE_MODELS = [CHWRecord, SupervisionRecord, CHPSyncRecord]
 
-# Models with a unique constraint that includes county — must merge row by
-# row, since two aliased rows can collide with an existing 'Busia' row.
-CONSTRAINED_MODELS = [KPIDataPoint, DashUtilDataPoint]
+# Models with a unique constraint that includes county, and the other
+# fields (besides `report`) that make up that constraint. Two aliased rows
+# can collide with an existing 'Busia' row, or with each other.
+CONSTRAINED_MODELS = [
+    (KPIDataPoint, ['sub_county', 'metric_key', 'year', 'month']),
+    (DashUtilDataPoint, ['sub_county']),
+]
 
 
 class Command(BaseCommand):
@@ -62,28 +68,47 @@ class Command(BaseCommand):
             if updated:
                 self.stdout.write(f"{model.__name__}: merged {updated} row(s) into 'Busia'")
 
-        for model in CONSTRAINED_MODELS:
-            renamed = 0
-            deleted_dupes = 0
-            rows = list(model.objects.filter(county__in=BUSIA_ALIASES))
-            for row in rows:
-                try:
-                    with transaction.atomic():
-                        row.county = 'Busia'
-                        row.save(update_fields=['county'])
-                    renamed += 1
-                except IntegrityError:
-                    # A 'Busia' row already exists for this exact
-                    # report/sub_county/metric/period — the data is
-                    # already represented, so this aliased row is a
-                    # redundant duplicate and can be dropped.
-                    model.objects.filter(pk=row.pk).delete()
-                    deleted_dupes += 1
-            total += renamed + deleted_dupes
-            if renamed or deleted_dupes:
+        for model, key_fields in CONSTRAINED_MODELS:
+            aliased = list(model.objects.filter(county__in=BUSIA_ALIASES))
+            if not aliased:
+                continue
+
+            def key_of(row):
+                return (row.report_id,) + tuple(getattr(row, f) for f in key_fields)
+
+            existing_busia_keys = set(
+                key_of(row) for row in model.objects.filter(county='Busia').only(
+                    'report_id', *key_fields
+                )
+            )
+
+            to_rename = []
+            to_delete_ids = []
+            claimed_keys = set()
+            for row in aliased:
+                key = key_of(row)
+                if key in existing_busia_keys or key in claimed_keys:
+                    # Either a 'Busia' row already occupies this slot, or
+                    # another aliased row (e.g. both 'Busia LS' and 'Busia
+                    # IS') got there first in this same pass — either way
+                    # the data is already represented, so this row is a
+                    # redundant duplicate.
+                    to_delete_ids.append(row.pk)
+                else:
+                    claimed_keys.add(key)
+                    row.county = 'Busia'
+                    to_rename.append(row)
+
+            if to_delete_ids:
+                model.objects.filter(pk__in=to_delete_ids).delete()
+            if to_rename:
+                model.objects.bulk_update(to_rename, ['county'], batch_size=500)
+
+            total += len(to_rename) + len(to_delete_ids)
+            if to_rename or to_delete_ids:
                 self.stdout.write(
-                    f"{model.__name__}: merged {renamed} row(s) into 'Busia', "
-                    f"removed {deleted_dupes} redundant duplicate(s)"
+                    f"{model.__name__}: merged {len(to_rename)} row(s) into 'Busia', "
+                    f"removed {len(to_delete_ids)} redundant duplicate(s)"
                 )
 
         if total:

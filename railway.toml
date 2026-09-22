@@ -2,7 +2,15 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python manage.py migrate --noinput && python manage.py normalize_busia_county && python manage.py collectstatic --noinput && gunicorn cha_dashboard.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+# Runs once, in its own short-lived container, before the new deployment
+# is switched in. Migrations, the Busia county backfill, and collectstatic
+# all belong here rather than in startCommand: they don't need to run on
+# every container start, and lumping them into startCommand delayed
+# gunicorn from listening by ~90s on a large backfill, which blew past the
+# healthcheck timeout below and made Railway report a healthy deploy as
+# failed.
+preDeployCommand = "python manage.py migrate --noinput && python manage.py normalize_busia_county && python manage.py collectstatic --noinput"
+startCommand = "gunicorn cha_dashboard.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
 healthcheckPath = "/healthz/"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
