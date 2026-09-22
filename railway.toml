@@ -3,14 +3,21 @@ builder = "NIXPACKS"
 
 [deploy]
 # Runs once, in its own short-lived container, before the new deployment
-# is switched in. Migrations, the Busia county backfill, and collectstatic
-# all belong here rather than in startCommand: they don't need to run on
-# every container start, and lumping them into startCommand delayed
-# gunicorn from listening by ~90s on a large backfill, which blew past the
-# healthcheck timeout below and made Railway report a healthy deploy as
-# failed.
-preDeployCommand = "python manage.py migrate --noinput && python manage.py normalize_busia_county && python manage.py collectstatic --noinput"
-startCommand = "gunicorn cha_dashboard.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+# is switched in. Migrations and the Busia county backfill belong here —
+# they only touch the database, not the filesystem — so they don't delay
+# gunicorn's startup (an earlier version put a slow backfill in
+# startCommand and blew past the healthcheck timeout below).
+#
+# IMPORTANT: collectstatic must NOT live here. Railway's pre-deploy
+# container has its own separate, throwaway filesystem — it does not share
+# disk with the container that actually runs startCommand — so anything
+# collectstatic writes here is gone by the time gunicorn starts, which is
+# exactly what caused every page to load with no CSS/JS after the last
+# deploy. collectstatic is fast (a few seconds), so it stays in
+# startCommand where its output actually persists into the running
+# container.
+preDeployCommand = "python manage.py migrate --noinput && python manage.py normalize_busia_county"
+startCommand = "python manage.py collectstatic --noinput && gunicorn cha_dashboard.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
 healthcheckPath = "/healthz/"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
