@@ -685,13 +685,14 @@ function renderHihtBreakdownChart(rows, geoLabel, geoField) {
     card.className = 'chart-card';
     card.style.marginBottom = '14px';
     const canvasId = `hiht-breakdown-chart-${idx}`;
-    card.innerHTML = `<div style="height:${Math.max(280, chunk.length * 26)}px"><canvas id="${canvasId}"></canvas></div>`;
+    card.innerHTML = `<div style="height:320px"><canvas id="${canvasId}"></canvas></div>`;
     container.appendChild(card);
 
     const labels = chunk.map(r => r[geoField]);
-    // Horizontal bars once a chunk has more than a handful of rows — labels
-    // stay readable down the side instead of overlapping along the bottom.
-    const horizontal = chunk.length > 8;
+    // Always vertical bars — chunks are capped at CHUNK_SIZE rows, so
+    // labels along the bottom stay readable without switching to
+    // horizontal bars for larger chunks.
+    const horizontal = false;
     const categoryScale = { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 10 } } };
     const valueScale = { beginAtZero: true, title: { display: true, text: 'HIHTs per CHW' } };
 
