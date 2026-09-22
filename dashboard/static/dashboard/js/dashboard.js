@@ -567,9 +567,11 @@ function initHihtSection() {
   if (levelBtns.length) {
     // Jump straight to the next drill-down level below whatever the
     // top-level filters have already narrowed to, instead of always
-    // resetting to "Sub-County" and making the person re-pick what
-    // they already selected up top.
-    let defaultLevel = 'sub_county';
+    // resetting to a fixed level and making the person re-pick what
+    // they already selected up top. With no county chosen yet, compare
+    // by county first rather than dumping every sub-county from every
+    // county onto one cramped chart.
+    let defaultLevel = 'county';
     if (CHU) defaultLevel = 'chp';
     else if (SUB_COUNTY) defaultLevel = 'chu';
     else if (COUNTY) defaultLevel = 'sub_county';
