@@ -665,7 +665,7 @@ function renderHihtBreakdown(c, rows, level) {
 // A single chart with 40+ bars squeezed onto it is unreadable (labels
 // overlap, bars shrink to slivers), so every geography still gets its own
 // bar: rows are split into pages of CHUNK_SIZE, each rendered as its own
-// full-width chart stacked one under another (rows 1–20, 21–40, ...).
+// full-width chart stacked one under another (rows 1–10, 11–20, ...).
 function renderHihtBreakdownChart(rows, geoLabel, geoField) {
   const container = document.getElementById('hiht-breakdown-charts');
   if (!container || typeof Chart === 'undefined') return;
@@ -674,7 +674,7 @@ function renderHihtBreakdownChart(rows, geoLabel, geoField) {
   hihtBreakdownCharts = [];
   container.innerHTML = '';
 
-  const CHUNK_SIZE = 20;
+  const CHUNK_SIZE = 10;
   const chunks = [];
   for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
 
