@@ -615,16 +615,21 @@ function loadHihtBreakdown(level) {
 }
 
 // Chart.js instances for the HIHT tab — kept around so a re-render (level
-// switch, filter change) destroys the old chart before drawing a new one,
-// rather than stacking canvases on top of each other.
-let hihtBreakdownChart = null;
+// switch, filter change) destroys the old chart(s) before drawing new ones,
+// rather than stacking canvases on top of each other. The breakdown chart
+// can be split across several canvases (see renderHihtBreakdownChart), so
+// it's an array; the trend chart is always exactly one.
+let hihtBreakdownCharts = [];
 let hihtTrendChart = null;
 const HIHT_TREND_COLORS = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#198754','#dc3545','#0dcaf0','#6c757d','#ffc107','#343a40','#adb5bd'];
 
 function renderHihtBreakdown(c, rows, level) {
   if (!rows || rows.length === 0) {
     c.innerHTML = '<div class="table-empty">No data for this selection.</div>';
-    if (hihtBreakdownChart) { hihtBreakdownChart.destroy(); hihtBreakdownChart = null; }
+    hihtBreakdownCharts.forEach(ch => ch.destroy());
+    hihtBreakdownCharts = [];
+    const chartsC = document.getElementById('hiht-breakdown-charts');
+    if (chartsC) chartsC.innerHTML = '';
     return;
   }
   const geoLabel = { county: 'County', sub_county: 'Sub-County', chu: 'Community Health Unit', chp: 'CHP' }[level] || 'Geography';
@@ -651,47 +656,77 @@ function renderHihtBreakdown(c, rows, level) {
   c.innerHTML = h;
 }
 
-// Grouped bar chart of Non-FP / FP / Total HIHTs per CHW, so it's easy to
-// see at a glance which geographies are pulling the number up or down —
+// Grouped bar chart(s) of Non-FP / FP / Total HIHTs per CHW, so it's easy
+// to see at a glance which geographies are pulling the number up or down —
 // the table underneath still has every row and the CSV has the full detail.
+//
+// A single chart with 40+ bars squeezed onto it is unreadable (labels
+// overlap, bars shrink to slivers), so every geography still gets its own
+// bar: rows are split into pages of CHUNK_SIZE, each rendered as its own
+// full-width chart stacked one under another (rows 1–20, 21–40, ...).
 function renderHihtBreakdownChart(rows, geoLabel, geoField) {
-  const canvas = document.getElementById('hiht-breakdown-chart');
-  if (!canvas || typeof Chart === 'undefined') return;
+  const container = document.getElementById('hiht-breakdown-charts');
+  if (!container || typeof Chart === 'undefined') return;
 
-  const TOP_N = 20;
-  const top = rows.slice(0, TOP_N);
-  const labels = top.map(r => r[geoField]);
+  hihtBreakdownCharts.forEach(ch => ch.destroy());
+  hihtBreakdownCharts = [];
+  container.innerHTML = '';
 
-  if (hihtBreakdownChart) hihtBreakdownChart.destroy();
-  hihtBreakdownChart = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        // Same palette as the trend line chart below, so the two charts feel
-        // like one consistent set rather than two different color schemes.
-        { label: 'Non-FP HIHTs/CHW', data: top.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: HIHT_TREND_COLORS[0] },
-        { label: 'FP HIHTs/CHW',     data: top.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: HIHT_TREND_COLORS[2] },
-        { label: 'Total HIHTs/CHW',  data: top.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: HIHT_TREND_COLORS[4] },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: rows.length > TOP_N
-            ? `Top ${TOP_N} of ${rows.length} ${geoLabel.toLowerCase()}(s), by Total HIHTs/CHW`
-            : `${geoLabel} comparison — HIHTs per CHW`,
+  const CHUNK_SIZE = 20;
+  const chunks = [];
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
+
+  chunks.forEach((chunk, idx) => {
+    const start = idx * CHUNK_SIZE + 1;
+    const end = idx * CHUNK_SIZE + chunk.length;
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.style.marginBottom = '14px';
+    const canvasId = `hiht-breakdown-chart-${idx}`;
+    card.innerHTML = `<div style="height:${Math.max(280, chunk.length * 26)}px"><canvas id="${canvasId}"></canvas></div>`;
+    container.appendChild(card);
+
+    const labels = chunk.map(r => r[geoField]);
+    // Horizontal bars once a chunk has more than a handful of rows — labels
+    // stay readable down the side instead of overlapping along the bottom.
+    const horizontal = chunk.length > 8;
+    const categoryScale = { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 10 } } };
+    const valueScale = { beginAtZero: true, title: { display: true, text: 'HIHTs per CHW' } };
+
+    const chart = new Chart(document.getElementById(canvasId).getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          // Same palette as the trend line chart below, so the two charts
+          // feel like one consistent set rather than two different schemes.
+          { label: 'Non-FP HIHTs/CHW', data: chunk.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: HIHT_TREND_COLORS[0] },
+          { label: 'FP HIHTs/CHW',     data: chunk.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: HIHT_TREND_COLORS[2] },
+          { label: 'Total HIHTs/CHW',  data: chunk.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: HIHT_TREND_COLORS[4] },
+        ],
+      },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: chunks.length > 1
+              ? `${geoLabel} ${start}–${end} of ${rows.length}, by Total HIHTs/CHW`
+              : `${geoLabel} comparison — HIHTs per CHW`,
+          },
+          legend: { display: idx === 0, position: 'bottom' },
         },
-        legend: { position: 'bottom' },
+        // Chart.js keeps calling them "x" and "y" even when indexAxis is
+        // flipped — the category scale just swaps from x to y, so build
+        // the scales object to match instead of hard-coding x/y meanings.
+        scales: horizontal
+          ? { x: valueScale, y: categoryScale }
+          : { x: categoryScale, y: valueScale },
       },
-      scales: {
-        x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 10 } } },
-        y: { beginAtZero: true, title: { display: true, text: 'HIHTs per CHW' } },
-      },
-    },
+    });
+    hihtBreakdownCharts.push(chart);
   });
 }
 

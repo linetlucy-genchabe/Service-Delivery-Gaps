@@ -77,7 +77,7 @@
 <div class="category-nav">
   <button class="cat-btn active" data-section="workforce">👥 Workforce</button>
   <button class="cat-btn" data-section="supervision">🔍 Supervision</button>
-  <button class="cat-btn" data-section="hiht">🎯 HIHT</button>
+  <button class="cat-btn" data-section="hiht">🎯 HIHTs</button>
   <button class="cat-btn" data-section="childhealth">🧒 Child Health</button>
   <button class="cat-btn" data-section="maternal">🤱 Maternal Health</button>
   <button class="cat-btn" data-section="fp">💊 Family Planning</button>
@@ -189,12 +189,10 @@
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chp">CHP</button>
     <a id="hiht-download-link" href="{% url 'download_hiht_breakdown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&level=sub_county" class="btn btn-sm btn-outline" style="margin-left:auto">⬇ Download CSV</a>
   </div>
-  <div class="chart-card" style="margin-bottom:14px;">
-    <div style="height:340px"><canvas id="hiht-breakdown-chart"></canvas></div>
-  </div>
+  <div id="hiht-breakdown-charts"></div>
   <div id="hiht-breakdown-container"><div class="table-loading">Loading…</div></div>
 
-  <p style="font-size:12px;color:var(--text-muted);margin-top:16px">Looking for the multi-month trend? It's now on its own page — <a href="{% url 'hiht_trends' %}">🎯 HIHT Trends</a>, under Scorecards.</p>
+  <p style="font-size:12px;color:var(--text-muted);margin-top:16px">Looking for the multi-month trend? It's now on its own page — <a href="{% url 'hiht_trends' %}">🎯 HIHTs Trends</a>, under Scorecards.</p>
 </div>
 
 <!-- CHILD HEALTH -->
