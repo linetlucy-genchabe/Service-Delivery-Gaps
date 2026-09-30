@@ -63,4 +63,9 @@ urlpatterns = [
     path('download/hiht-breakdown/',       views.download_hiht_breakdown, name='download_hiht_breakdown'),
     path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
     path('hiht-trends/',                   views.hiht_trends_view,        name='hiht_trends'),
+    # EDD (Expected Delivery Date) list — Ad Hoc
+    path('edd/',                           views.edd_dashboard_view,      name='edd_dashboard'),
+    path('edd/upload/',                    views.edd_upload_view,         name='edd_upload'),
+    path('edd/upload/delete/<int:pk>/',    views.edd_delete_view,         name='edd_delete'),
+    path('edd/download/',                  views.download_edd_list,       name='download_edd_list'),
 ]

@@ -1,0 +1,133 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Upcoming EDDs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">📅 Upcoming EDDs</h1>
+    <p class="page-subtitle">Expected Delivery Dates by CHW area, so teams can plan follow-up ahead of time.</p>
+  </div>
+  {% if is_uploader %}<a href="{% url 'edd_upload' %}" class="btn btn-outline">Upload Data</a>{% endif %}
+</div>
+
+{% if not batches %}
+<div class="table-empty" style="padding:40px;">No EDD list has been uploaded yet. {% if is_uploader %}<a href="{% url 'edd_upload' %}">Upload one</a>.{% endif %}</div>
+{% else %}
+
+<div class="filter-bar">
+  <form method="get" class="filter-form">
+    <div class="filter-group">
+      <label class="filter-label">EDD List</label>
+      <select name="batch" class="filter-select" onchange="this.form.submit()">
+        {% for b in batches %}
+          <option value="{{ b.pk }}" {% if selected_batch_id == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for c in counties %}
+          <option value="{{ c }}" {% if selected_county == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if selected_county %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="sub_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in subcounties %}
+          <option value="{{ sc }}" {% if selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if selected_subcounty %}
+    <div class="filter-group">
+      <label class="filter-label">Community Unit</label>
+      <select name="chu" class="filter-select" onchange="this.form.submit()">
+        <option value="">All CHUs</option>
+        {% for cu in chus %}
+          <option value="{{ cu }}" {% if selected_chu == cu %}selected{% endif %}>{{ cu }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="filter-group">
+      <label class="filter-label">Due Within</label>
+      <select name="due_within" class="filter-select" onchange="this.form.submit()">
+        <option value="" {% if not selected_due_within %}selected{% endif %}>Any time</option>
+        <option value="7"  {% if selected_due_within == '7'  %}selected{% endif %}>Next 7 days</option>
+        <option value="14" {% if selected_due_within == '14' %}selected{% endif %}>Next 14 days</option>
+        <option value="30" {% if selected_due_within == '30' %}selected{% endif %}>Next 30 days</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="cards-grid">
+  <div class="stat-card navy">
+    <div class="stat-value">{{ summary.total }}</div>
+    <div class="stat-label">Upcoming Pregnancies (this view)</div>
+  </div>
+  <div class="stat-card {% if summary.due_7 > 0 %}yellow{% else %}green{% endif %}">
+    <div class="stat-value">{{ summary.due_7 }}</div>
+    <div class="stat-label">Due in Next 7 Days</div>
+  </div>
+  <div class="stat-card {% if summary.due_14 > 0 %}yellow{% else %}green{% endif %}">
+    <div class="stat-value">{{ summary.due_14 }}</div>
+    <div class="stat-label">Due in Next 14 Days</div>
+  </div>
+  <div class="stat-card cyan">
+    <div class="stat-value">{{ summary.edd_shifted }}</div>
+    <div class="stat-label">EDD Revised</div>
+    <div class="stat-sub">Effective EDD differs from the initial estimate</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <h3 class="card-title">Upcoming Deliveries, Soonest First</h3>
+    <a href="{% url 'download_edd_list' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&due_within={{ selected_due_within }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      {% if rows %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>County</th><th>Sub-County</th><th>Community Unit</th><th>CHW</th>
+            <th>Member</th><th>Effective EDD</th><th class="num">Gest. Weeks (Reg.)</th>
+            <th class="num">CHP Visits</th><th>Last Visit</th><th>EDD Revised</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.county|default:"—" }}</td>
+            <td>{{ r.sub_county|default:"—" }}</td>
+            <td>{{ r.community_unit|default:"—" }}</td>
+            <td>{{ r.chw_name|default:"—" }}</td>
+            <td>{{ r.member_name|default:"—" }}</td>
+            <td><strong>{{ r.effective_edd_date|date:"d M Y"|default:"—" }}</strong></td>
+            <td class="num">{{ r.gestational_weeks_at_registration|default:"—" }}</td>
+            <td class="num">{{ r.chp_visit_count|default:"—" }}</td>
+            <td>{{ r.last_visit_date|date:"d M Y"|default:"—" }}</td>
+            <td>{% if r.has_edd_shift_flag %}Yes ({{ r.edd_shift_days }}d){% else %}No{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if row_count > 500 %}
+      <div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">Showing the first 500 of {{ row_count }} — narrow the filters above or download the CSV for the full list.</div>
+      {% endif %}
+      {% else %}
+      <div class="table-empty">No pregnancies match this selection.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

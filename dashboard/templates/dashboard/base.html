@@ -36,8 +36,15 @@
   <!-- Nav links -->
   <div class="nav-actions" id="nav-actions">
     {% if user.is_authenticated %}
-      <a href="{% url 'dashboard' %}" class="btn btn-ghost-sm">Gaps Dashboard</a>
-      <a href="{% url 'gaps_compare' %}" class="btn btn-ghost-sm">Gaps Compare</a>
+      <div class="nav-dropdown" style="position:relative;display:inline-block;">
+        <button class="btn btn-ghost-sm nav-dropdown-btn" onclick="toggleNavDd(this)" style="cursor:pointer;">
+          📉 Gaps ▾
+        </button>
+        <div class="nav-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;background:white;border:1.5px solid #E5E7EB;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;min-width:220px;padding:6px 0;">
+          <a href="{% url 'dashboard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">Gaps Dashboard</a>
+          <a href="{% url 'gaps_compare' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">Gaps Compare</a>
+        </div>
+      </div>
       <div class="nav-dropdown" style="position:relative;display:inline-block;">
         <button class="btn btn-ghost-sm nav-dropdown-btn" onclick="toggleNavDd(this)" style="cursor:pointer;">
           📊 Scorecards ▾
@@ -48,8 +55,23 @@
           <a href="{% url 'kpi_scorecard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">📊 KPI Trends</a>
         </div>
       </div>
-      <a href="{% url 'sync_dashboard' %}" class="btn btn-ghost-sm">Sync Dashboard</a>
-      <a href="{% url 'sync_compare' %}" class="btn btn-ghost-sm">Sync Compare</a>
+      <div class="nav-dropdown" style="position:relative;display:inline-block;">
+        <button class="btn btn-ghost-sm nav-dropdown-btn" onclick="toggleNavDd(this)" style="cursor:pointer;">
+          🔄 Sync ▾
+        </button>
+        <div class="nav-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;background:white;border:1.5px solid #E5E7EB;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;min-width:220px;padding:6px 0;">
+          <a href="{% url 'sync_dashboard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">Sync Dashboard</a>
+          <a href="{% url 'sync_compare' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">Sync Compare</a>
+        </div>
+      </div>
+      <div class="nav-dropdown" style="position:relative;display:inline-block;">
+        <button class="btn btn-ghost-sm nav-dropdown-btn" onclick="toggleNavDd(this)" style="cursor:pointer;">
+          ➕ Ad Hoc ▾
+        </button>
+        <div class="nav-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;background:white;border:1.5px solid #E5E7EB;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:300;min-width:220px;padding:6px 0;">
+          <a href="{% url 'edd_dashboard' %}" style="display:block;padding:10px 16px;font-size:13px;color:#1B3A6B;text-decoration:none;font-weight:500;" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='white'">📅 Upcoming EDDs</a>
+        </div>
+      </div>
       {% if is_uploader %}
         <a href="{% url 'upload' %}" class="btn btn-outline-sm">Upload Data</a>
       {% endif %}

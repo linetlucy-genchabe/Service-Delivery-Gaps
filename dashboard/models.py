@@ -390,3 +390,64 @@ class DashUtilDataPoint(models.Model):
     def __str__(self):
         geo = f"{self.county}/{self.sub_county}" if self.sub_county else self.county
         return f"{geo} – {self.utilization_pct}% [{self.report}]"
+
+
+# ===========================================================================
+# EDD (Expected Delivery Date) List — an "Ad Hoc" report shared separately
+# from the other uploads, used to visualize upcoming deliveries so teams can
+# plan CHP follow-up. One row per pregnancy, with the CHW hierarchy it sits
+# under and its effective EDD.
+# ===========================================================================
+
+class EDDUploadBatch(models.Model):
+    """An uploaded EDD list (e.g. 'October 2026')."""
+    file        = models.FileField(upload_to='edd_lists/')
+    label       = models.CharField(max_length=100, help_text="e.g. October 2026")
+    uploaded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return self.label
+
+
+class EDDRecord(models.Model):
+    """One pregnancy's expected-delivery-date tracking row from an EDD list."""
+    batch = models.ForeignKey(EDDUploadBatch, on_delete=models.CASCADE, related_name='records')
+
+    # CHW hierarchy the pregnancy sits under.
+    county         = models.CharField(max_length=100, blank=True, db_index=True)
+    sub_county     = models.CharField(max_length=100, blank=True, db_index=True)
+    community_unit = models.CharField(max_length=150, blank=True, db_index=True)
+    chw_name       = models.CharField(max_length=150, blank=True, db_index=True)
+    chw_uuid       = models.CharField(max_length=100, blank=True)
+
+    # Who the pregnancy belongs to.
+    pregnancy_id   = models.CharField(max_length=64, blank=True, db_index=True)
+    member_name    = models.CharField(max_length=150, blank=True)
+    household_name = models.CharField(max_length=150, blank=True)
+
+    # EDD tracking — effective_edd_date is the one to plan around; initial/
+    # latest and the shift fields explain why it moved, if it did.
+    effective_edd_date  = models.DateField(null=True, blank=True, db_index=True)
+    initial_edd_date    = models.DateField(null=True, blank=True)
+    latest_edd_date      = models.DateField(null=True, blank=True)
+    has_edd_shift_flag   = models.BooleanField(default=False)
+    edd_shift_days       = models.IntegerField(null=True, blank=True)
+    has_no_edd_captured  = models.BooleanField(default=False)
+
+    # Visit / status context, for judging how well-tracked the pregnancy is.
+    gestational_weeks_at_registration = models.IntegerField(null=True, blank=True)
+    chp_visit_count = models.IntegerField(null=True, blank=True)
+    last_visit_date = models.DateField(null=True, blank=True)
+    status          = models.CharField(max_length=30, blank=True)  # e.g. 'active'
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['county', 'sub_county', 'community_unit'], name='edd_geo_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.member_name or self.pregnancy_id} — EDD {self.effective_edd_date}"

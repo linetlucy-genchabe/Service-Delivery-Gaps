@@ -6,7 +6,7 @@ All views for the CHA Dashboard.
 import json
 import csv
 import io
-from datetime import date
+from datetime import date, timedelta
 
 from django import forms as django_forms
 from django.shortcuts import render, redirect, get_object_or_404
@@ -4124,3 +4124,145 @@ def admin_reprocess_view(request):
         html += f"<tr><td>{r['label']}</td><td>{r['chw'] or '—'}</td><td>{r['sup'] or '—'}</td><td>{err_str}</td></tr>"
     html += '</table><br><a href="/">← Back to Dashboard</a></body></html>'
     return HttpResponse(html)
+
+# ===========================================================================
+# EDD (Expected Delivery Date) List — "Ad Hoc" report
+# ===========================================================================
+
+@login_required
+def edd_upload_view(request):
+    """Upload an EDD list (shared separately from the other reports)."""
+    from .models import EDDUploadBatch
+    from .edd_parser import parse_edd_file
+
+    batches = EDDUploadBatch.objects.all()
+    success = error = None
+
+    if request.method == 'POST':
+        f     = request.FILES.get('file')
+        label = request.POST.get('label', '').strip()
+
+        if f and label:
+            batch = EDDUploadBatch(file=f, label=label, uploaded_by=request.user)
+            batch.save()
+            try:
+                count = parse_edd_file(batch, batch.file)
+                success = f"EDD list '{label}' uploaded — {count} pregnancies parsed."
+            except Exception as e:
+                batch.delete()
+                error = f"Could not parse this file: {e}"
+        else:
+            error = "Please choose a file and give it a label (e.g. 'October 2026')."
+
+    return render(request, 'dashboard/edd_upload.html', {
+        'batches': batches, 'success': success, 'error': error,
+        'is_uploader': is_uploader(request.user),
+    })
+
+
+@login_required
+def edd_delete_view(request, pk):
+    from .models import EDDUploadBatch
+    if request.method == 'POST':
+        get_object_or_404(EDDUploadBatch, pk=pk).delete()
+    return redirect('edd_upload')
+
+
+def _edd_filtered_queryset(request):
+    from .models import EDDUploadBatch, EDDRecord
+
+    batch_id   = request.GET.get('batch') or ''
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    due_within = request.GET.get('due_within', '')
+
+    latest_batch = EDDUploadBatch.objects.first()
+    if not batch_id and latest_batch:
+        batch_id = str(latest_batch.id)
+
+    qs = EDDRecord.objects.filter(batch_id=batch_id) if batch_id else EDDRecord.objects.none()
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_unit=chu)
+
+    if due_within:
+        today = date.today()
+        days = {'7': 7, '14': 14, '30': 30}.get(due_within)
+        if days:
+            qs = qs.filter(effective_edd_date__gte=today,
+                            effective_edd_date__lte=today + timedelta(days=days))
+
+    return qs.order_by('effective_edd_date'), batch_id, county, sub_county, chu, due_within
+
+
+@login_required
+def edd_dashboard_view(request):
+    """Visualizes upcoming EDDs — filterable by county / sub-county / CHU,
+    with CHW hierarchy and effective EDD front and center."""
+    from .models import EDDUploadBatch, EDDRecord
+
+    qs, batch_id, county, sub_county, chu, due_within = _edd_filtered_queryset(request)
+    batches = EDDUploadBatch.objects.all()
+
+    batch_records = EDDRecord.objects.filter(batch_id=batch_id) if batch_id else EDDRecord.objects.none()
+    counties = list(
+        batch_records.exclude(county='').values_list('county', flat=True).distinct().order_by('county')
+    )
+    subcounties = []
+    if county:
+        subcounties = list(
+            batch_records.filter(county=county).exclude(sub_county='')
+            .values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        )
+    chus = []
+    if county and sub_county:
+        chus = list(
+            batch_records.filter(county=county, sub_county=sub_county).exclude(community_unit='')
+            .values_list('community_unit', flat=True).distinct().order_by('community_unit')
+        )
+
+    today = date.today()
+    summary = {
+        'total':       qs.count(),
+        'due_7':       qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=7)).count(),
+        'due_14':      qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=14)).count(),
+        'edd_shifted': qs.filter(has_edd_shift_flag=True).count(),
+        'no_edd':      qs.filter(has_no_edd_captured=True).count(),
+    }
+
+    return render(request, 'dashboard/edd_dashboard.html', {
+        'rows': qs[:500],
+        'row_count': qs.count(),
+        'batches': batches,
+        'selected_batch_id': batch_id,
+        'selected_county': county,
+        'selected_subcounty': sub_county,
+        'selected_chu': chu,
+        'selected_due_within': due_within,
+        'counties': counties,
+        'subcounties': subcounties,
+        'chus': chus,
+        'summary': summary,
+        'is_uploader': is_uploader(request.user),
+    })
+
+
+@login_required
+def download_edd_list(request):
+    qs, batch_id, *_ = _edd_filtered_queryset(request)
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="upcoming_edds.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'County', 'Sub-County', 'Community Unit', 'CHW Name', 'Member Name',
+        'Effective EDD', 'Gestational Weeks at Registration', 'CHP Visit Count',
+        'Last Visit Date', 'EDD Shifted', 'EDD Shift Days', 'Status',
+    ])
+    for r in qs:
+        writer.writerow([
+            r.county, r.sub_county, r.community_unit, r.chw_name, r.member_name,
+            r.effective_edd_date, r.gestational_weeks_at_registration, r.chp_visit_count,
+            r.last_visit_date, 'Yes' if r.has_edd_shift_flag else 'No', r.edd_shift_days, r.status,
+        ])
+    return response

@@ -75,7 +75,7 @@
 
 <!-- CATEGORY NAV -->
 <div class="category-nav">
-  <button class="cat-btn active" data-section="workforce">👥 Workforce</button>
+  <button class="cat-btn active" data-section="workforce">👥 CHW Activity</button>
   <button class="cat-btn" data-section="supervision">🔍 Supervision</button>
   <button class="cat-btn" data-section="hiht">🎯 HIHTs</button>
   <button class="cat-btn" data-section="childhealth">🧒 Child Health</button>
@@ -86,7 +86,7 @@
 
 <!-- WORKFORCE -->
 <div class="cat-section active" id="section-workforce">
-  <div class="section-label">👥 Workforce Overview</div>
+  <div class="section-label">👥 CHW Activity Overview</div>
   <div class="cards-grid">
     <div class="stat-card navy">
       <div class="stat-value">{{ indicators.total_active }}</div>
@@ -208,9 +208,9 @@
     </div>
     <div class="stat-card {% if indicators.high_u5_low_pos_count == 0 %}green{% elif indicators.high_u5_low_pos_count < 50 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.high_u5_low_pos_count }}</div>
-      <div class="stat-label">High U5 Assessment, Zero Positive Diagnoses</div>
-      <div class="stat-sub">CHPs assessing ≥80% of U5 children (≥10 assessed) but recording zero positive diagnoses</div>
-      <button class="definition-btn" data-def="High U5 Assessment but Zero Positive Diagnoses: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded absolutely zero positive diagnoses (malaria, pneumonia, diarrhea). This is a data quality flag — it is statistically unusual to assess many children and find none sick. The CHP may need support in recognizing and documenting illness correctly. Includes the CHP's iCCM Assessments count for context.">View definition</button>
+      <div class="stat-label">Positive Diagnosis Rate Review</div>
+      <div class="stat-sub">CHPs assessing ≥80% of U5 children (≥10 assessed) with no positive diagnoses recorded</div>
+      <button class="definition-btn" data-def="Positive Diagnosis Rate Review: Active CHPs who assessed ≥80% of their registered Under-5 children AND assessed at least 10 children, but recorded no positive diagnoses (malaria, pneumonia, diarrhea) this period. This is a data quality flag, not a judgment on the CHP — it is statistically unusual to assess many children and find none sick, and usually points to a recording or documentation gap worth reviewing together. Includes the CHP's iCCM Assessments count for context.">View definition</button>
     </div>
     <div class="stat-card {% if indicators.low_iccm_count == 0 %}green{% elif indicators.low_iccm_count < 100 %}yellow{% else %}red{% endif %}">
       <div class="stat-value">{{ indicators.low_iccm_count }}</div>
@@ -350,7 +350,7 @@
 
 <!-- Drill-down category nav -->
 <div class="drilldown-cat-nav">
-  <button class="dd-cat-btn active" data-ddcat="dd-workforce">👥 Workforce</button>
+  <button class="dd-cat-btn active" data-ddcat="dd-workforce">👥 CHW Activity</button>
   <button class="dd-cat-btn" data-ddcat="dd-supervision">🔍 Supervision</button>
   <button class="dd-cat-btn" data-ddcat="dd-childhealth">🧒 Child Health</button>
   <button class="dd-cat-btn" data-ddcat="dd-maternal">🤱 Maternal Health</button>
@@ -419,7 +419,7 @@
 <div class="dd-cat-panel" id="dd-childhealth">
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="u5-high-hh">Good HH, Low U5 Assessment <span class="tab-count">{{ indicators.high_hh_low_u5_count }}</span></button>
-    <button class="tab-btn" data-tab="u5-high-u5">High U5, Zero Diagnoses <span class="tab-count">{{ indicators.high_u5_low_pos_count }}</span></button>
+    <button class="tab-btn" data-tab="u5-high-u5">Positive Diagnosis Rate Review <span class="tab-count">{{ indicators.high_u5_low_pos_count }}</span></button>
     <button class="tab-btn" data-tab="low-iccm">Low iCCM Assessments <span class="tab-count">{{ indicators.low_iccm_count }}</span></button>
     <button class="tab-btn" data-tab="zero-positive">Zero Positive Diagnoses <span class="tab-count">{{ indicators.zero_positive_count }}</span></button>
     <button class="tab-btn" data-tab="mam-sam">MAM/SAM Referrals <span class="tab-count">{{ indicators.mam_sam_total }}</span></button>
@@ -432,7 +432,7 @@
   </div>
   <div class="tab-panel" id="tab-u5-high-u5">
     <div class="card"><div class="card-header">
-      <div><h3 class="card-title">High U5 Assessment (≥80%, ≥10 assessed) — Zero Positive Diagnoses</h3><p class="card-subtitle">CHPs assessing many children but recording no illness — data quality flag.</p></div>
+      <div><h3 class="card-title">Positive Diagnosis Rate Review (≥80% Assessed, ≥10 Children)</h3><p class="card-subtitle">CHPs assessing many children with no illness recorded — a data quality flag worth reviewing together, not a judgment on the CHP.</p></div>
       <a href="{% url 'download_u5_gap' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&type=high_u5_low_pos" class="btn btn-sm btn-outline">⬇ Download CSV</a>
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="u5-high-u5-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
