@@ -68,23 +68,26 @@
 </div>
 
 <div class="cards-grid">
-  <div class="stat-card navy">
+  <a href="{{ href_total }}" class="stat-card navy stat-card-link {% if is_card_total %}stat-card-active{% endif %}">
     <div class="stat-value">{{ summary.total }}</div>
     <div class="stat-label">Upcoming Pregnancies (this view)</div>
-  </div>
-  <div class="stat-card {% if summary.due_7 > 0 %}yellow{% else %}green{% endif %}">
+    <div class="stat-sub">{% if is_card_total %}Showing all &middot; click a card below to drill down{% else %}Click to show all{% endif %}</div>
+  </a>
+  <a href="{{ href_due_7 }}" class="stat-card stat-card-link {% if summary.due_7 > 0 %}yellow{% else %}green{% endif %} {% if is_card_due_7 %}stat-card-active{% endif %}">
     <div class="stat-value">{{ summary.due_7 }}</div>
     <div class="stat-label">Due in Next 7 Days</div>
-  </div>
-  <div class="stat-card {% if summary.due_14 > 0 %}yellow{% else %}green{% endif %}">
+    <div class="stat-sub">{% if is_card_due_7 %}Showing this &middot; click to clear{% else %}Click to filter the table{% endif %}</div>
+  </a>
+  <a href="{{ href_due_14 }}" class="stat-card stat-card-link {% if summary.due_14 > 0 %}yellow{% else %}green{% endif %} {% if is_card_due_14 %}stat-card-active{% endif %}">
     <div class="stat-value">{{ summary.due_14 }}</div>
     <div class="stat-label">Due in Next 14 Days</div>
-  </div>
-  <div class="stat-card cyan">
+    <div class="stat-sub">{% if is_card_due_14 %}Showing this &middot; click to clear{% else %}Click to filter the table{% endif %}</div>
+  </a>
+  <a href="{{ href_revised }}" class="stat-card cyan stat-card-link {% if is_card_revised %}stat-card-active{% endif %}">
     <div class="stat-value">{{ summary.edd_shifted }}</div>
     <div class="stat-label">EDD Revised</div>
-    <div class="stat-sub">Effective EDD differs from the initial estimate</div>
-  </div>
+    <div class="stat-sub">{% if is_card_revised %}Showing this &middot; click to clear{% else %}Effective EDD differs from the initial estimate &middot; click to filter{% endif %}</div>
+  </a>
 </div>
 
 <div class="card" style="margin-top:16px;">

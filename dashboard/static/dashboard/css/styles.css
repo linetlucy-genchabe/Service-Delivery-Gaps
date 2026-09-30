@@ -181,6 +181,10 @@ body {
 }
 .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
+.stat-card-link { display: block; text-decoration: none; color: inherit; cursor: pointer; }
+.stat-card-active { outline: 2.5px solid var(--navy); outline-offset: -1px; }
+.stat-card-active .stat-sub { color: var(--navy); font-weight: 600; }
+
 .stat-card.navy   { border-top-color: var(--navy); }
 .stat-card.orange { border-top-color: var(--orange); }
 .stat-card.cyan   { border-top-color: var(--cyan); }

@@ -7,6 +7,7 @@ import json
 import csv
 import io
 from datetime import date, timedelta
+from urllib.parse import urlencode
 
 from django import forms as django_forms
 from django.shortcuts import render, redirect, get_object_or_404
@@ -4168,14 +4169,17 @@ def edd_delete_view(request, pk):
     return redirect('edd_upload')
 
 
-def _edd_filtered_queryset(request):
+def _edd_base_queryset(request):
+    """EDDRecords for the selected batch/county/sub-county/CHU only — no
+    due-within or revised-only narrowing. Used both as the starting point
+    for the fully-filtered queryset and to compute stable stat-card counts
+    that don't shrink to match whichever card is currently selected."""
     from .models import EDDUploadBatch, EDDRecord
 
     batch_id   = request.GET.get('batch') or ''
     county     = request.GET.get('county', '')
     sub_county = request.GET.get('sub_county', '')
     chu        = request.GET.get('chu', '')
-    due_within = request.GET.get('due_within', '')
 
     latest_batch = EDDUploadBatch.objects.first()
     if not batch_id and latest_batch:
@@ -4186,6 +4190,15 @@ def _edd_filtered_queryset(request):
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_unit=chu)
 
+    return qs, batch_id, county, sub_county, chu
+
+
+def _edd_filtered_queryset(request):
+    qs, batch_id, county, sub_county, chu = _edd_base_queryset(request)
+
+    due_within  = request.GET.get('due_within', '')
+    edd_revised = request.GET.get('edd_revised', '')
+
     if due_within:
         today = date.today()
         days = {'7': 7, '14': 14, '30': 30}.get(due_within)
@@ -4193,16 +4206,22 @@ def _edd_filtered_queryset(request):
             qs = qs.filter(effective_edd_date__gte=today,
                             effective_edd_date__lte=today + timedelta(days=days))
 
-    return qs.order_by('effective_edd_date'), batch_id, county, sub_county, chu, due_within
+    if edd_revised == '1':
+        qs = qs.filter(has_edd_shift_flag=True)
+
+    return qs.order_by('effective_edd_date'), batch_id, county, sub_county, chu, due_within, edd_revised
 
 
 @login_required
 def edd_dashboard_view(request):
     """Visualizes upcoming EDDs — filterable by county / sub-county / CHU,
-    with CHW hierarchy and effective EDD front and center."""
+    with CHW hierarchy and effective EDD front and center. The summary
+    cards double as drill-down links: clicking one adds/clears its filter
+    on the table below while keeping the geographic filters as they are."""
     from .models import EDDUploadBatch, EDDRecord
 
-    qs, batch_id, county, sub_county, chu, due_within = _edd_filtered_queryset(request)
+    qs, batch_id, county, sub_county, chu, due_within, edd_revised = _edd_filtered_queryset(request)
+    base_qs, *_ = _edd_base_queryset(request)
     batches = EDDUploadBatch.objects.all()
 
     batch_records = EDDRecord.objects.filter(batch_id=batch_id) if batch_id else EDDRecord.objects.none()
@@ -4222,14 +4241,32 @@ def edd_dashboard_view(request):
             .values_list('community_unit', flat=True).distinct().order_by('community_unit')
         )
 
+    # Stat-card counts are computed off base_qs (geography only), never off
+    # qs (which already has due_within/edd_revised applied) — otherwise
+    # selecting "Due in 7 days" would make every other card's count look
+    # like it collapsed to match.
     today = date.today()
     summary = {
-        'total':       qs.count(),
-        'due_7':       qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=7)).count(),
-        'due_14':      qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=14)).count(),
-        'edd_shifted': qs.filter(has_edd_shift_flag=True).count(),
-        'no_edd':      qs.filter(has_no_edd_captured=True).count(),
+        'total':       base_qs.count(),
+        'due_7':       base_qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=7)).count(),
+        'due_14':      base_qs.filter(effective_edd_date__gte=today, effective_edd_date__lte=today + timedelta(days=14)).count(),
+        'edd_shifted': base_qs.filter(has_edd_shift_flag=True).count(),
+        'no_edd':      base_qs.filter(has_no_edd_captured=True).count(),
     }
+
+    # Build hrefs for the clickable stat cards, preserving batch/geography
+    # filters and toggling due_within/edd_revised off if that card is
+    # already the active one (click again to clear).
+    def _card_href(**overrides):
+        params = {'batch': batch_id, 'county': county, 'sub_county': sub_county, 'chu': chu}
+        params.update(overrides)
+        params = {k: v for k, v in params.items() if v}
+        return '?' + urlencode(params)
+
+    is_due_7  = (due_within == '7')
+    is_due_14 = (due_within == '14')
+    is_revised = (edd_revised == '1')
+    is_total  = not due_within and not is_revised
 
     return render(request, 'dashboard/edd_dashboard.html', {
         'rows': qs[:500],
@@ -4240,10 +4277,19 @@ def edd_dashboard_view(request):
         'selected_subcounty': sub_county,
         'selected_chu': chu,
         'selected_due_within': due_within,
+        'selected_edd_revised': edd_revised,
         'counties': counties,
         'subcounties': subcounties,
         'chus': chus,
         'summary': summary,
+        'href_total':   _card_href(due_within='', edd_revised=''),
+        'href_due_7':   _card_href(due_within='' if is_due_7 else '7', edd_revised=''),
+        'href_due_14':  _card_href(due_within='' if is_due_14 else '14', edd_revised=''),
+        'href_revised': _card_href(due_within='', edd_revised='' if is_revised else '1'),
+        'is_card_total':   is_total,
+        'is_card_due_7':   is_due_7,
+        'is_card_due_14':  is_due_14,
+        'is_card_revised': is_revised,
         'is_uploader': is_uploader(request.user),
     })
 
