@@ -3667,15 +3667,20 @@ def _score_against_targets(row, targets_by_county):
     row['scored'] = scored
     row['achieved_count'] = achieved
     row['scoreable_count'] = scoreable
-    row['overall_pct'] = round(achieved / scoreable * 100, 1) if scoreable else None
-    if scoreable == 0:
-        row['overall_colour'] = 'grey'
-    elif achieved == scoreable:
-        row['overall_colour'] = 'green'
-    elif row['overall_pct'] >= 50:
-        row['overall_colour'] = 'yellow'
+
+    # Ranked and colour-coded on Total HIHTs/CHW specifically, not on how many
+    # of the 11 indicators crossed 100% — counting achieved indicators tied
+    # together rows with very different performance (e.g. "just under target
+    # on everything" scored the same as "far below on everything"), which
+    # made the ranking look arbitrary. Total HIHTs/CHW's own % of target is
+    # a single continuous number, so ties like that don't happen.
+    hihts = scored.get('total_hihts_per_chw')
+    if hihts and hihts['pct_of_target'] is not None:
+        row['overall_pct'] = hihts['pct_of_target']
+        row['overall_colour'] = hihts['colour']
     else:
-        row['overall_colour'] = 'red'
+        row['overall_pct'] = None
+        row['overall_colour'] = 'grey'
     return row
 
 
