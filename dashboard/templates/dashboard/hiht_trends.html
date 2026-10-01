@@ -207,7 +207,7 @@
     <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
   </div>
   <div class="card-body no-pad">
-    <div class="table-scroll">
+    <div class="table-scroll table-scroll-tall">
       {% if ta_rows %}
       <table class="data-table ta-table">
         <thead>

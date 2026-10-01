@@ -3687,7 +3687,19 @@ def _target_achievement_filters(request):
     sub_counties = request.GET.getlist('ta_sub_county')
     chus         = request.GET.getlist('ta_chu')
     chps         = request.GET.getlist('ta_chp')
-    level        = request.GET.get('ta_level', 'sub_county')
+
+    # Auto-drill one level down for whatever's selected, same as the Trend
+    # tab: nothing picked compares counties, picking (any) county compares
+    # its sub-counties, picking a sub-county compares its CUs, picking a CU
+    # compares its CHPs. With multi-select, "picking" means at least one.
+    if chus:
+        level = 'chp'
+    elif sub_counties:
+        level = 'chu'
+    elif counties:
+        level = 'sub_county'
+    else:
+        level = 'county'
 
     qs = CHWRecord.objects.filter(batch_id=batch_id) if batch_id else CHWRecord.objects.none()
     if counties:     qs = qs.filter(county__in=counties)
@@ -3711,8 +3723,7 @@ def _target_achievement_filters(request):
 
 @login_required
 def download_target_achievement(request):
-    rows, batch_id, *_ = _target_achievement_filters(request)
-    level = request.GET.get('level', 'sub_county')
+    rows, batch_id, _monthly_batches, _counties, _sub_counties, _chus, _chps, level = _target_achievement_filters(request)
     geo_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
 
     response = HttpResponse(content_type='text/csv')
