@@ -12,8 +12,8 @@
 </div>
 
 <div class="category-nav" style="margin-bottom:16px;">
-  <button type="button" class="cat-btn {% if active_tab != 'target_achievement' %}active{% endif %}" id="ht-tab-btn-trend" onclick="showHtTab('trend')">📈 Trend</button>
   <button type="button" class="cat-btn {% if active_tab == 'target_achievement' %}active{% endif %}" id="ht-tab-btn-ta" onclick="showHtTab('target_achievement')">🎯 Target Achievement</button>
+  <button type="button" class="cat-btn {% if active_tab != 'target_achievement' %}active{% endif %}" id="ht-tab-btn-trend" onclick="showHtTab('trend')">📈 Trend</button>
 </div>
 
 <!-- ======================= TREND TAB ======================= -->
@@ -54,7 +54,7 @@
     </div>
     {% endif %}
     {% if selected_county %}
-      <a href="{% url 'hiht_trends' %}" class="filter-reset">✕ Clear Filters</a>
+      <a href="{% url 'hiht_trends' %}?tab=trend" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
   </form>
 </div>

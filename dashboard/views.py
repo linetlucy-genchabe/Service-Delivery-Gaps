@@ -655,7 +655,7 @@ def hiht_trends_view(request):
         'selected_chu':        selected_chu,
         'trend_level':         trend_level,
         'has_monthly_batches': bool(monthly_batches),
-        'active_tab':          request.GET.get('tab', 'trend'),
+        'active_tab':          request.GET.get('tab', 'target_achievement'),
 
         # Target Achievement tab context.
         'ta_rows':             ta_rows,
