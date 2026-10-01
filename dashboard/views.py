@@ -633,6 +633,10 @@ def hiht_trends_view(request):
     # --- Target Achievement tab — same page, namespaced ta_ filters ---
     ta_rows, ta_batch_id, ta_monthly_batches, ta_counties, ta_sub_counties, ta_chus, ta_chps, ta_level = \
         _target_achievement_filters(request)
+    # Only meaningful (and only shown) when nothing is picked yet — toggles
+    # the top-level view between all counties and all sub-counties nationwide.
+    ta_at_top_level = not (ta_counties or ta_sub_counties or ta_chus)
+    ta_view = request.GET.get('ta_view', 'county') if ta_at_top_level else 'county'
 
     ta_latest_qs = CHWRecord.objects.filter(batch_id=ta_batch_id) if ta_batch_id else CHWRecord.objects.none()
     ta_county_options = list(ta_latest_qs.values_list('county', flat=True).distinct().order_by('county'))
@@ -663,6 +667,8 @@ def hiht_trends_view(request):
         'ta_selected_batch':   ta_batch_id,
         'ta_metrics':          TARGET_METRICS,
         'ta_level':            ta_level,
+        'ta_view':             ta_view,
+        'ta_at_top_level':     ta_at_top_level,
         'ta_selected_counties':     ta_counties,
         'ta_selected_sub_counties': ta_sub_counties,
         'ta_selected_chus':         ta_chus,
@@ -3692,11 +3698,15 @@ def _target_achievement_filters(request):
     # tab: nothing picked compares counties, picking (any) county compares
     # its sub-counties, picking a sub-county compares its CUs, picking a CU
     # compares its CHPs. With multi-select, "picking" means at least one.
+    # When nothing at all is picked, ta_view lets the top-level view switch
+    # between all counties and all 31 sub-counties nationwide.
     if chus:
         level = 'chp'
     elif sub_counties:
         level = 'chu'
     elif counties:
+        level = 'sub_county'
+    elif request.GET.get('ta_view') == 'sub_county':
         level = 'sub_county'
     else:
         level = 'county'

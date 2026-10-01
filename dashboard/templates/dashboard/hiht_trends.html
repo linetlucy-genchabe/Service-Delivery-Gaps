@@ -174,13 +174,13 @@
   </form>
 </div>
 
-<p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">
-  Scored against the per-county targets your team set (Busia uses the Busia IS numbers; Kisumu uses one Kisumu-wide target). Green = target met, amber = within 75% of target, red = below that. Stock and phone indicators aren't tracked yet, so they're not scored here.
-  {% if ta_selected_chus %}Showing each CHP in the selected CU(s).
-  {% elif ta_selected_sub_counties %}Showing each CU in the selected sub-count{{ ta_selected_sub_counties|length|pluralize:"y,ies" }}.
-  {% elif ta_selected_counties %}Showing each sub-county in the selected count{{ ta_selected_counties|length|pluralize:"y,ies" }}.
-  {% else %}Showing all counties — pick a county to drill into its sub-counties, then a sub-county for its CUs, then a CU for its CHPs.{% endif %}
-</p>
+{% if ta_at_top_level %}
+<div style="margin:-4px 0 12px;">
+  <span style="font-size:12px;color:var(--text-muted);margin-right:8px;">View:</span>
+  <a href="?tab=target_achievement&ta_batch={{ ta_selected_batch }}&ta_view=county" class="btn btn-sm {% if ta_view == 'county' %}btn-primary{% else %}btn-outline{% endif %}">Counties</a>
+  <a href="?tab=target_achievement&ta_batch={{ ta_selected_batch }}&ta_view=sub_county" class="btn btn-sm {% if ta_view == 'sub_county' %}btn-primary{% else %}btn-outline{% endif %}" style="margin-left:6px;">All Sub-Counties</a>
+</div>
+{% endif %}
 
 <div class="cards-grid">
   <div class="stat-card navy">
@@ -203,8 +203,8 @@
 
 <div class="card" style="margin-top:16px;">
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-    <h3 class="card-title">Ranked Best to Worst</h3>
-    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <h3 class="card-title">Ranked Best to Worst{% if ta_level == 'sub_county' and ta_selected_counties|length == 1 %} — {{ ta_selected_counties.0 }}{% elif ta_level == 'chu' and ta_selected_sub_counties|length == 1 %} — {{ ta_selected_sub_counties.0 }}{% elif ta_level == 'chp' and ta_selected_chus|length == 1 %} — {{ ta_selected_chus.0 }}{% endif %}</h3>
+    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}&ta_view={{ ta_view }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll table-scroll-tall">
@@ -227,9 +227,9 @@
             <td class="zero">{{ forloop.counter }}</td>
             <td>
               {% if ta_level == 'county' %}{{ row.county }}
-              {% elif ta_level == 'sub_county' %}{{ row.sub_county }} <span style="color:var(--text-muted);font-size:11px;">({{ row.county }})</span>
+              {% elif ta_level == 'sub_county' %}{{ row.sub_county }}{% if ta_selected_counties|length != 1 %} <span style="color:var(--text-muted);font-size:11px;">({{ row.county }})</span>{% endif %}
               {% elif ta_level == 'chu' %}{{ row.community_health_unit }}
-              {% else %}{{ row.chw_name }} <span style="color:var(--text-muted);font-size:11px;">({{ row.community_health_unit }})</span>
+              {% else %}{{ row.chw_name }}{% if ta_selected_chus|length != 1 %} <span style="color:var(--text-muted);font-size:11px;">({{ row.community_health_unit }})</span>{% endif %}
               {% endif %}
             </td>
             {% for key, meta in ta_metrics.items %}
