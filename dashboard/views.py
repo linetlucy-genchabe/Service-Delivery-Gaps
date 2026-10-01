@@ -630,6 +630,22 @@ def hiht_trends_view(request):
     else:
         trend_level = 'county'
 
+    # --- Target Achievement tab — same page, namespaced ta_ filters ---
+    ta_rows, ta_batch_id, ta_monthly_batches, ta_counties, ta_sub_counties, ta_chus, ta_chps, ta_level = \
+        _target_achievement_filters(request)
+
+    ta_latest_qs = CHWRecord.objects.filter(batch_id=ta_batch_id) if ta_batch_id else CHWRecord.objects.none()
+    ta_county_options = list(ta_latest_qs.values_list('county', flat=True).distinct().order_by('county'))
+    ta_sub_county_options = list(
+        ta_latest_qs.filter(county__in=ta_counties).values_list('sub_county', flat=True).distinct().order_by('sub_county')
+    ) if ta_counties else []
+    ta_chu_options = list(
+        ta_latest_qs.filter(sub_county__in=ta_sub_counties).values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit')
+    ) if ta_sub_counties else []
+    ta_chp_options = list(
+        ta_latest_qs.filter(community_health_unit__in=ta_chus).values_list('chw_name', flat=True).distinct().order_by('chw_name')
+    ) if ta_chus else []
+
     return render(request, 'dashboard/hiht_trends.html', {
         'counties':            counties,
         'sub_counties':        sub_counties,
@@ -639,6 +655,27 @@ def hiht_trends_view(request):
         'selected_chu':        selected_chu,
         'trend_level':         trend_level,
         'has_monthly_batches': bool(monthly_batches),
+        'active_tab':          request.GET.get('tab', 'trend'),
+
+        # Target Achievement tab context.
+        'ta_rows':             ta_rows,
+        'ta_batches':          ta_monthly_batches,
+        'ta_selected_batch':   ta_batch_id,
+        'ta_metrics':          TARGET_METRICS,
+        'ta_level':            ta_level,
+        'ta_selected_counties':     ta_counties,
+        'ta_selected_sub_counties': ta_sub_counties,
+        'ta_selected_chus':         ta_chus,
+        'ta_selected_chps':         ta_chps,
+        'ta_county_options':      ta_county_options,
+        'ta_sub_county_options':  ta_sub_county_options,
+        'ta_chu_options':         ta_chu_options,
+        'ta_chp_options':         ta_chp_options,
+        'ta_green_count':  sum(1 for r in ta_rows if r['overall_colour'] == 'green'),
+        'ta_yellow_count': sum(1 for r in ta_rows if r['overall_colour'] == 'yellow'),
+        'ta_red_count':    sum(1 for r in ta_rows if r['overall_colour'] == 'red'),
+        'ta_total_count':  len(ta_rows),
+        'is_uploader': is_uploader(request.user),
     })
 
 
@@ -3479,6 +3516,260 @@ def compute_hiht_trend(level='county', batches=None):
         series.append({'label': label, 'geo': geo, 'values': values})
 
     return {'periods': period_labels, 'series': series}
+
+
+# ===========================================================================
+# HIHT Target Achievement — 11 indicators, scored against per-county targets
+# (IndicatorTarget), rankable from county down to individual CHP.
+# ===========================================================================
+
+TARGET_METRICS = {
+    'total_hihts_per_chw':    {'label': 'HIHTs/CHW (Total)',           'unit': ''},
+    'non_fp_hihts_per_chw':   {'label': 'HIHTs/CHW (Non-FP)',          'unit': ''},
+    'preg_per_chp':           {'label': 'Pregnancies Registered/CHW',  'unit': ''},
+    'supervision_pct':        {'label': '% CHWs Supervised',          'unit': '%'},
+    'iccm_referral_pct':      {'label': '% Sick Child Referrals Completed', 'unit': '%'},
+    'pnc_blend_pct':          {'label': 'On-Time PNC (48hr & 3-7d blend)', 'unit': '%'},
+    'fp_cyp_per_chw':         {'label': 'CYP per FP-Trained CHW',      'unit': ''},
+    'anc_4plus_pct':          {'label': 'ANC 4+ Coverage',             'unit': '%'},
+    'u5_pd_per_chw':          {'label': 'U5 Positive Diagnoses/CHW',   'unit': ''},
+    'u1_pd_per_chw':          {'label': 'U1 Positive Diagnoses/CHW',   'unit': ''},
+    'iz_fully_immunized_pct': {'label': '% 9-23mo Fully Immunized',    'unit': '%'},
+}
+# All 11 are "higher is better" per the April KPI report — no inverse indicators.
+
+
+def _target_achievement_query(chw_qs, group_fields):
+    """
+    All 11 target indicators grouped by `group_fields` ('county', 'sub_county',
+    'chu', or 'chp' geography), computed in one grouped aggregate query.
+    Mirrors the conventions already used in compute_scorecard_metrics and
+    compute_hiht_for_queryset so the numbers agree with the rest of the app.
+    """
+    active_qs = chw_qs.filter(is_active=True)
+
+    agg_kwargs = dict(
+        active_all=Count('id'),
+        active_fp=Count('id', filter=Q(fp_assessments__gt=0)),
+        supervised_bool=Count('id', filter=Q(supervised=True)),
+        supervised_visits=Count('id', filter=Q(supervision_visits__gt=0)),
+        preg_reg=Sum('pregnancies_registered'),
+        total_del=Sum('total_deliveries'),
+        pnc_48=Sum('pnc_48hr_ontime'),
+        pnc_37=Sum('pnc_3_7d_ontime'),
+        referrals_total=Sum('iccm_referrals_total'),
+        referrals_completed=Sum('iccm_referral_followup'),
+        fp_cyp=Sum('fp_cyp'),
+        anc_4plus=Sum('deliveries_4plus_anc'),
+        anc_with_data=Sum('deliveries_with_anc_data'),
+        u5_pd=Sum('positive_diagnoses_u5'),
+        u1_pd=Sum('u1_positive_diagnoses'),
+        iz_immunized=Sum('iz_fully_immunized'),
+        iz_assessed=Sum('iz_assessments'),
+    )
+    # Plus the 12 HIHT component fields, for total/non-FP HIHTs/CHW.
+    for field, _key in HIHT_NON_FP_COMPONENTS:
+        agg_kwargs[field] = Sum(field)
+    for f1, f2, _key in HIHT_DISEASE_PAIRS:
+        agg_kwargs[f1] = Sum(f1)
+        agg_kwargs[f2] = Sum(f2)
+    agg_kwargs[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
+
+    grouped = (active_qs.values(*group_fields)
+                         .annotate(**agg_kwargs)
+                         .order_by(*group_fields))
+
+    def pct(n, d):
+        return round(n / d * 100, 1) if d else None
+
+    def rate(n, d):
+        return round(n / d, 2) if d else None
+
+    rows = []
+    for combo in grouped:
+        total_active = combo['active_all']
+        active_fp    = combo['active_fp']
+
+        # HIHT totals (same calc as compute_hiht_for_queryset)
+        non_fp_total = 0
+        for field, _key in HIHT_NON_FP_COMPONENTS:
+            non_fp_total += combo.get(field) or 0
+        for f1, f2, _key in HIHT_DISEASE_PAIRS:
+            non_fp_total += (combo.get(f1) or 0) + (combo.get(f2) or 0)
+        fp_total = combo.get(HIHT_FP_COMPONENT[0]) or 0
+        total_hihts = non_fp_total + fp_total
+
+        # Supervision — same "whichever signal isn't a 100%-everyone artifact" fallback
+        # used in compute_scorecard_metrics, so the numbers agree across the app.
+        sb, sv = combo['supervised_bool'], combo['supervised_visits']
+        if sb == total_active:
+            supervised = sv
+        elif sv > 0 and sv != total_active:
+            supervised = max(sb, sv)
+        else:
+            supervised = sb
+
+        pnc_48_pct = pct(combo['pnc_48'] or 0, combo['total_del'] or 0)
+        pnc_37_pct = pct(combo['pnc_37'] or 0, combo['total_del'] or 0)
+        pnc_blend  = round((pnc_48_pct + pnc_37_pct) / 2, 1) if pnc_48_pct is not None and pnc_37_pct is not None else None
+
+        metrics = {
+            'total_hihts_per_chw':    rate(total_hihts, total_active),
+            'non_fp_hihts_per_chw':   rate(non_fp_total, total_active),
+            'preg_per_chp':           rate(combo['preg_reg'] or 0, total_active),
+            'supervision_pct':        pct(supervised, total_active),
+            'iccm_referral_pct':      pct(combo['referrals_completed'] or 0, combo['referrals_total'] or 0),
+            'pnc_blend_pct':          pnc_blend,
+            'fp_cyp_per_chw':         rate(combo['fp_cyp'] or 0, active_fp),
+            'anc_4plus_pct':          pct(combo['anc_4plus'] or 0, combo['anc_with_data'] or 0),
+            'u5_pd_per_chw':          rate(combo['u5_pd'] or 0, total_active),
+            'u1_pd_per_chw':          rate(combo['u1_pd'] or 0, total_active),
+            'iz_fully_immunized_pct': pct(combo['iz_immunized'] or 0, combo['iz_assessed'] or 0),
+        }
+
+        row = {f: combo[f] for f in group_fields}
+        row['active_all'] = total_active
+        row['metrics'] = metrics
+        rows.append(row)
+    return rows
+
+
+def _score_against_targets(row, targets_by_county):
+    """
+    Attach per-indicator colour (green/amber/red/grey) and an overall
+    achievement score to one geography row, using that row's county to
+    look up targets (Kisumu 2.0 sub-counties use the plain Kisumu target,
+    per how targets were agreed — targets are keyed by county only).
+    """
+    county = row.get('county', '')
+    county_targets = targets_by_county.get(county, {})
+    scored = {}
+    achieved = 0
+    scoreable = 0
+    for key in TARGET_METRICS:
+        value  = row['metrics'].get(key)
+        target = county_targets.get(key)
+        if value is None or target is None or target == 0:
+            scored[key] = {'value': value, 'target': target, 'colour': 'grey', 'pct_of_target': None}
+            continue
+        pct_of_target = round(value / target * 100, 1)
+        colour = 'green' if pct_of_target >= 100 else 'yellow' if pct_of_target >= 75 else 'red'
+        scored[key] = {'value': value, 'target': target, 'colour': colour, 'pct_of_target': pct_of_target}
+        scoreable += 1
+        if colour == 'green':
+            achieved += 1
+    row['scored'] = scored
+    row['achieved_count'] = achieved
+    row['scoreable_count'] = scoreable
+    row['overall_pct'] = round(achieved / scoreable * 100, 1) if scoreable else None
+    if scoreable == 0:
+        row['overall_colour'] = 'grey'
+    elif achieved == scoreable:
+        row['overall_colour'] = 'green'
+    elif row['overall_pct'] >= 50:
+        row['overall_colour'] = 'yellow'
+    else:
+        row['overall_colour'] = 'red'
+    return row
+
+
+def _target_achievement_filters(request):
+    """Shared multi-select + level + batch parsing for the view and the CSV download."""
+    from .models import IndicatorTarget
+
+    monthly_batches = auto_detect_monthly_batches()
+    batch_id = request.GET.get('ta_batch') or (str(monthly_batches[-1].id) if monthly_batches else '')
+
+    # Namespaced with a ta_ prefix since this tab lives on the same page/URL
+    # as the Trend tab's own (single-select) county/sub_county/chu params —
+    # distinct names keep the two tabs' filters from clobbering each other.
+    counties     = request.GET.getlist('ta_county')
+    sub_counties = request.GET.getlist('ta_sub_county')
+    chus         = request.GET.getlist('ta_chu')
+    chps         = request.GET.getlist('ta_chp')
+    level        = request.GET.get('ta_level', 'sub_county')
+
+    qs = CHWRecord.objects.filter(batch_id=batch_id) if batch_id else CHWRecord.objects.none()
+    if counties:     qs = qs.filter(county__in=counties)
+    if sub_counties: qs = qs.filter(sub_county__in=sub_counties)
+    if chus:         qs = qs.filter(community_health_unit__in=chus)
+    if chps:         qs = qs.filter(chw_name__in=chps)
+
+    group_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
+    rows = _target_achievement_query(qs, group_fields)
+
+    targets_by_county = {}
+    for t in IndicatorTarget.objects.all():
+        targets_by_county.setdefault(t.county, {})[t.metric_key] = t.target
+
+    rows = [_score_against_targets(r, targets_by_county) for r in rows]
+    # Best to worst — rows with no scoreable indicators (grey) sink to the bottom.
+    rows.sort(key=lambda r: (r['overall_pct'] is None, -(r['overall_pct'] or 0)))
+
+    return rows, batch_id, monthly_batches, counties, sub_counties, chus, chps, level
+
+
+@login_required
+def download_target_achievement(request):
+    rows, batch_id, *_ = _target_achievement_filters(request)
+    level = request.GET.get('level', 'sub_county')
+    geo_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="hiht_target_achievement.csv"'
+    writer = csv.writer(response)
+    header = [f.replace('_', ' ').title() for f in geo_fields]
+    for key, meta in TARGET_METRICS.items():
+        header += [f"{meta['label']} (Actual)", f"{meta['label']} (Target)", f"{meta['label']} (Status)"]
+    header += ['Indicators Achieved', 'Overall %', 'Overall Status']
+    writer.writerow(header)
+
+    for r in rows:
+        row_out = [r.get(f) for f in geo_fields]
+        for key in TARGET_METRICS:
+            s = r['scored'][key]
+            row_out += [s['value'], s['target'], s['colour']]
+        row_out += [f"{r['achieved_count']}/{r['scoreable_count']}", r['overall_pct'], r['overall_colour']]
+        writer.writerow(row_out)
+    return response
+
+
+@login_required
+def manage_targets_view(request):
+    """Small grid to view/edit the per-county targets behind Target Achievement."""
+    from .models import IndicatorTarget
+
+    if not is_uploader(request.user):
+        messages.error(request, "You don't have permission to edit targets.")
+        return redirect('target_achievement')
+
+    counties = ['Busia', 'Kisumu', 'Vihiga', 'Bungoma']
+
+    if request.method == 'POST':
+        for county in counties:
+            for key in TARGET_METRICS:
+                field_name = f"{county}__{key}"
+                raw = request.POST.get(field_name, '').strip()
+                value = float(raw) if raw else None
+                IndicatorTarget.objects.update_or_create(
+                    county=county, metric_key=key,
+                    defaults={'target': value, 'updated_by': request.user},
+                )
+        messages.success(request, 'Targets saved.')
+        return redirect('manage_targets')
+
+    existing = {(t.county, t.metric_key): t.target for t in IndicatorTarget.objects.all()}
+    grid = []
+    for key, meta in TARGET_METRICS.items():
+        row = {'key': key, 'label': meta['label'], 'unit': meta['unit'], 'values': {}}
+        for county in counties:
+            row['values'][county] = existing.get((county, key))
+        grid.append(row)
+
+    return render(request, 'dashboard/manage_targets.html', {
+        'counties': counties,
+        'grid': grid,
+    })
 
 
 def get_dash_util(county, sub_county, report):

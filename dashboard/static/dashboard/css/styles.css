@@ -143,6 +143,36 @@ body {
 }
 .filter-select option { background: var(--navy); color: white; }
 .filter-select:focus  { outline: none; border-color: var(--cyan); }
+
+/* Multi-select checkbox dropdown (county/sub-county/CU/CHP on Target Achievement) */
+.ms-dropdown { position: relative; display: inline-block; }
+.ms-dropdown-btn { text-align: left; min-width: 150px; }
+.ms-dropdown-menu {
+  display: none; position: absolute; top: 100%; left: 0; margin-top: 4px;
+  background: var(--navy); border: 1.5px solid rgba(255,255,255,0.2);
+  border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  z-index: 300; min-width: 220px; max-height: 260px; overflow-y: auto; padding: 6px 0;
+}
+.ms-dropdown-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+  font-size: 13px; color: var(--white); cursor: pointer; white-space: nowrap;
+}
+.ms-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+.ms-dropdown-item input { cursor: pointer; }
+
+/* Target Achievement ranking table */
+.ta-table .ta-cell { font-weight: 600; }
+.ta-table .ta-green  { background: rgba(34,197,94,0.14);  color: #15803d; }
+.ta-table .ta-yellow { background: rgba(234,179,8,0.16);  color: #a16207; }
+.ta-table .ta-red    { background: rgba(239,68,68,0.14);  color: #b91c1c; }
+.ta-table .ta-grey   { color: var(--text-muted); font-weight: 400; }
+.status-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px;
+}
+.status-dot.status-green  { background: var(--green); }
+.status-dot.status-yellow { background: var(--yellow); }
+.status-dot.status-red    { background: var(--red); }
+.status-dot.status-grey   { background: var(--gray-300, #d1d5db); }
 .filter-reset  {
   align-self: flex-end; background: rgba(232,67,26,0.2); color: var(--orange);
   border: 1px solid var(--orange); padding: 7px 14px; border-radius: var(--radius-sm);

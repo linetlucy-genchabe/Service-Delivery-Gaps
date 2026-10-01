@@ -1,17 +1,27 @@
 {% extends 'dashboard/base.html' %}
+{% load dashboard_extras %}
 {% block title %}HIHTs Trends · Service Delivery Gaps{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
     <h1 class="page-title">🎯 HIHTs Trends</h1>
-    <p class="page-subtitle">Total HIHTs/CHW across the last 6 monthly reports.</p>
+    <p class="page-subtitle">Total HIHTs/CHW across the last 6 monthly reports, and how counties/sub-counties/CUs/CHPs are tracking against target.</p>
   </div>
+  {% if is_uploader %}<a href="{% url 'manage_targets' %}" class="btn btn-outline">⚙ Manage Targets</a>{% endif %}
 </div>
 
-<!-- FILTERS -->
+<div class="category-nav" style="margin-bottom:16px;">
+  <button type="button" class="cat-btn {% if active_tab != 'target_achievement' %}active{% endif %}" id="ht-tab-btn-trend" onclick="showHtTab('trend')">📈 Trend</button>
+  <button type="button" class="cat-btn {% if active_tab == 'target_achievement' %}active{% endif %}" id="ht-tab-btn-ta" onclick="showHtTab('target_achievement')">🎯 Target Achievement</button>
+</div>
+
+<!-- ======================= TREND TAB ======================= -->
+<div id="ht-tab-trend" {% if active_tab == 'target_achievement' %}style="display:none;"{% endif %}>
+
 <div class="filter-bar">
   <form method="get" id="hiht-trends-filter-form" class="filter-form">
+    <input type="hidden" name="tab" value="trend">
     <div class="filter-group">
       <label class="filter-label">County</label>
       <select name="county" class="filter-select" onchange="this.form.submit()">
@@ -66,6 +76,191 @@
   <div id="hiht-trend-container"><div class="table-loading">Loading…</div></div>
 {% endif %}
 
+</div>
+
+<!-- ======================= TARGET ACHIEVEMENT TAB ======================= -->
+<div id="ht-tab-target_achievement" {% if active_tab != 'target_achievement' %}style="display:none;"{% endif %}>
+
+{% if not ta_batches %}
+  <div class="table-empty">No monthly reports uploaded yet — upload at least one monthly CHW Detail batch to rank target achievement.</div>
+{% else %}
+
+<div class="filter-bar">
+  <form method="get" id="ta-filter-form" class="filter-form">
+    <input type="hidden" name="tab" value="target_achievement">
+
+    <div class="filter-group">
+      <label class="filter-label">Month</label>
+      <select name="ta_batch" class="filter-select" onchange="this.form.submit()">
+        {% for b in ta_batches reversed %}
+          <option value="{{ b.pk }}" {% if ta_selected_batch == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Rank By</label>
+      <select name="ta_level" class="filter-select" onchange="this.form.submit()">
+        <option value="county"     {% if ta_level == 'county' %}selected{% endif %}>County</option>
+        <option value="sub_county" {% if ta_level == 'sub_county' %}selected{% endif %}>Sub-County</option>
+        <option value="chu"        {% if ta_level == 'chu' %}selected{% endif %}>Community Unit</option>
+        <option value="chp"        {% if ta_level == 'chp' %}selected{% endif %}>CHP</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if ta_selected_counties %}{{ ta_selected_counties|length }} selected{% else %}All Counties{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for c in ta_county_options %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="ta_county" value="{{ c }}" {% if c in ta_selected_counties %}checked{% endif %} onchange="this.form.submit()"> {{ c }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if ta_selected_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if ta_selected_sub_counties %}{{ ta_selected_sub_counties|length }} selected{% else %}All Sub-Counties{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for sc in ta_sub_county_options %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="ta_sub_county" value="{{ sc }}" {% if sc in ta_selected_sub_counties %}checked{% endif %} onchange="this.form.submit()"> {{ sc }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if ta_selected_sub_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Community Unit</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if ta_selected_chus %}{{ ta_selected_chus|length }} selected{% else %}All CUs{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for cu in ta_chu_options %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="ta_chu" value="{{ cu }}" {% if cu in ta_selected_chus %}checked{% endif %} onchange="this.form.submit()"> {{ cu }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if ta_selected_chus %}
+    <div class="filter-group">
+      <label class="filter-label">CHP</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if ta_selected_chps %}{{ ta_selected_chps|length }} selected{% else %}All CHPs{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for chp in ta_chp_options %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="ta_chp" value="{{ chp }}" {% if chp in ta_selected_chps %}checked{% endif %} onchange="this.form.submit()"> {{ chp }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if ta_selected_counties or ta_selected_sub_counties or ta_selected_chus or ta_selected_chps %}
+      <a href="?tab=target_achievement&ta_batch={{ ta_selected_batch }}&ta_level={{ ta_level }}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+  </form>
+</div>
+
+<p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">
+  Scored against the per-county targets your team set (Busia uses the Busia IS numbers; Kisumu uses one Kisumu-wide target). Green = target met, amber = within 75% of target, red = below that. Stock and phone indicators aren't tracked yet, so they're not scored here.
+</p>
+
+<div class="cards-grid">
+  <div class="stat-card navy">
+    <div class="stat-value">{{ ta_total_count }}</div>
+    <div class="stat-label">{{ ta_level|title }} rows shown</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-value">{{ ta_green_count }}</div>
+    <div class="stat-label">Achieving Target</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="stat-value">{{ ta_yellow_count }}</div>
+    <div class="stat-label">Approaching Target</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-value">{{ ta_red_count }}</div>
+    <div class="stat-label">Below Target</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <h3 class="card-title">Ranked Best to Worst</h3>
+    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}&ta_level={{ ta_level }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      {% if ta_rows %}
+      <table class="data-table ta-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{{ ta_level|title }}</th>
+            {% for key, meta in ta_metrics.items %}
+              <th class="num" title="{{ meta.label }}">{{ meta.label }}</th>
+            {% endfor %}
+            <th class="num">Achieved</th>
+            <th>Overall</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in ta_rows %}
+          <tr>
+            <td class="zero">{{ forloop.counter }}</td>
+            <td>
+              {% if ta_level == 'county' %}{{ row.county }}
+              {% elif ta_level == 'sub_county' %}{{ row.sub_county }} <span style="color:var(--text-muted);font-size:11px;">({{ row.county }})</span>
+              {% elif ta_level == 'chu' %}{{ row.community_health_unit }}
+              {% else %}{{ row.chw_name }} <span style="color:var(--text-muted);font-size:11px;">({{ row.community_health_unit }})</span>
+              {% endif %}
+            </td>
+            {% for key, meta in ta_metrics.items %}
+              {% with cell=row.scored|dict_get:key %}
+              <td class="num ta-cell ta-{{ cell.colour }}">
+                {% if cell.value is not None %}{{ cell.value }}{{ meta.unit }}{% else %}—{% endif %}
+              </td>
+              {% endwith %}
+            {% endfor %}
+            <td class="num">{{ row.achieved_count }}/{{ row.scoreable_count }}</td>
+            <td><span class="status-dot status-{{ row.overall_colour }}"></span> {{ row.overall_pct|default:"—" }}{% if row.overall_pct %}%{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="table-empty">No data for this selection.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endif %}
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -81,6 +276,25 @@ const TREND_LEVEL = "{{ trend_level }}";
 // dashboard.js even loads, since this block renders earlier in the page.
 document.addEventListener('DOMContentLoaded', function () {
   if (typeof loadHihtTrend === 'function') loadHihtTrend(TREND_LEVEL);
+});
+
+function showHtTab(tab) {
+  document.getElementById('ht-tab-trend').style.display = (tab === 'trend') ? '' : 'none';
+  document.getElementById('ht-tab-target_achievement').style.display = (tab === 'target_achievement') ? '' : 'none';
+  document.getElementById('ht-tab-btn-trend').classList.toggle('active', tab === 'trend');
+  document.getElementById('ht-tab-btn-ta').classList.toggle('active', tab === 'target_achievement');
+}
+
+function toggleMsDd(btn) {
+  const menu = btn.nextElementSibling;
+  const isOpen = menu.style.display === 'block';
+  document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.style.display = 'none');
+  menu.style.display = isOpen ? 'none' : 'block';
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.ms-dropdown')) {
+    document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.style.display = 'none');
+  }
 });
 </script>
 {% endblock %}

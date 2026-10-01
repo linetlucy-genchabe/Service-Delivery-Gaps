@@ -451,3 +451,27 @@ class EDDRecord(models.Model):
 
     def __str__(self):
         return f"{self.member_name or self.pregnancy_id} — EDD {self.effective_edd_date}"
+
+
+# ===========================================================================
+# HIHT Target Achievement — per-county targets for the 11 indicators agreed
+# with Claire's team, so sub-counties/CUs/CHPs can be ranked green/amber/red
+# against them from county level down to the individual CHP. One row per
+# (county, metric_key); edited from a small in-app grid rather than an
+# upload, since it's just ~44 numbers that change occasionally.
+# ===========================================================================
+
+class IndicatorTarget(models.Model):
+    """One target value for one indicator, for one county."""
+    county           = models.CharField(max_length=100, db_index=True)
+    metric_key       = models.CharField(max_length=50, db_index=True)
+    target           = models.FloatField(null=True, blank=True)
+    updated_by       = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['county', 'metric_key']
+        ordering = ['county', 'metric_key']
+
+    def __str__(self):
+        return f"{self.county} — {self.metric_key}: {self.target}"

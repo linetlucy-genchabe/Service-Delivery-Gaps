@@ -1,0 +1,52 @@
+{% extends 'dashboard/base.html' %}
+{% load dashboard_extras %}
+{% block title %}Manage HIHT Targets{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">⚙ Manage HIHT Targets</h1>
+    <p class="page-subtitle">Per-county targets behind the Target Achievement ranking. Busia uses the Busia IS numbers; Kisumu uses one target for all its sub-counties, including Muhoroni and Nyakach.</p>
+  </div>
+  <a href="{% url 'hiht_trends' %}?tab=target_achievement" class="btn btn-outline">🎯 Target Achievement</a>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}" style="margin-bottom:16px;"><span>{{ message }}</span></div>
+  {% endfor %}
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card">
+    <div class="card-body no-pad">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Indicator</th>
+              {% for county in counties %}<th class="num">{{ county }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in grid %}
+            <tr>
+              <td><strong>{{ row.label }}</strong>{% if row.unit %} <span style="color:var(--text-muted);">({{ row.unit }})</span>{% endif %}</td>
+              {% for county in counties %}
+              <td class="num">
+                <input type="number" step="0.01" name="{{ county }}__{{ row.key }}"
+                       value="{{ row.values|dict_get:county|default_if_none:'' }}"
+                       style="width:90px;padding:6px 8px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;text-align:right;">
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary" style="margin-top:16px;">Save Targets</button>
+</form>
+{% endblock %}
