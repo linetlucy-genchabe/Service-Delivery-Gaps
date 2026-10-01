@@ -99,6 +99,15 @@
     </div>
 
     <div class="filter-group">
+      <label class="filter-label">Rank By</label>
+      <select name="ta_rank_by" class="filter-select" onchange="this.form.submit()">
+        {% for key, meta in ta_metrics.items %}
+          <option value="{{ key }}" {% if ta_rank_by == key %}selected{% endif %}>{{ meta.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
       <label class="filter-label">County</label>
       <div class="ms-dropdown">
         <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
@@ -189,15 +198,15 @@
   </div>
   <div class="stat-card green">
     <div class="stat-value">{{ ta_green_count }}</div>
-    <div class="stat-label">Achieving HIHTs Target</div>
+    <div class="stat-label">Achieving {{ ta_rank_by_label }} Target</div>
   </div>
   <div class="stat-card yellow">
     <div class="stat-value">{{ ta_yellow_count }}</div>
-    <div class="stat-label">Approaching HIHTs Target</div>
+    <div class="stat-label">Approaching {{ ta_rank_by_label }} Target</div>
   </div>
   <div class="stat-card red">
     <div class="stat-value">{{ ta_red_count }}</div>
-    <div class="stat-label">Below HIHTs Target</div>
+    <div class="stat-label">Below {{ ta_rank_by_label }} Target</div>
   </div>
 </div>
 
@@ -205,9 +214,9 @@
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
     <div>
       <h3 class="card-title">Ranked Best to Worst{% if ta_level == 'sub_county' and ta_selected_counties|length == 1 %} — {{ ta_selected_counties.0 }}{% elif ta_level == 'chu' and ta_selected_sub_counties|length == 1 %} — {{ ta_selected_sub_counties.0 }}{% elif ta_level == 'chp' and ta_selected_chus|length == 1 %} — {{ ta_selected_chus.0 }}{% endif %}</h3>
-      <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Ranked by Total HIHTs/CHW as a % of target.</p>
+      <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Ranked by {{ ta_rank_by_label }} as a % of target.</p>
     </div>
-    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}&ta_view={{ ta_view }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}&ta_view={{ ta_view }}&ta_rank_by={{ ta_rank_by }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll table-scroll-tall">
@@ -221,7 +230,7 @@
               <th class="num" title="{{ meta.label }}">{{ meta.label }}</th>
             {% endfor %}
             <th class="num">Achieved</th>
-            <th title="Total HIHTs/CHW as a % of target">Rank Score</th>
+            <th title="{{ ta_rank_by_label }} as a % of target">Rank Score</th>
           </tr>
         </thead>
         <tbody>

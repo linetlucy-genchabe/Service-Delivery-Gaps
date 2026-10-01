@@ -631,7 +631,7 @@ def hiht_trends_view(request):
         trend_level = 'county'
 
     # --- Target Achievement tab — same page, namespaced ta_ filters ---
-    ta_rows, ta_batch_id, ta_monthly_batches, ta_counties, ta_sub_counties, ta_chus, ta_chps, ta_level = \
+    ta_rows, ta_batch_id, ta_monthly_batches, ta_counties, ta_sub_counties, ta_chus, ta_chps, ta_level, ta_rank_by = \
         _target_achievement_filters(request)
     # Only meaningful (and only shown) when nothing is picked yet — toggles
     # the top-level view between all counties and all sub-counties nationwide.
@@ -667,6 +667,8 @@ def hiht_trends_view(request):
         'ta_selected_batch':   ta_batch_id,
         'ta_metrics':          TARGET_METRICS,
         'ta_level':            ta_level,
+        'ta_rank_by':          ta_rank_by,
+        'ta_rank_by_label':    TARGET_METRICS[ta_rank_by]['label'],
         'ta_view':             ta_view,
         'ta_at_top_level':     ta_at_top_level,
         'ta_selected_counties':     ta_counties,
@@ -3640,12 +3642,18 @@ def _target_achievement_query(chw_qs, group_fields):
     return rows
 
 
-def _score_against_targets(row, targets_by_county):
+def _score_against_targets(row, targets_by_county, rank_by='total_hihts_per_chw'):
     """
     Attach per-indicator colour (green/amber/red/grey) and an overall
     achievement score to one geography row, using that row's county to
     look up targets (Kisumu 2.0 sub-counties use the plain Kisumu target,
     per how targets were agreed — targets are keyed by county only).
+
+    `rank_by` picks which single indicator the ranking/overall colour is
+    based on (defaults to Total HIHTs/CHW). Ranking on one indicator's own
+    % of target, rather than counting how many of the 11 crossed 100%,
+    keeps the order continuous — two rows that are both short of target
+    don't tie just because neither one fully hit it.
     """
     county = row.get('county', '')
     county_targets = targets_by_county.get(county, {})
@@ -3668,16 +3676,10 @@ def _score_against_targets(row, targets_by_county):
     row['achieved_count'] = achieved
     row['scoreable_count'] = scoreable
 
-    # Ranked and colour-coded on Total HIHTs/CHW specifically, not on how many
-    # of the 11 indicators crossed 100% — counting achieved indicators tied
-    # together rows with very different performance (e.g. "just under target
-    # on everything" scored the same as "far below on everything"), which
-    # made the ranking look arbitrary. Total HIHTs/CHW's own % of target is
-    # a single continuous number, so ties like that don't happen.
-    hihts = scored.get('total_hihts_per_chw')
-    if hihts and hihts['pct_of_target'] is not None:
-        row['overall_pct'] = hihts['pct_of_target']
-        row['overall_colour'] = hihts['colour']
+    rank_cell = scored.get(rank_by)
+    if rank_cell and rank_cell['pct_of_target'] is not None:
+        row['overall_pct'] = rank_cell['pct_of_target']
+        row['overall_colour'] = rank_cell['colour']
     else:
         row['overall_pct'] = None
         row['overall_colour'] = 'grey'
@@ -3729,16 +3731,20 @@ def _target_achievement_filters(request):
     for t in IndicatorTarget.objects.all():
         targets_by_county.setdefault(t.county, {})[t.metric_key] = t.target
 
-    rows = [_score_against_targets(r, targets_by_county) for r in rows]
+    rank_by = request.GET.get('ta_rank_by', 'total_hihts_per_chw')
+    if rank_by not in TARGET_METRICS:
+        rank_by = 'total_hihts_per_chw'
+
+    rows = [_score_against_targets(r, targets_by_county, rank_by) for r in rows]
     # Best to worst — rows with no scoreable indicators (grey) sink to the bottom.
     rows.sort(key=lambda r: (r['overall_pct'] is None, -(r['overall_pct'] or 0)))
 
-    return rows, batch_id, monthly_batches, counties, sub_counties, chus, chps, level
+    return rows, batch_id, monthly_batches, counties, sub_counties, chus, chps, level, rank_by
 
 
 @login_required
 def download_target_achievement(request):
-    rows, batch_id, _monthly_batches, _counties, _sub_counties, _chus, _chps, level = _target_achievement_filters(request)
+    rows, batch_id, _monthly_batches, _counties, _sub_counties, _chus, _chps, level, _rank_by = _target_achievement_filters(request)
     geo_fields = HIHT_GEO_LEVELS.get(level, HIHT_GEO_LEVELS['sub_county'])
 
     response = HttpResponse(content_type='text/csv')
