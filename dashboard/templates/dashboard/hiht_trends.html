@@ -99,16 +99,6 @@
     </div>
 
     <div class="filter-group">
-      <label class="filter-label">Rank By</label>
-      <select name="ta_level" class="filter-select" onchange="this.form.submit()">
-        <option value="county"     {% if ta_level == 'county' %}selected{% endif %}>County</option>
-        <option value="sub_county" {% if ta_level == 'sub_county' %}selected{% endif %}>Sub-County</option>
-        <option value="chu"        {% if ta_level == 'chu' %}selected{% endif %}>Community Unit</option>
-        <option value="chp"        {% if ta_level == 'chp' %}selected{% endif %}>CHP</option>
-      </select>
-    </div>
-
-    <div class="filter-group">
       <label class="filter-label">County</label>
       <div class="ms-dropdown">
         <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
@@ -179,13 +169,17 @@
     {% endif %}
 
     {% if ta_selected_counties or ta_selected_sub_counties or ta_selected_chus or ta_selected_chps %}
-      <a href="?tab=target_achievement&ta_batch={{ ta_selected_batch }}&ta_level={{ ta_level }}" class="filter-reset">✕ Clear Filters</a>
+      <a href="?tab=target_achievement&ta_batch={{ ta_selected_batch }}" class="filter-reset">✕ Clear Filters</a>
     {% endif %}
   </form>
 </div>
 
 <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">
   Scored against the per-county targets your team set (Busia uses the Busia IS numbers; Kisumu uses one Kisumu-wide target). Green = target met, amber = within 75% of target, red = below that. Stock and phone indicators aren't tracked yet, so they're not scored here.
+  {% if ta_selected_chus %}Showing each CHP in the selected CU(s).
+  {% elif ta_selected_sub_counties %}Showing each CU in the selected sub-count{{ ta_selected_sub_counties|length|pluralize:"y,ies" }}.
+  {% elif ta_selected_counties %}Showing each sub-county in the selected count{{ ta_selected_counties|length|pluralize:"y,ies" }}.
+  {% else %}Showing all counties — pick a county to drill into its sub-counties, then a sub-county for its CUs, then a CU for its CHPs.{% endif %}
 </p>
 
 <div class="cards-grid">
@@ -210,7 +204,7 @@
 <div class="card" style="margin-top:16px;">
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
     <h3 class="card-title">Ranked Best to Worst</h3>
-    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}&ta_level={{ ta_level }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <a href="{% url 'download_target_achievement' %}?ta_batch={{ ta_selected_batch }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}{% for cu in ta_selected_chus %}&ta_chu={{ cu }}{% endfor %}{% for chp in ta_selected_chps %}&ta_chp={{ chp }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll">
