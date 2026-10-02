@@ -1442,8 +1442,9 @@ def download_sync_report_pdf(request):
     """
     Colorful PDF sync-status report matching the dashboard's own palette.
     Two sections: CHPs not synced completely, and CHPs synced but with
-    telemetry issues, each grouped by county then sub-county, showing the
-    Community Unit, CHP Name, and the last date a report came in from them.
+    telemetry issues. Each sub-county gets its own page, with CHPs grouped
+    under their Community Unit, kept compact so a typical sub-county fits
+    on a single page.
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -1478,14 +1479,16 @@ def download_sync_report_pdf(request):
     RED_LIGHT   = colors.HexColor('#FEF2F2')
     YELLOW      = colors.HexColor('#D97706')
     WHITE       = colors.white
+    GREY_TEXT   = colors.HexColor('#374151')
+    GREY_LINE   = colors.HexColor('#D1D5DB')
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="sync_report_{batch.label}.pdf"'
 
     doc = SimpleDocTemplate(
         response, pagesize=A4,
-        topMargin=16 * mm, bottomMargin=14 * mm,
-        leftMargin=14 * mm, rightMargin=14 * mm,
+        topMargin=12 * mm, bottomMargin=10 * mm,
+        leftMargin=12 * mm, rightMargin=12 * mm,
     )
 
     title_style = ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=18,
@@ -1494,10 +1497,12 @@ def download_sync_report_pdf(request):
                                      textColor=WHITE, alignment=TA_CENTER, leading=14)
     section_style = ParagraphStyle('Section', fontName='Helvetica-Bold', fontSize=13,
                                     textColor=WHITE, leading=16)
-    county_style = ParagraphStyle('County', fontName='Helvetica-Bold', fontSize=11,
-                                   textColor=NAVY_DARK, leading=14)
-    sub_style = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=9.5,
-                                textColor=colors.HexColor('#374151'), leading=12)
+    page_header_style = ParagraphStyle('PageHeader', fontName='Helvetica-Bold', fontSize=13,
+                                        textColor=NAVY_DARK, leading=16)
+    page_sub_style = ParagraphStyle('PageSub', fontName='Helvetica', fontSize=9,
+                                     textColor=GREY_TEXT, leading=11)
+    chu_style = ParagraphStyle('CHU', fontName='Helvetica-Bold', fontSize=9,
+                                textColor=WHITE, leading=11)
     empty_style = ParagraphStyle('Empty', fontName='Helvetica-Oblique', fontSize=9,
                                   textColor=colors.HexColor('#6B7280'))
 
@@ -1506,7 +1511,7 @@ def download_sync_report_pdf(request):
     # --- Title banner ---
     banner = Table([[Paragraph('Living Goods Sync Status Report', title_style)],
                      [Paragraph(f'{batch.label}  |  Generated {timezone_now_str()}', subtitle_style)]],
-                    colWidths=[180 * mm])
+                    colWidths=[184 * mm])
     banner.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), NAVY),
         ('TOPPADDING', (0, 0), (-1, 0), 10),
@@ -1515,11 +1520,41 @@ def download_sync_report_pdf(request):
         ('BOTTOMPADDING', (0, 1), (-1, 1), 10),
     ]))
     elements.append(banner)
-    elements.append(Spacer(1, 8 * mm))
+    elements.append(Spacer(1, 6 * mm))
 
-    def build_section(heading, band_color, light_color, text_color, records, date_field, date_label, empty_msg):
+    def chu_table(rows, date_label, text_color, light_color):
+        """A compact two-column (CHP Name / Last Report Sent) table for one CHU."""
+        data = [['CHP Name', date_label]]
+        for r in sorted(rows, key=lambda x: x.chp_name):
+            d = r._report_date
+            data.append([r.chp_name, str(d) if d else 'Never'])
+
+        t = Table(data, colWidths=[112 * mm, 50 * mm], repeatRows=1)
+        row_styles = [
+            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.4, GREY_LINE),
+            ('TEXTCOLOR', (1, 1), (1, -1), text_color),
+            ('FONTNAME', (1, 1), (1, -1), 'Helvetica-Bold'),
+        ]
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                row_styles.append(('BACKGROUND', (0, i), (-1, i), light_color))
+        t.setStyle(TableStyle(row_styles))
+        return t
+
+    def build_section(heading, band_color, light_color, text_color, records, date_field, date_label, empty_msg, first_page):
         sec_elements = []
-        band = Table([[Paragraph(heading, section_style)]], colWidths=[180 * mm])
+        if not first_page:
+            sec_elements.append(PageBreak())
+
+        band = Table([[Paragraph(heading, section_style)]], colWidths=[184 * mm])
         band.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), band_color),
             ('TOPPADDING', (0, 0), (-1, -1), 8),
@@ -1527,85 +1562,79 @@ def download_sync_report_pdf(request):
             ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ]))
         sec_elements.append(band)
-        sec_elements.append(Spacer(1, 4 * mm))
 
         if not records:
+            sec_elements.append(Spacer(1, 4 * mm))
             sec_elements.append(Paragraph(empty_msg, empty_style))
-            sec_elements.append(Spacer(1, 6 * mm))
             return sec_elements
 
-        counties_seen = {}
+        # tag each record with the date value this section cares about, so
+        # chu_table() doesn't need to know which field to read
         for r in records:
-            counties_seen.setdefault(r.county, {}).setdefault(r.sub_county, []).append(r)
+            r._report_date = getattr(r, date_field)
 
-        for cty in sorted(counties_seen.keys()):
-            cty_total = sum(len(v) for v in counties_seen[cty].values())
-            cty_band = Table([[Paragraph(f'{cty} County', county_style),
-                                Paragraph(f'{cty_total} CHP(s)', county_style)]],
-                              colWidths=[140 * mm, 40 * mm])
-            cty_band.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, -1), light_color),
-                ('TOPPADDING', (0, 0), (-1, -1), 5),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-                ('LEFTPADDING', (0, 0), (0, -1), 8),
-                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                ('RIGHTPADDING', (1, 0), (1, -1), 8),
-                ('BOX', (0, 0), (-1, -1), 0.5, band_color),
-            ]))
-            sec_elements.append(cty_band)
-            sec_elements.append(Spacer(1, 2 * mm))
+        grouped = {}
+        for r in records:
+            grouped.setdefault(r.county, {}).setdefault(r.sub_county, {}).setdefault(
+                r.community_health_unit, []).append(r)
 
-            for sc in sorted(counties_seen[cty].keys()):
-                rows = counties_seen[cty][sc]
-                sec_elements.append(Paragraph(f'{sc} Sub-County  ({len(rows)})', sub_style))
-                sec_elements.append(Spacer(1, 1.5 * mm))
+        first_subcounty_page = True
+        for cty in sorted(grouped.keys()):
+            for sc in sorted(grouped[cty].keys()):
+                chus = grouped[cty][sc]
+                sc_total = sum(len(v) for v in chus.values())
 
-                table_data = [['Community Unit', 'CHP Name', date_label]]
-                for r in sorted(rows, key=lambda x: (x.community_health_unit, x.chp_name)):
-                    d = getattr(r, date_field)
-                    table_data.append([
-                        r.community_health_unit, r.chp_name,
-                        str(d) if d else 'Never',
-                    ])
+                if not first_subcounty_page:
+                    sec_elements.append(PageBreak())
+                first_subcounty_page = False
 
-                t = Table(table_data, colWidths=[62 * mm, 72 * mm, 46 * mm], repeatRows=1)
-                row_styles = [
-                    ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8.5),
-                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                    ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D1D5DB')),
-                    ('TEXTCOLOR', (2, 1), (2, -1), text_color),
-                    ('FONTNAME', (2, 1), (2, -1), 'Helvetica-Bold'),
-                ]
-                for i in range(1, len(table_data)):
-                    if i % 2 == 0:
-                        row_styles.append(('BACKGROUND', (0, i), (-1, i), light_color))
-                t.setStyle(TableStyle(row_styles))
-                sec_elements.append(t)
-                sec_elements.append(Spacer(1, 4 * mm))
+                header = Table(
+                    [[Paragraph(f'{sc} Sub-County', page_header_style),
+                      Paragraph(f'{sc_total} CHP(s)', page_header_style)],
+                     [Paragraph(f'{cty} County', page_sub_style), '']],
+                    colWidths=[134 * mm, 50 * mm],
+                )
+                header.setStyle(TableStyle([
+                    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 1),
+                    ('TOPPADDING', (0, 1), (-1, 1), 0),
+                    ('LINEBELOW', (0, 1), (-1, 1), 1, band_color),
+                    ('BOTTOMPADDING', (0, 1), (-1, 1), 4),
+                ]))
+                sec_elements.append(header)
+                sec_elements.append(Spacer(1, 3 * mm))
+
+                for chu_name in sorted(chus.keys()):
+                    rows = chus[chu_name]
+                    chu_band = Table([[Paragraph(f'&bull; {chu_name}  ({len(rows)})', chu_style)]],
+                                      colWidths=[184 * mm])
+                    chu_band.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, -1), NAVY_DARK),
+                        ('TOPPADDING', (0, 0), (-1, -1), 3),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ]))
+                    sec_elements.append(chu_band)
+                    sec_elements.append(chu_table(rows, date_label, text_color, light_color))
+                    sec_elements.append(Spacer(1, 2.5 * mm))
 
         return sec_elements
 
-    not_synced_qs = base_qs.filter(NEVER_SYNCED_Q)
-    telemetry_qs  = base_qs.filter(TELEMETRY_ISSUE_Q)
+    not_synced_qs = list(base_qs.filter(NEVER_SYNCED_Q))
+    telemetry_qs  = list(base_qs.filter(TELEMETRY_ISSUE_Q))
 
     elements += build_section(
         'CHPs Not Synced Completely', RED, RED_LIGHT, RED,
-        list(not_synced_qs), 'last_sync_date', 'Last Report Sent',
+        not_synced_qs, 'last_sync_date', 'Last Report Sent',
         'No CHPs are fully unsynced for this selection — great news.',
+        first_page=True,
     )
-
-    elements.append(Spacer(1, 4 * mm))
 
     elements += build_section(
         'Synced but Flagged with Telemetry Issues', YELLOW, ORANGE_LIGHT, YELLOW,
-        list(telemetry_qs), 'latest_form_date', 'Last Report Sent',
+        telemetry_qs, 'latest_form_date', 'Last Report Sent',
         'No CHPs with telemetry issues for this selection.',
+        first_page=False,
     )
 
     doc.build(elements)
