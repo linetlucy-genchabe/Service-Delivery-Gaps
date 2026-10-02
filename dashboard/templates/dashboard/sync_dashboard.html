@@ -292,7 +292,10 @@
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">CHPs Not Synced Completely</h3><p class="card-subtitle">Data completely absent from eCHIS — requires immediate follow-up</p></div>
-    <a href="{% url 'download_never_synced' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="downloadNeverSyncedImage()" id="never-synced-image-btn">🖼 Download Image</button>
+      <a href="{% url 'download_never_synced' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll">
@@ -328,6 +331,7 @@
 
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 const BATCH_ID          = "{{ selected_batch_id }}";
 const COUNTY            = "{{ selected_county }}";
@@ -455,6 +459,118 @@ function loadNeverSynced() {
     })
     .catch(() => {
       document.getElementById('never-synced-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
+    });
+}
+
+// ── Not Synced Completely — shareable PNG image export ─────────
+function _imageScopeLabel() {
+  if (CHU && CHU !== 'None' && CHU !== '') return CHU;
+  if (SUB_COUNTY && SUB_COUNTY !== 'None' && SUB_COUNTY !== '') return SUB_COUNTY + ' Sub-County';
+  if (COUNTY && COUNTY !== 'None' && COUNTY !== '') return COUNTY + ' County';
+  return 'All Counties';
+}
+
+function downloadNeverSyncedImage() {
+  const btn = document.getElementById('never-synced-image-btn');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Building…';
+
+  const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
+  fetch('/api/never-synced/?' + params)
+    .then(r => r.json())
+    .then(data => {
+      const results = data.results || [];
+      if (results.length === 0) {
+        alert('No CHPs are flagged as Not Synced Completely for this selection — nothing to export.');
+        return;
+      }
+
+      // Group by CHU, preserving first-seen order
+      const groups = [];
+      const groupIndex = {};
+      results.forEach(r => {
+        const key = r.community_health_unit || 'Unknown CHU';
+        if (!(key in groupIndex)) {
+          groupIndex[key] = groups.length;
+          groups.push({ chu: key, rows: [] });
+        }
+        groups[groupIndex[key]].rows.push(r);
+      });
+
+      let counter = 0;
+      const cardsHtml = groups.map(g => {
+        const rowsHtml = g.rows.map(r => {
+          counter++;
+          return `<div style="display:flex;justify-content:space-between;padding:5px 10px;font-size:12px;border-bottom:1px solid #F1F1F1;">
+            <span style="color:#1B3A6B;font-weight:600;min-width:22px;">${counter}.</span>
+            <span style="flex:1;color:#1F2937;">${esc(r.chp_name)}</span>
+            <span style="color:#6B7280;">${esc(r.username)}</span>
+          </div>`;
+        }).join('');
+        return `<div style="break-inside:avoid;margin-bottom:14px;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;background:#FFFFFF;">
+          <div style="background:#1B3A6B;color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;">${esc(g.chu)}</span>
+            <span style="background:#DC2626;color:#fff;border-radius:999px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:0 6px;">${g.rows.length}</span>
+          </div>
+          <div>${rowsHtml}</div>
+        </div>`;
+      }).join('');
+
+      const scopeLabel = _imageScopeLabel();
+      const chuCount = groups.length;
+
+      const root = document.createElement('div');
+      root.id = 'image-export-root';
+      root.style.position = 'fixed';
+      root.style.left = '-99999px';
+      root.style.top = '0';
+      root.style.width = '900px';
+      root.style.background = '#F7F8FA';
+      root.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+      root.style.padding = '24px';
+      root.innerHTML = `
+        <div style="text-align:center;margin-bottom:16px;">
+          <div style="font-size:20px;font-weight:800;color:#1B3A6B;">${esc(scopeLabel)} — CHPs Not Synced Completely</div>
+          <div style="font-size:13px;color:#6B7280;margin-top:4px;">eCHIS sync status &bull; Days synced = 0, Forms recorded = 0</div>
+        </div>
+        <div style="display:flex;gap:14px;justify-content:center;margin-bottom:18px;">
+          <div style="background:#FEF2F2;border:1px solid #DC2626;border-radius:10px;padding:12px 22px;text-align:center;min-width:150px;">
+            <div style="font-size:26px;font-weight:800;color:#DC2626;">${results.length}</div>
+            <div style="font-size:12px;color:#7A1F1F;">CHPs not synced</div>
+          </div>
+          <div style="background:#EEF2F8;border:1px solid #1B3A6B;border-radius:10px;padding:12px 22px;text-align:center;min-width:150px;">
+            <div style="font-size:26px;font-weight:800;color:#1B3A6B;">${chuCount}</div>
+            <div style="font-size:12px;color:#1B3A6B;">CHUs affected</div>
+          </div>
+        </div>
+        <div style="column-count:2;column-gap:14px;">${cardsHtml}</div>
+        <div style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:10px;">
+          Grouped by Community Health Unit &bull; number in red badge = CHPs not synced completely in that CHU.
+        </div>
+      `;
+      document.body.appendChild(root);
+
+      html2canvas(root, { scale: 2, backgroundColor: '#F7F8FA' }).then(canvas => {
+        const link = document.createElement('a');
+        const safeScope = scopeLabel.replace(/[^a-z0-9]+/gi, '_');
+        link.download = `not_synced_completely_${safeScope}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        document.body.removeChild(root);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }).catch(() => {
+        document.body.removeChild(root);
+        alert('Could not generate the image. Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      });
+    })
+    .catch(() => {
+      alert('Could not load data for the image.');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
     });
 }
 
