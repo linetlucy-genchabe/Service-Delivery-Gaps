@@ -12,19 +12,28 @@ from django.db.models import F, Q
 from .models import CHWRecord, SupervisionRecord
 
 # Sync-status Q objects — single source of truth, shared by compute_sync_indicators
-# and the drill-down/download views in views.py. A CHP counts as synced if a
-# report reached the server this week at all — either the upload-telemetry
-# shows a successful upload, or a form was submitted, even if telemetry
-# hasn't caught up to show that upload as successful yet (SYNCED_Q below).
-# "A form was submitted" is read from EITHER signal the report gives us —
-# a non-zero Forms recorded count, or a Latest form date — because the two
-# columns aren't always populated together. TELEMETRY_ISSUE_Q narrows that
-# to the "form arrived but telemetry hasn't confirmed it" case specifically
-# — still synced, just flagged for follow-up.
+# and the drill-down/download views in views.py. There are two independent
+# signals a CHP can show for a given week — a submitted form, and a
+# confirmed successful upload (telemetry) — and every CHP falls into
+# exactly one of the four combinations of the two:
+#
+#   forms?   telemetry?   -> bucket
+#   yes      yes          -> FULLY_SYNCED_Q      (clean, both signals present)
+#   yes      no           -> TELEMETRY_ISSUE_Q   (synced; upload not confirmed yet)
+#   no       yes          -> TELEMETRY_ONLY_Q    (synced; a successful upload with no form data)
+#   no       no           -> NEVER_SYNCED_Q      (not synced completely)
+#
+# SYNCED_Q is the union of the three "synced" buckets (anything with either
+# signal present). "A form was submitted" is read from EITHER signal the
+# report gives us for that — a non-zero Forms recorded count, or a Latest
+# form date — because the two columns aren't always populated together.
 HAS_SUBMITTED_FORM_Q = Q(forms_recorded__gt=0) | Q(latest_form_date__isnull=False)
-SYNCED_Q          = HAS_SUBMITTED_FORM_Q | Q(last_sync_date__isnull=False)
-NEVER_SYNCED_Q    = ~HAS_SUBMITTED_FORM_Q & Q(last_sync_date__isnull=True)
-TELEMETRY_ISSUE_Q = HAS_SUBMITTED_FORM_Q & Q(last_sync_date__isnull=True)
+HAS_TELEMETRY_Q      = Q(last_sync_date__isnull=False)
+SYNCED_Q          = HAS_SUBMITTED_FORM_Q | HAS_TELEMETRY_Q
+NEVER_SYNCED_Q    = ~HAS_SUBMITTED_FORM_Q & ~HAS_TELEMETRY_Q
+TELEMETRY_ISSUE_Q = HAS_SUBMITTED_FORM_Q & ~HAS_TELEMETRY_Q
+TELEMETRY_ONLY_Q  = ~HAS_SUBMITTED_FORM_Q & HAS_TELEMETRY_Q
+FULLY_SYNCED_Q    = HAS_SUBMITTED_FORM_Q & HAS_TELEMETRY_Q
 
 
 # ---------------------------------------------------------------------------
@@ -610,6 +619,8 @@ def compute_sync_indicators(qs):
         synced_count=Count('id', filter=SYNCED_Q),
         never_synced=Count('id', filter=NEVER_SYNCED_Q),
         telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
+        telemetry_only=Count('id', filter=TELEMETRY_ONLY_Q),
+        fully_synced=Count('id', filter=FULLY_SYNCED_Q),
         avg_days=Avg('days_synced'),
         avg_reports=Avg('reports_synced'),
     )
@@ -617,6 +628,8 @@ def compute_sync_indicators(qs):
     synced           = agg['synced_count'] or 0
     never            = agg['never_synced'] or 0
     telemetry_issues = agg['telemetry_issues'] or 0
+    telemetry_only   = agg['telemetry_only'] or 0
+    fully_synced     = agg['fully_synced'] or 0
     sync_rate        = round(synced / total * 100, 1) if total else 0
     avg_days         = round(agg['avg_days'] or 0, 2)
     avg_reports      = round(agg['avg_reports'] or 0, 1)
@@ -644,6 +657,8 @@ def compute_sync_indicators(qs):
             synced=Count('id', filter=SYNCED_Q),
             never=Count('id', filter=NEVER_SYNCED_Q),
             telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
+            telemetry_only=Count('id', filter=TELEMETRY_ONLY_Q),
+            fully_synced=Count('id', filter=FULLY_SYNCED_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -663,6 +678,8 @@ def compute_sync_indicators(qs):
             synced=Count('id', filter=SYNCED_Q),
             never=Count('id', filter=NEVER_SYNCED_Q),
             telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
+            telemetry_only=Count('id', filter=TELEMETRY_ONLY_Q),
+            fully_synced=Count('id', filter=FULLY_SYNCED_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -693,6 +710,8 @@ def compute_sync_indicators(qs):
             synced=Count('id', filter=SYNCED_Q),
             never=Count('id', filter=NEVER_SYNCED_Q),
             telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
+            telemetry_only=Count('id', filter=TELEMETRY_ONLY_Q),
+            fully_synced=Count('id', filter=FULLY_SYNCED_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -718,6 +737,8 @@ def compute_sync_indicators(qs):
         'synced':           synced,
         'never_synced':     never,
         'telemetry_issues': telemetry_issues,
+        'telemetry_only':   telemetry_only,
+        'fully_synced':     fully_synced,
         'sync_rate':        sync_rate,
         'avg_days':         avg_days,
         'avg_reports':      avg_reports,

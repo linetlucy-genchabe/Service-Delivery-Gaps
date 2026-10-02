@@ -307,6 +307,16 @@ class CHPSyncRecord(models.Model):
         fields haven't caught up to show a successful upload yet."""
         return self.has_submitted_form() and not self.last_sync_date
 
+    def is_telemetry_only(self):
+        """A confirmed successful upload this week, but no form activity
+        recorded for the CHP — the mirror image of has_telemetry_issue()."""
+        return bool(self.last_sync_date) and not self.has_submitted_form()
+
+    def is_fully_synced(self):
+        """Both signals present this week — a submitted form AND a
+        confirmed successful upload. The cleanest possible state."""
+        return self.has_submitted_form() and bool(self.last_sync_date)
+
     def is_unsynced(self):
         """No form submitted and no successful upload at all this week."""
         return not self.is_synced()

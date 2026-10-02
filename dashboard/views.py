@@ -1186,7 +1186,7 @@ def download_supervised_3plus(request):
 # ===========================================================================
 
 from .models import SyncUploadBatch, CHPSyncRecord
-from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q
+from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q, TELEMETRY_ONLY_Q
 
 
 def _last_report_display(record):
@@ -1446,6 +1446,60 @@ def download_telemetry_issues(request):
         writer.writerow([r.county, r.sub_county, r.community_health_unit,
                          r.chp_name, r.username, r.forms_recorded,
                          _last_report_display(r), r.last_sync_date or 'Pending'])
+    return response
+
+
+@require_GET
+def api_telemetry_only(request):
+    """CHPs with a confirmed successful upload this week but no form
+    activity recorded for them at all — synced, and not a problem by
+    itself, but worth seeing separately from a 'clean' fully-synced CHP."""
+    batch_id    = request.GET.get('batch')
+    county      = request.GET.get('county', '')
+    sub_county  = request.GET.get('sub_county', '')
+    chu         = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHPSyncRecord.objects.filter(batch_id=batch_id).filter(TELEMETRY_ONLY_Q).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = [{
+        'county': r.county, 'sub_county': r.sub_county,
+        'community_health_unit': r.community_health_unit,
+        'chp_name': r.chp_name, 'username': r.username,
+        'reports_synced': r.reports_synced,
+        'last_sync_date': str(r.last_sync_date) if r.last_sync_date else '',
+    } for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name')]
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_telemetry_only(request):
+    batch_id    = request.GET.get('batch')
+    county      = request.GET.get('county', '')
+    sub_county  = request.GET.get('sub_county', '')
+    chu         = request.GET.get('chu', '')
+
+    batch = get_object_or_404(SyncUploadBatch, pk=batch_id)
+    qs = CHPSyncRecord.objects.filter(batch=batch).filter(TELEMETRY_ONLY_Q).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="telemetry_only_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Last Successful Upload'])
+    for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit,
+                         r.chp_name, r.username, r.last_sync_date or ''])
     return response
 
 

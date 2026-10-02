@@ -50,6 +50,8 @@ urlpatterns = [
     path('download/never-synced/',         views.download_never_synced,  name='download_never_synced'),
     path('api/telemetry-issues/',          views.api_telemetry_issues,      name='api_telemetry_issues'),
     path('download/telemetry-issues/',     views.download_telemetry_issues, name='download_telemetry_issues'),
+    path('api/telemetry-only/',            views.api_telemetry_only,        name='api_telemetry_only'),
+    path('download/telemetry-only/',       views.download_telemetry_only,   name='download_telemetry_only'),
     path('download/sync-report-pdf/',      views.download_sync_report_pdf,   name='download_sync_report_pdf'),
     path('download/chu-sync/',             views.download_chu_sync,      name='download_chu_sync'),
     # Child Health — MAM/SAM drill-down
