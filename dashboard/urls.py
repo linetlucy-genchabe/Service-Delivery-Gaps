@@ -48,6 +48,9 @@ urlpatterns = [
     path('sync/compare/download/',         views.api_compare_download,   name='sync_compare_download'),
     path('api/never-synced/',              views.api_never_synced,       name='api_never_synced'),
     path('download/never-synced/',         views.download_never_synced,  name='download_never_synced'),
+    path('api/telemetry-issues/',          views.api_telemetry_issues,      name='api_telemetry_issues'),
+    path('download/telemetry-issues/',     views.download_telemetry_issues, name='download_telemetry_issues'),
+    path('download/sync-report-pdf/',      views.download_sync_report_pdf,   name='download_sync_report_pdf'),
     path('download/chu-sync/',             views.download_chu_sync,      name='download_chu_sync'),
     # Child Health — MAM/SAM drill-down
     path('api/mam-sam/',                   views.api_mam_sam,             name='api_mam_sam'),

@@ -1186,7 +1186,7 @@ def download_supervised_3plus(request):
 # ===========================================================================
 
 from .models import SyncUploadBatch, CHPSyncRecord
-from .parsers import parse_sync_file, compute_sync_indicators
+from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q
 
 forms = django_forms  # alias so SyncUploadForm reads cleanly
 
@@ -1339,7 +1339,7 @@ def api_never_synced(request):
     if not batch_id:
         return JsonResponse({'error': 'batch required'}, status=400)
 
-    qs = CHPSyncRecord.objects.filter(batch_id=batch_id, days_synced=0).exclude(
+    qs = CHPSyncRecord.objects.filter(batch_id=batch_id).filter(NEVER_SYNCED_Q).exclude(
         county='').exclude(sub_county='').exclude(community_health_unit='')
     if county:     qs = qs.filter(county=county)
     if sub_county: qs = qs.filter(sub_county=sub_county)
@@ -1364,14 +1364,14 @@ def download_never_synced(request):
     chu         = request.GET.get('chu', '')
 
     batch = get_object_or_404(SyncUploadBatch, pk=batch_id)
-    qs = CHPSyncRecord.objects.filter(batch=batch, days_synced=0).exclude(
+    qs = CHPSyncRecord.objects.filter(batch=batch).filter(NEVER_SYNCED_Q).exclude(
         county='').exclude(sub_county='').exclude(community_health_unit='')
     if county:     qs = qs.filter(county=county)
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
 
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="never_synced_{batch.label}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="not_synced_{batch.label}.csv"'
     writer = csv.writer(response)
     writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Days Synced', 'Reports Synced', 'Last Sync Date'])
     for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
@@ -1379,6 +1379,242 @@ def download_never_synced(request):
                          r.chp_name, r.username, r.days_synced, r.reports_synced,
                          r.last_sync_date or 'Never'])
     return response
+
+
+@require_GET
+def api_telemetry_issues(request):
+    """CHPs who DID send a report this week (a form date was recorded) but
+    whose upload-telemetry hasn't caught up to show a successful upload yet.
+    These are synced in substance, just flagged for follow-up."""
+    batch_id    = request.GET.get('batch')
+    county      = request.GET.get('county', '')
+    sub_county  = request.GET.get('sub_county', '')
+    chu         = request.GET.get('chu', '')
+
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+
+    qs = CHPSyncRecord.objects.filter(batch_id=batch_id).filter(TELEMETRY_ISSUE_Q).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    data = list(qs.values(
+        'county', 'sub_county', 'community_health_unit',
+        'chp_name', 'username', 'reports_synced', 'latest_form_date', 'last_sync_date'
+    ).order_by('sub_county', 'community_health_unit', 'chp_name'))
+
+    for row in data:
+        row['latest_form_date'] = str(row['latest_form_date']) if row['latest_form_date'] else ''
+        row['last_sync_date']   = str(row['last_sync_date']) if row['last_sync_date'] else 'Pending'
+
+    return JsonResponse({'results': data, 'count': len(data)})
+
+
+@login_required
+def download_telemetry_issues(request):
+    batch_id    = request.GET.get('batch')
+    county      = request.GET.get('county', '')
+    sub_county  = request.GET.get('sub_county', '')
+    chu         = request.GET.get('chu', '')
+
+    batch = get_object_or_404(SyncUploadBatch, pk=batch_id)
+    qs = CHPSyncRecord.objects.filter(batch=batch).filter(TELEMETRY_ISSUE_Q).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="telemetry_issues_{batch.label}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Latest Form Date', 'Last Successful Upload'])
+    for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
+        writer.writerow([r.county, r.sub_county, r.community_health_unit,
+                         r.chp_name, r.username,
+                         r.latest_form_date or '', r.last_sync_date or 'Pending'])
+    return response
+
+
+@login_required
+def download_sync_report_pdf(request):
+    """
+    Colorful PDF sync-status report matching the dashboard's own palette.
+    Two sections: CHPs not synced completely, and CHPs synced but with
+    telemetry issues, each grouped by county then sub-county, showing the
+    Community Unit, CHP Name, and the last date a report came in from them.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    )
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+
+    batch_id    = request.GET.get('batch')
+    county      = request.GET.get('county', '')
+    sub_county  = request.GET.get('sub_county', '')
+    chu         = request.GET.get('chu', '')
+
+    batch = get_object_or_404(SyncUploadBatch, pk=batch_id)
+    base_qs = CHPSyncRecord.objects.filter(batch=batch).exclude(
+        county='').exclude(sub_county='').exclude(community_health_unit='')
+    if county:     base_qs = base_qs.filter(county=county)
+    if sub_county: base_qs = base_qs.filter(sub_county=sub_county)
+    if chu:        base_qs = base_qs.filter(community_health_unit=chu)
+
+    # Brand palette, lifted from styles.css
+    NAVY        = colors.HexColor('#1B3A6B')
+    NAVY_DARK   = colors.HexColor('#122848')
+    NAVY_LIGHT  = colors.HexColor('#EEF2F8')
+    ORANGE      = colors.HexColor('#E8431A')
+    ORANGE_LIGHT = colors.HexColor('#FEF0EB')
+    GREEN       = colors.HexColor('#059669')
+    GREEN_LIGHT = colors.HexColor('#ECFDF5')
+    RED         = colors.HexColor('#DC2626')
+    RED_LIGHT   = colors.HexColor('#FEF2F2')
+    YELLOW      = colors.HexColor('#D97706')
+    WHITE       = colors.white
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="sync_report_{batch.label}.pdf"'
+
+    doc = SimpleDocTemplate(
+        response, pagesize=A4,
+        topMargin=16 * mm, bottomMargin=14 * mm,
+        leftMargin=14 * mm, rightMargin=14 * mm,
+    )
+
+    title_style = ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=18,
+                                  textColor=WHITE, alignment=TA_CENTER, leading=22)
+    subtitle_style = ParagraphStyle('Subtitle', fontName='Helvetica', fontSize=11,
+                                     textColor=WHITE, alignment=TA_CENTER, leading=14)
+    section_style = ParagraphStyle('Section', fontName='Helvetica-Bold', fontSize=13,
+                                    textColor=WHITE, leading=16)
+    county_style = ParagraphStyle('County', fontName='Helvetica-Bold', fontSize=11,
+                                   textColor=NAVY_DARK, leading=14)
+    sub_style = ParagraphStyle('Sub', fontName='Helvetica-Bold', fontSize=9.5,
+                                textColor=colors.HexColor('#374151'), leading=12)
+    empty_style = ParagraphStyle('Empty', fontName='Helvetica-Oblique', fontSize=9,
+                                  textColor=colors.HexColor('#6B7280'))
+
+    elements = []
+
+    # --- Title banner ---
+    banner = Table([[Paragraph('Living Goods Sync Status Report', title_style)],
+                     [Paragraph(f'{batch.label}  |  Generated {timezone_now_str()}', subtitle_style)]],
+                    colWidths=[180 * mm])
+    banner.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY),
+        ('TOPPADDING', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+        ('TOPPADDING', (0, 1), (-1, 1), 2),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 10),
+    ]))
+    elements.append(banner)
+    elements.append(Spacer(1, 8 * mm))
+
+    def build_section(heading, band_color, light_color, text_color, records, date_field, date_label, empty_msg):
+        sec_elements = []
+        band = Table([[Paragraph(heading, section_style)]], colWidths=[180 * mm])
+        band.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), band_color),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        sec_elements.append(band)
+        sec_elements.append(Spacer(1, 4 * mm))
+
+        if not records:
+            sec_elements.append(Paragraph(empty_msg, empty_style))
+            sec_elements.append(Spacer(1, 6 * mm))
+            return sec_elements
+
+        counties_seen = {}
+        for r in records:
+            counties_seen.setdefault(r.county, {}).setdefault(r.sub_county, []).append(r)
+
+        for cty in sorted(counties_seen.keys()):
+            cty_total = sum(len(v) for v in counties_seen[cty].values())
+            cty_band = Table([[Paragraph(f'{cty} County', county_style),
+                                Paragraph(f'{cty_total} CHP(s)', county_style)]],
+                              colWidths=[140 * mm, 40 * mm])
+            cty_band.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), light_color),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LEFTPADDING', (0, 0), (0, -1), 8),
+                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+                ('RIGHTPADDING', (1, 0), (1, -1), 8),
+                ('BOX', (0, 0), (-1, -1), 0.5, band_color),
+            ]))
+            sec_elements.append(cty_band)
+            sec_elements.append(Spacer(1, 2 * mm))
+
+            for sc in sorted(counties_seen[cty].keys()):
+                rows = counties_seen[cty][sc]
+                sec_elements.append(Paragraph(f'{sc} Sub-County  ({len(rows)})', sub_style))
+                sec_elements.append(Spacer(1, 1.5 * mm))
+
+                table_data = [['Community Unit', 'CHP Name', date_label]]
+                for r in sorted(rows, key=lambda x: (x.community_health_unit, x.chp_name)):
+                    d = getattr(r, date_field)
+                    table_data.append([
+                        r.community_health_unit, r.chp_name,
+                        str(d) if d else 'Never',
+                    ])
+
+                t = Table(table_data, colWidths=[62 * mm, 72 * mm, 46 * mm], repeatRows=1)
+                row_styles = [
+                    ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D1D5DB')),
+                    ('TEXTCOLOR', (2, 1), (2, -1), text_color),
+                    ('FONTNAME', (2, 1), (2, -1), 'Helvetica-Bold'),
+                ]
+                for i in range(1, len(table_data)):
+                    if i % 2 == 0:
+                        row_styles.append(('BACKGROUND', (0, i), (-1, i), light_color))
+                t.setStyle(TableStyle(row_styles))
+                sec_elements.append(t)
+                sec_elements.append(Spacer(1, 4 * mm))
+
+        return sec_elements
+
+    not_synced_qs = base_qs.filter(NEVER_SYNCED_Q)
+    telemetry_qs  = base_qs.filter(TELEMETRY_ISSUE_Q)
+
+    elements += build_section(
+        'CHPs Not Synced Completely', RED, RED_LIGHT, RED,
+        list(not_synced_qs), 'last_sync_date', 'Last Report Sent',
+        'No CHPs are fully unsynced for this selection — great news.',
+    )
+
+    elements.append(Spacer(1, 4 * mm))
+
+    elements += build_section(
+        'Synced but Flagged with Telemetry Issues', YELLOW, ORANGE_LIGHT, YELLOW,
+        list(telemetry_qs), 'latest_form_date', 'Last Report Sent',
+        'No CHPs with telemetry issues for this selection.',
+    )
+
+    doc.build(elements)
+    return response
+
+
+def timezone_now_str():
+    from django.utils import timezone
+    return timezone.localtime(timezone.now()).strftime('%d %b %Y, %I:%M %p')
 
 
 @login_required

@@ -8,8 +8,19 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-from django.db.models import F
+from django.db.models import F, Q
 from .models import CHWRecord, SupervisionRecord
+
+# Sync-status Q objects — single source of truth, shared by compute_sync_indicators
+# and the drill-down/download views in views.py. A CHP counts as synced if a
+# report reached the server this week at all — either the upload-telemetry
+# shows a successful upload, or a form date was recorded, even if telemetry
+# hasn't caught up to show that upload as successful yet (SYNCED_Q below).
+# TELEMETRY_ISSUE_Q narrows that to the "form arrived but telemetry hasn't
+# confirmed it" case specifically — still synced, just flagged for follow-up.
+SYNCED_Q          = Q(last_sync_date__isnull=False) | Q(latest_form_date__isnull=False)
+NEVER_SYNCED_Q    = Q(last_sync_date__isnull=True) & Q(latest_form_date__isnull=True)
+TELEMETRY_ISSUE_Q = Q(latest_form_date__isnull=False) & Q(last_sync_date__isnull=True)
 
 
 # ---------------------------------------------------------------------------
@@ -510,15 +521,36 @@ def parse_sync_file(batch, file_obj):
     except Exception as e:
         return 0, [f"Could not read Sync file: {e}"]
 
-    county_col  = 'Roster Source County' if 'Roster Source County' in df.columns else 'County'
-    days_col    = 'Days with successful upload' if 'Days with successful upload' in df.columns else 'Days Synced'
-    reports_col = 'Uploaded documents (telemetry)' if 'Uploaded documents (telemetry)' in df.columns else 'Reports Synced'
-    last_sync_col = 'Latest successful upload (in week)' if 'Latest successful upload (in week)' in df.columns else 'Last Sync Date'
+    county_col      = 'Roster Source County' if 'Roster Source County' in df.columns else 'County'
+    days_col        = 'Days with successful upload' if 'Days with successful upload' in df.columns else 'Days Synced'
+    reports_col     = 'Uploaded documents (telemetry)' if 'Uploaded documents (telemetry)' in df.columns else 'Reports Synced'
+    last_sync_col   = 'Latest successful upload (in week)' if 'Latest successful upload (in week)' in df.columns else 'Last Sync Date'
+    # Only present in the Oct 2026+ report format — absent in older files,
+    # in which case every CHP's forms_recorded/latest_form_date stay at
+    # their defaults (0 / None) and is_synced() falls back to last_sync_date
+    # alone, matching the old behaviour.
+    forms_col       = 'Forms recorded'
+    form_date_col   = 'Latest form date (in week)'
 
     required = ['CHP Name', county_col, 'Sub-County', 'Community Unit']
     missing = [c for c in required if c not in df.columns]
     if missing:
         return 0, [f"Sync file missing columns: {missing}"]
+
+    def _parse_date_cell(raw):
+        if raw is None or (isinstance(raw, float) and np.isnan(raw)):
+            return None
+        raw_str = str(raw).strip()
+        if raw_str == '' or raw_str.lower() == 'never':
+            return None
+        try:
+            if isinstance(raw, str):
+                return datetime.strptime(raw_str, '%Y-%m-%d').date()
+            elif hasattr(raw, 'date'):
+                return raw.date()
+        except ValueError:
+            pass
+        return None  # bad/unrecognized format — skip gracefully
 
     records = []
     errors  = []
@@ -530,18 +562,8 @@ def parse_sync_file(batch, file_obj):
             skipped += 1
             continue
         try:
-            raw_date = row.get(last_sync_col)
-            last_sync = None
-            if raw_date and not (isinstance(raw_date, float) and np.isnan(raw_date)):
-                raw_str = str(raw_date).strip()
-                if raw_str.lower() != 'never' and raw_str != '':
-                    try:
-                        if isinstance(raw_date, str):
-                            last_sync = datetime.strptime(raw_str, '%Y-%m-%d').date()
-                        elif hasattr(raw_date, 'date'):
-                            last_sync = raw_date.date()
-                    except ValueError:
-                        last_sync = None  # bad date format — skip gracefully
+            last_sync = _parse_date_cell(row.get(last_sync_col))
+            latest_form_date = _parse_date_cell(row.get(form_date_col)) if form_date_col in df.columns else None
 
             records.append(CHPSyncRecord(
                 batch=batch,
@@ -553,6 +575,8 @@ def parse_sync_file(batch, file_obj):
                 days_synced=_int(row.get(days_col, 0)),
                 reports_synced=_int(row.get(reports_col, 0)),
                 last_sync_date=last_sync,
+                forms_recorded=_int(row.get(forms_col, 0)) if forms_col in df.columns else 0,
+                latest_form_date=latest_form_date,
             ))
         except Exception as e:
             errors.append(f"Row {i+2}: {e}")
@@ -572,24 +596,26 @@ def compute_sync_indicators(qs):
     Compute all sync dashboard indicators from a CHPSyncRecord queryset.
     Includes county, sub-county and CHU rankings with avg-days thresholds.
     """
-    from django.db.models import Sum, Count, Avg, Q
+    from django.db.models import Sum, Count, Avg
 
     total = qs.count()
     if total == 0:
         return None
 
     agg = qs.aggregate(
-        synced_count=Count('id', filter=Q(days_synced__gte=1)),
-        never_synced=Count('id', filter=Q(days_synced=0)),
+        synced_count=Count('id', filter=SYNCED_Q),
+        never_synced=Count('id', filter=NEVER_SYNCED_Q),
+        telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
         avg_days=Avg('days_synced'),
         avg_reports=Avg('reports_synced'),
     )
 
-    synced      = agg['synced_count'] or 0
-    never       = agg['never_synced'] or 0
-    sync_rate   = round(synced / total * 100, 1) if total else 0
-    avg_days    = round(agg['avg_days'] or 0, 2)
-    avg_reports = round(agg['avg_reports'] or 0, 1)
+    synced           = agg['synced_count'] or 0
+    never            = agg['never_synced'] or 0
+    telemetry_issues = agg['telemetry_issues'] or 0
+    sync_rate        = round(synced / total * 100, 1) if total else 0
+    avg_days         = round(agg['avg_days'] or 0, 2)
+    avg_reports      = round(agg['avg_reports'] or 0, 1)
 
     def days_level(d):
         if d >= 2.0:   return 'high'
@@ -611,8 +637,9 @@ def compute_sync_indicators(qs):
         qs.values('county')
         .annotate(
             total=Count('id'),
-            synced=Count('id', filter=Q(days_synced__gte=1)),
-            never=Count('id', filter=Q(days_synced=0)),
+            synced=Count('id', filter=SYNCED_Q),
+            never=Count('id', filter=NEVER_SYNCED_Q),
+            telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -629,8 +656,9 @@ def compute_sync_indicators(qs):
         qs.values('county', 'sub_county')
         .annotate(
             total=Count('id'),
-            synced=Count('id', filter=Q(days_synced__gte=1)),
-            never=Count('id', filter=Q(days_synced=0)),
+            synced=Count('id', filter=SYNCED_Q),
+            never=Count('id', filter=NEVER_SYNCED_Q),
+            telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -658,8 +686,9 @@ def compute_sync_indicators(qs):
         qs.values('county', 'sub_county', 'community_health_unit')
         .annotate(
             total=Count('id'),
-            synced=Count('id', filter=Q(days_synced__gte=1)),
-            never=Count('id', filter=Q(days_synced=0)),
+            synced=Count('id', filter=SYNCED_Q),
+            never=Count('id', filter=NEVER_SYNCED_Q),
+            telemetry_issues=Count('id', filter=TELEMETRY_ISSUE_Q),
             avg_days=Avg('days_synced'),
             avg_reports=Avg('reports_synced'),
         )
@@ -681,12 +710,13 @@ def compute_sync_indicators(qs):
         chu['rank'] = i + 1
 
     return {
-        'total':        total,
-        'synced':       synced,
-        'never_synced': never,
-        'sync_rate':    sync_rate,
-        'avg_days':     avg_days,
-        'avg_reports':  avg_reports,
+        'total':            total,
+        'synced':           synced,
+        'never_synced':     never,
+        'telemetry_issues': telemetry_issues,
+        'sync_rate':        sync_rate,
+        'avg_days':         avg_days,
+        'avg_reports':      avg_reports,
         'days_level':   days_level(avg_days),
         'counties':     counties,
         'sub_counties': sub_counties,

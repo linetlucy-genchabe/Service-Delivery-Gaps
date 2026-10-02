@@ -8,3 +8,4 @@ gunicorn==21.2.0
 django-jazzmin==2.6.0
 dj-database-url==2.1.0
 python-pptx
+reportlab==5.0.1

@@ -15,9 +15,14 @@
       <p class="page-subtitle">Select a reporting period to view CHP sync analytics.</p>
     {% endif %}
   </div>
-  {% if is_uploader %}
-    <a href="{% url 'sync_upload' %}" class="btn btn-primary">Upload Sync Report</a>
-  {% endif %}
+  <div style="display:flex; gap:8px;">
+    {% if selected_batch and indicators %}
+      <a href="{% url 'download_sync_report_pdf' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-outline">📄 Generate PDF Report</a>
+    {% endif %}
+    {% if is_uploader %}
+      <a href="{% url 'sync_upload' %}" class="btn btn-primary">Upload Sync Report</a>
+    {% endif %}
+  </div>
 </div>
 
 <!-- FILTERS -->
@@ -104,9 +109,16 @@
 
   <div class="stat-card {% if indicators.never_synced == 0 %}green{% elif indicators.never_synced < 50 %}yellow{% else %}red{% endif %}">
     <div class="stat-value">{{ indicators.never_synced }}</div>
-    <div class="stat-label">Never Synced</div>
-    <div class="stat-sub">CHPs with 0 days synced — data completely absent from eCHIS</div>
-    <button class="definition-btn" data-def="Never Synced: CHPs who did not sync even once this period. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
+    <div class="stat-label">Not Synced Completely</div>
+    <div class="stat-sub">No form and no successful upload this week — data completely absent from eCHIS</div>
+    <button class="definition-btn" data-def="Not Synced Completely: CHPs with neither a form recorded this week nor a successful upload. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
+  </div>
+
+  <div class="stat-card {% if indicators.telemetry_issues == 0 %}green{% elif indicators.telemetry_issues < 50 %}yellow{% else %}red{% endif %}">
+    <div class="stat-value">{{ indicators.telemetry_issues }}</div>
+    <div class="stat-label">Synced — Telemetry Issues</div>
+    <div class="stat-sub">Form came in this week, but upload telemetry hasn't confirmed it yet</div>
+    <button class="definition-btn" data-def="Telemetry Issues: CHPs whose phone reached the server this week (a form date is recorded) but whose upload-telemetry fields are still blank — the sync itself worked, telemetry reporting is just lagging. These CHPs are counted as synced, but are flagged here for follow-up in case the gap doesn't close.">View definition</button>
   </div>
 
   <div class="stat-card {% if indicators.days_level == 'high' %}green{% elif indicators.days_level == 'good' %}cyan{% elif indicators.days_level == 'moderate' %}yellow{% else %}red{% endif %}">
@@ -275,16 +287,30 @@
 </div>
 {% endif %}
 
-<!-- NEVER SYNCED — always shown -->
-<div class="section-label">🔴 Never-Synced CHPs — {{ indicators.never_synced }} CHPs with 0 sync days</div>
+<!-- NOT SYNCED COMPLETELY — always shown -->
+<div class="section-label">🔴 Not Synced Completely — {{ indicators.never_synced }} CHP(s) with no form and no upload this week</div>
 <div class="card">
   <div class="card-header">
-    <div><h3 class="card-title">CHPs Who Never Synced</h3><p class="card-subtitle">Data completely absent from eCHIS — requires immediate follow-up</p></div>
+    <div><h3 class="card-title">CHPs Not Synced Completely</h3><p class="card-subtitle">Data completely absent from eCHIS — requires immediate follow-up</p></div>
     <a href="{% url 'download_never_synced' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll">
       <div id="never-synced-container"><div class="table-loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SYNCED BUT TELEMETRY ISSUES — always shown -->
+<div class="section-label">🟠 Synced but Telemetry Issues — {{ indicators.telemetry_issues }} CHP(s) with a form this week but no confirmed upload yet</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">CHPs Synced but Flagged with Telemetry Issues</h3><p class="card-subtitle">A report reached the server this week, but upload-telemetry hasn't caught up — counted as synced, worth a follow-up check</p></div>
+    <a href="{% url 'download_telemetry_issues' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      <div id="telemetry-issues-container"><div class="table-loading">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -321,6 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (SHOW_COUNTY_CHART && COUNTY_DATA.length > 0) buildSimpleChart('county-bar-chart', 'county-chart-wrap', COUNTY_DATA, 'county');
     if (SHOW_SC_CHART && SC_DATA.length > 0) buildSimpleChart('sc-bar-chart', 'sc-chart-wrap', SC_DATA, 'sub_county');
     loadNeverSynced();
+    loadTelemetryIssues();
   }
   initDefinitionModal();
 });
@@ -428,6 +455,37 @@ function loadNeverSynced() {
     })
     .catch(() => {
       document.getElementById('never-synced-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
+    });
+}
+
+// ── Telemetry-issues table ──────────────────────────────────────
+function loadTelemetryIssues() {
+  const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
+  fetch('/api/telemetry-issues/?' + params)
+    .then(r => r.json())
+    .then(data => {
+      const c = document.getElementById('telemetry-issues-container');
+      if (!data.results || data.results.length === 0) {
+        c.innerHTML = '<div class="table-empty">✅ No telemetry issues — all synced CHPs show a confirmed upload!</div>';
+        return;
+      }
+      let h = `<table class="data-table"><thead><tr>
+        <th>#</th><th>Sub-County</th><th>Community Health Unit</th>
+        <th>CHP Name</th><th>Username</th>
+        <th>Latest Form Date</th><th>Last Successful Upload</th>
+      </tr></thead><tbody>`;
+      data.results.forEach((r, i) => {
+        h += `<tr><td class="zero">${i+1}</td><td>${esc(r.sub_county)}</td>
+          <td><strong>${esc(r.community_health_unit)}</strong></td>
+          <td>${esc(r.chp_name)}</td><td class="zero">${esc(r.username)}</td>
+          <td>${esc(r.latest_form_date)}</td>
+          <td class="${r.last_sync_date==='Pending'?'bad':'zero'}">${esc(r.last_sync_date)}</td></tr>`;
+      });
+      h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${data.count} CHP(s) synced with a telemetry gap</div>`;
+      c.innerHTML = h;
+    })
+    .catch(() => {
+      document.getElementById('telemetry-issues-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
     });
 }
 
