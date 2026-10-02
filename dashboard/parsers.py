@@ -468,6 +468,17 @@ def parse_sync_file(batch, file_obj):
     """
     Parse the CHP Sync Report Excel file and bulk-create CHPSyncRecord rows.
     Returns (rows_created, list_of_errors).
+
+    The report's columns changed in the Oct 2026 version: "County" became
+    "Roster Source County", and "Days Synced" / "Reports Synced" /
+    "Last Sync Date" were replaced by a richer forms-vs-upload telemetry
+    model. "Days with successful upload", "Uploaded documents (telemetry)"
+    and "Latest successful upload (in week)" are that version's equivalents
+    of those three columns, so we map onto whichever set is present and
+    everything downstream (sync rate, avg days, avg reports) keeps working
+    unchanged. The newer report's extra detail (forms recorded vs. uploaded,
+    upload failures, the Signal/Evidence columns) isn't captured yet — only
+    ask about surfacing those separately if that level of detail is wanted.
     """
     from .models import CHPSyncRecord
     try:
@@ -481,6 +492,9 @@ def parse_sync_file(batch, file_obj):
                 combined_sheet = name
                 break
 
+        def _has_county_col(cols):
+            return 'County' in cols or 'Roster Source County' in cols
+
         if combined_sheet:
             df = xl[combined_sheet]
         elif len(xl) == 1:
@@ -488,7 +502,7 @@ def parse_sync_file(batch, file_obj):
         else:
             frames = []
             for sheet_name, sheet_df in xl.items():
-                if 'County' in sheet_df.columns and 'CHP Name' in sheet_df.columns:
+                if _has_county_col(sheet_df.columns) and 'CHP Name' in sheet_df.columns:
                     frames.append(sheet_df)
             if not frames:
                 return 0, ["No valid sheets found with required columns"]
@@ -496,7 +510,12 @@ def parse_sync_file(batch, file_obj):
     except Exception as e:
         return 0, [f"Could not read Sync file: {e}"]
 
-    required = ['CHP Name', 'County', 'Sub-County', 'Community Unit']
+    county_col  = 'Roster Source County' if 'Roster Source County' in df.columns else 'County'
+    days_col    = 'Days with successful upload' if 'Days with successful upload' in df.columns else 'Days Synced'
+    reports_col = 'Uploaded documents (telemetry)' if 'Uploaded documents (telemetry)' in df.columns else 'Reports Synced'
+    last_sync_col = 'Latest successful upload (in week)' if 'Latest successful upload (in week)' in df.columns else 'Last Sync Date'
+
+    required = ['CHP Name', county_col, 'Sub-County', 'Community Unit']
     missing = [c for c in required if c not in df.columns]
     if missing:
         return 0, [f"Sync file missing columns: {missing}"]
@@ -507,11 +526,11 @@ def parse_sync_file(batch, file_obj):
 
     for i, row in df.iterrows():
         # Skip CHPs missing county, sub-county or community unit
-        if not _str(row.get("County")) or not _str(row.get("Sub-County")) or not _str(row.get("Community Unit")):
+        if not _str(row.get(county_col)) or not _str(row.get("Sub-County")) or not _str(row.get("Community Unit")):
             skipped += 1
             continue
         try:
-            raw_date = row.get('Last Sync Date')
+            raw_date = row.get(last_sync_col)
             last_sync = None
             if raw_date and not (isinstance(raw_date, float) and np.isnan(raw_date)):
                 raw_str = str(raw_date).strip()
@@ -526,13 +545,13 @@ def parse_sync_file(batch, file_obj):
 
             records.append(CHPSyncRecord(
                 batch=batch,
-                county=_normalize_county(row.get('County')),
+                county=_normalize_county(row.get(county_col)),
                 sub_county=_str(row.get('Sub-County')),
                 community_health_unit=_str(row.get('Community Unit')),
                 chp_name=_str(row.get('CHP Name')),
                 username=_str(row.get('Username')),
-                days_synced=_int(row.get('Days Synced', 0)),
-                reports_synced=_int(row.get('Reports Synced', 0)),
+                days_synced=_int(row.get(days_col, 0)),
+                reports_synced=_int(row.get(reports_col, 0)),
                 last_sync_date=last_sync,
             ))
         except Exception as e:
