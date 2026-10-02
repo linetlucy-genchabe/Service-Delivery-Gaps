@@ -470,6 +470,40 @@ function loadNeverSynced() {
     });
 }
 
+// ── Shared PNG save helper ───────────────────────────────────────
+// On a phone, a plain anchor-download often lands in a Downloads folder
+// the person can't easily find (or, on iOS Safari, may just open the
+// image instead of saving it). Where the device supports sharing a file
+// (Android Chrome, iOS Safari 15+), this opens the native share sheet so
+// the person can choose "Save Image" / "Save to Files" themselves —
+// which also makes the file easy to find afterwards. Desktop browsers
+// fall back to a normal download.
+function _saveCanvasAsPng(canvas, filename) {
+  return new Promise((resolve) => {
+    canvas.toBlob(function(blob) {
+      if (!blob) { resolve(); return; }
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([blob], filename, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: filename }).catch(() => {}).then(resolve, resolve);
+            return;
+          }
+        } catch (e) { /* unsupported — fall through to download */ }
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      resolve();
+    }, 'image/png');
+  });
+}
+
 // ── Not Synced Completely — shareable PNG image export ─────────
 function _imageScopeLabel() {
   if (CHU && CHU !== 'None' && CHU !== '') return CHU;
@@ -565,11 +599,9 @@ function _downloadGroupedCHUImage(apiPath, opts) {
       document.body.appendChild(root);
 
       html2canvas(root, { scale: 2, backgroundColor: '#F7F8FA' }).then(canvas => {
-        const link = document.createElement('a');
         const safeScope = scopeLabel.replace(/[^a-z0-9]+/gi, '_');
-        link.download = `${opts.filenamePrefix}_${safeScope}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        return _saveCanvasAsPng(canvas, `${opts.filenamePrefix}_${safeScope}.png`);
+      }).then(() => {
         document.body.removeChild(root);
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -625,10 +657,8 @@ function downloadChartAsImage(elementId, filename, btn) {
   btn.innerHTML = 'Building…';
   const safeFilename = (filename || 'chart.png').replace(/[^a-zA-Z0-9._-]+/g, '_');
   html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
-    const link = document.createElement('a');
-    link.download = safeFilename;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    return _saveCanvasAsPng(canvas, safeFilename);
+  }).then(() => {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }).catch(() => {
