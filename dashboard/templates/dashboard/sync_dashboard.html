@@ -148,8 +148,9 @@
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">County Sync Rate Comparison</h3><p class="card-subtitle">All counties ranked best to worst by sync rate</p></div>
+    <button type="button" class="btn btn-sm btn-outline" onclick="downloadChartAsImage('county-chart-card-body','county_sync_rate_comparison.png',this)">🖼 Download Image</button>
   </div>
-  <div class="card-body">
+  <div class="card-body" id="county-chart-card-body">
     <div class="chu-chart-wrap" id="county-chart-wrap" style="height:{% if indicators.counties|length %}{{ indicators.counties|length|add:1 }}{% else %}3{% endif %}00px;">
       <canvas id="county-bar-chart"></canvas>
     </div>
@@ -194,8 +195,9 @@
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">{{ selected_county }} — Sub-County Sync Rate Comparison</h3><p class="card-subtitle">All sub-counties ranked best to worst</p></div>
+    <button type="button" class="btn btn-sm btn-outline" onclick="downloadChartAsImage('sc-chart-card-body','{{ selected_county }}_sub_county_sync_rate_comparison.png',this)">🖼 Download Image</button>
   </div>
-  <div class="card-body">
+  <div class="card-body" id="sc-chart-card-body">
     <div class="chu-chart-wrap" id="sc-chart-wrap" style="height:300px;">
       <canvas id="sc-bar-chart"></canvas>
     </div>
@@ -238,9 +240,12 @@
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">{{ selected_subcounty }} — Community Health Units Ranked</h3><p class="card-subtitle">🟢 ≥80% · 🟡 50–79% · 🔴 &lt;50% · Ranked best to worst</p></div>
-    <a href="{% url 'download_chu_sync' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="downloadChartAsImage('chu-chart-card-body','{{ selected_subcounty }}_chu_sync_rate_ranking.png',this)">🖼 Download Image</button>
+      <a href="{% url 'download_chu_sync' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div>
   </div>
-  <div class="card-body">
+  <div class="card-body" id="chu-chart-card-body">
     <div class="chu-chart-grid">
       <div class="chu-chart-col">
         <div class="chu-col-label">🏆 Top Performers</div>
@@ -309,7 +314,10 @@
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">CHPs Synced but Flagged with Telemetry Issues</h3><p class="card-subtitle">A report reached the server this week, but upload-telemetry hasn't caught up — counted as synced, worth a follow-up check</p></div>
-    <a href="{% url 'download_telemetry_issues' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="downloadTelemetryIssuesImage()" id="telemetry-issues-image-btn">🖼 Download Image</button>
+      <a href="{% url 'download_telemetry_issues' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    </div>
   </div>
   <div class="card-body no-pad">
     <div class="table-scroll">
@@ -470,19 +478,23 @@ function _imageScopeLabel() {
   return 'All Counties';
 }
 
-function downloadNeverSyncedImage() {
-  const btn = document.getElementById('never-synced-image-btn');
+// Shared renderer: fetches a drill-down API, groups results by CHU, and
+// exports a shareable PNG (navy CHU header + colored count badge, per opts).
+function _downloadGroupedCHUImage(apiPath, opts) {
+  const btn = document.getElementById(opts.btnId);
   const originalText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = 'Building…';
 
   const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
-  fetch('/api/never-synced/?' + params)
+  fetch(apiPath + '?' + params)
     .then(r => r.json())
     .then(data => {
       const results = data.results || [];
       if (results.length === 0) {
-        alert('No CHPs are flagged as Not Synced Completely for this selection — nothing to export.');
+        alert(opts.emptyMsg);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         return;
       }
 
@@ -502,16 +514,17 @@ function downloadNeverSyncedImage() {
       const cardsHtml = groups.map(g => {
         const rowsHtml = g.rows.map(r => {
           counter++;
-          return `<div style="display:flex;justify-content:space-between;padding:5px 10px;font-size:12px;border-bottom:1px solid #F1F1F1;">
+          return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 10px;font-size:12px;border-bottom:1px solid #F1F1F1;">
             <span style="color:#1B3A6B;font-weight:600;min-width:22px;">${counter}.</span>
             <span style="flex:1;color:#1F2937;">${esc(r.chp_name)}</span>
             <span style="color:#6B7280;">${esc(r.username)}</span>
+            ${opts.extraCol ? `<span style="color:#9CA3AF;font-size:11px;">${esc(opts.extraCol(r))}</span>` : ''}
           </div>`;
         }).join('');
         return `<div style="break-inside:avoid;margin-bottom:14px;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;background:#FFFFFF;">
           <div style="background:#1B3A6B;color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:13px;font-weight:700;">${esc(g.chu)}</span>
-            <span style="background:#DC2626;color:#fff;border-radius:999px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:0 6px;">${g.rows.length}</span>
+            <span style="background:${opts.color};color:#fff;border-radius:999px;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;padding:0 6px;">${g.rows.length}</span>
           </div>
           <div>${rowsHtml}</div>
         </div>`;
@@ -531,13 +544,13 @@ function downloadNeverSyncedImage() {
       root.style.padding = '24px';
       root.innerHTML = `
         <div style="text-align:center;margin-bottom:16px;">
-          <div style="font-size:20px;font-weight:800;color:#1B3A6B;">${esc(scopeLabel)} — CHPs Not Synced Completely</div>
-          <div style="font-size:13px;color:#6B7280;margin-top:4px;">eCHIS sync status &bull; Days synced = 0, Forms recorded = 0</div>
+          <div style="font-size:20px;font-weight:800;color:#1B3A6B;">${esc(scopeLabel)} — ${esc(opts.titleSuffix)}</div>
+          <div style="font-size:13px;color:#6B7280;margin-top:4px;">${opts.subtitleHtml}</div>
         </div>
         <div style="display:flex;gap:14px;justify-content:center;margin-bottom:18px;">
-          <div style="background:#FEF2F2;border:1px solid #DC2626;border-radius:10px;padding:12px 22px;text-align:center;min-width:150px;">
-            <div style="font-size:26px;font-weight:800;color:#DC2626;">${results.length}</div>
-            <div style="font-size:12px;color:#7A1F1F;">CHPs not synced</div>
+          <div style="background:${opts.lightColor};border:1px solid ${opts.color};border-radius:10px;padding:12px 22px;text-align:center;min-width:150px;">
+            <div style="font-size:26px;font-weight:800;color:${opts.color};">${results.length}</div>
+            <div style="font-size:12px;color:#374151;">${esc(opts.countLabel)}</div>
           </div>
           <div style="background:#EEF2F8;border:1px solid #1B3A6B;border-radius:10px;padding:12px 22px;text-align:center;min-width:150px;">
             <div style="font-size:26px;font-weight:800;color:#1B3A6B;">${chuCount}</div>
@@ -546,7 +559,7 @@ function downloadNeverSyncedImage() {
         </div>
         <div style="column-count:2;column-gap:14px;">${cardsHtml}</div>
         <div style="text-align:center;font-size:11px;color:#9CA3AF;margin-top:10px;">
-          Grouped by Community Health Unit &bull; number in red badge = CHPs not synced completely in that CHU.
+          Grouped by Community Health Unit &bull; number in badge = ${esc(opts.badgeNote)}.
         </div>
       `;
       document.body.appendChild(root);
@@ -554,7 +567,7 @@ function downloadNeverSyncedImage() {
       html2canvas(root, { scale: 2, backgroundColor: '#F7F8FA' }).then(canvas => {
         const link = document.createElement('a');
         const safeScope = scopeLabel.replace(/[^a-z0-9]+/gi, '_');
-        link.download = `not_synced_completely_${safeScope}.png`;
+        link.download = `${opts.filenamePrefix}_${safeScope}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         document.body.removeChild(root);
@@ -572,6 +585,57 @@ function downloadNeverSyncedImage() {
       btn.disabled = false;
       btn.innerHTML = originalText;
     });
+}
+
+function downloadNeverSyncedImage() {
+  _downloadGroupedCHUImage('/api/never-synced/', {
+    btnId: 'never-synced-image-btn',
+    titleSuffix: 'CHPs Not Synced Completely',
+    subtitleHtml: 'eCHIS sync status &bull; Days synced = 0, Forms recorded = 0',
+    color: '#DC2626',
+    lightColor: '#FEF2F2',
+    countLabel: 'CHPs not synced',
+    filenamePrefix: 'not_synced_completely',
+    badgeNote: 'CHPs not synced completely in that CHU',
+    emptyMsg: 'No CHPs are flagged as Not Synced Completely for this selection — nothing to export.',
+  });
+}
+
+function downloadTelemetryIssuesImage() {
+  _downloadGroupedCHUImage('/api/telemetry-issues/', {
+    btnId: 'telemetry-issues-image-btn',
+    titleSuffix: 'CHPs Synced — Telemetry Issues',
+    subtitleHtml: 'eCHIS sync status &bull; Form submitted this week, upload not yet confirmed',
+    color: '#D97706',
+    lightColor: '#FEF0EB',
+    countLabel: 'CHPs flagged',
+    filenamePrefix: 'telemetry_issues',
+    badgeNote: 'CHPs flagged with a telemetry issue in that CHU',
+    emptyMsg: 'No CHPs are flagged with Telemetry Issues for this selection — nothing to export.',
+    extraCol: r => r.latest_form_date,
+  });
+}
+
+// Generic chart-card-to-PNG export (county / sub-county / CHU ranking charts).
+function downloadChartAsImage(elementId, filename, btn) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Building…';
+  const safeFilename = (filename || 'chart.png').replace(/[^a-zA-Z0-9._-]+/g, '_');
+  html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+    const link = document.createElement('a');
+    link.download = safeFilename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }).catch(() => {
+    alert('Could not generate the image. Please try again.');
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  });
 }
 
 // ── Telemetry-issues table ──────────────────────────────────────
