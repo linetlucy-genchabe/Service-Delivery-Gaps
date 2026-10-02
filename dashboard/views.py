@@ -1200,6 +1200,18 @@ def _last_report_display(record):
         return 'This week (no exact date)'
     return 'Pending'
 
+
+def _last_upload_display(record):
+    """What to show for 'last successful upload' — the precise upload date
+    when we have one, otherwise a plain acknowledgement that a successful
+    upload day was recorded (days_synced was non-zero) even though no
+    exact date was captured for it."""
+    if record.last_sync_date:
+        return str(record.last_sync_date)
+    if record.days_synced:
+        return 'Confirmed this week (no exact date)'
+    return 'Pending'
+
 forms = django_forms  # alias so SyncUploadForm reads cleanly
 
 
@@ -1418,7 +1430,7 @@ def api_telemetry_issues(request):
         'chp_name': r.chp_name, 'username': r.username,
         'reports_synced': r.reports_synced,
         'latest_form_date': _last_report_display(r),
-        'last_sync_date': str(r.last_sync_date) if r.last_sync_date else 'Pending',
+        'last_sync_date': _last_upload_display(r),
     } for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name')]
 
     return JsonResponse({'results': data, 'count': len(data)})
@@ -1445,7 +1457,7 @@ def download_telemetry_issues(request):
     for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
         writer.writerow([r.county, r.sub_county, r.community_health_unit,
                          r.chp_name, r.username, r.forms_recorded,
-                         _last_report_display(r), r.last_sync_date or 'Pending'])
+                         _last_report_display(r), _last_upload_display(r)])
     return response
 
 
@@ -1473,7 +1485,7 @@ def api_telemetry_only(request):
         'community_health_unit': r.community_health_unit,
         'chp_name': r.chp_name, 'username': r.username,
         'reports_synced': r.reports_synced,
-        'last_sync_date': str(r.last_sync_date) if r.last_sync_date else '',
+        'last_sync_date': _last_upload_display(r),
     } for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name')]
 
     return JsonResponse({'results': data, 'count': len(data)})
@@ -1499,7 +1511,7 @@ def download_telemetry_only(request):
     writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Last Successful Upload'])
     for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
         writer.writerow([r.county, r.sub_county, r.community_health_unit,
-                         r.chp_name, r.username, r.last_sync_date or ''])
+                         r.chp_name, r.username, _last_upload_display(r)])
     return response
 
 

@@ -297,25 +297,33 @@ class CHPSyncRecord(models.Model):
         both together."""
         return bool(self.forms_recorded) or bool(self.latest_form_date)
 
+    def has_telemetry(self):
+        """Any sign of a confirmed successful upload this week — either
+        the 'Days with successful upload' count is non-zero, or a
+        Latest-successful-upload date was captured. Same either-signal
+        rule as has_submitted_form(): the report doesn't always populate
+        both columns together."""
+        return bool(self.days_synced) or bool(self.last_sync_date)
+
     def is_synced(self):
         """A report reached the server this week — via a submitted form or
         a confirmed successful upload, either one counts."""
-        return self.has_submitted_form() or bool(self.last_sync_date)
+        return self.has_submitted_form() or self.has_telemetry()
 
     def has_telemetry_issue(self):
         """Synced (a form came in this week) but the upload-telemetry
         fields haven't caught up to show a successful upload yet."""
-        return self.has_submitted_form() and not self.last_sync_date
+        return self.has_submitted_form() and not self.has_telemetry()
 
     def is_telemetry_only(self):
         """A confirmed successful upload this week, but no form activity
         recorded for the CHP — the mirror image of has_telemetry_issue()."""
-        return bool(self.last_sync_date) and not self.has_submitted_form()
+        return self.has_telemetry() and not self.has_submitted_form()
 
     def is_fully_synced(self):
         """Both signals present this week — a submitted form AND a
         confirmed successful upload. The cleanest possible state."""
-        return self.has_submitted_form() and bool(self.last_sync_date)
+        return self.has_submitted_form() and self.has_telemetry()
 
     def is_unsynced(self):
         """No form submitted and no successful upload at all this week."""

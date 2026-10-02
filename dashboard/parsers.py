@@ -24,11 +24,14 @@ from .models import CHWRecord, SupervisionRecord
 #   no       no           -> NEVER_SYNCED_Q      (not synced completely)
 #
 # SYNCED_Q is the union of the three "synced" buckets (anything with either
-# signal present). "A form was submitted" is read from EITHER signal the
-# report gives us for that — a non-zero Forms recorded count, or a Latest
-# form date — because the two columns aren't always populated together.
+# signal present). Both "a form was submitted" and "telemetry was observed"
+# are each read from EITHER of the two columns the report gives for that
+# signal, because the columns aren't always populated together: a form was
+# submitted if Forms recorded > 0 OR a Latest form date was captured;
+# telemetry was observed if Days with successful upload > 0 OR a Latest
+# successful upload date was captured.
 HAS_SUBMITTED_FORM_Q = Q(forms_recorded__gt=0) | Q(latest_form_date__isnull=False)
-HAS_TELEMETRY_Q      = Q(last_sync_date__isnull=False)
+HAS_TELEMETRY_Q      = Q(days_synced__gt=0) | Q(last_sync_date__isnull=False)
 SYNCED_Q          = HAS_SUBMITTED_FORM_Q | HAS_TELEMETRY_Q
 NEVER_SYNCED_Q    = ~HAS_SUBMITTED_FORM_Q & ~HAS_TELEMETRY_Q
 TELEMETRY_ISSUE_Q = HAS_SUBMITTED_FORM_Q & ~HAS_TELEMETRY_Q
