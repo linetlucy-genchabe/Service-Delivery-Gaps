@@ -1188,6 +1188,18 @@ def download_supervised_3plus(request):
 from .models import SyncUploadBatch, CHPSyncRecord
 from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q
 
+
+def _last_report_display(record):
+    """What to show as 'last report sent' for a CHP flagged with a
+    telemetry issue — the precise form date when we have one, otherwise a
+    plain acknowledgement that a form came in this week (forms_recorded
+    was non-zero) even though no exact date was captured for it."""
+    if record.latest_form_date:
+        return str(record.latest_form_date)
+    if record.forms_recorded:
+        return 'This week (no exact date)'
+    return 'Pending'
+
 forms = django_forms  # alias so SyncUploadForm reads cleanly
 
 
@@ -1400,14 +1412,14 @@ def api_telemetry_issues(request):
     if sub_county: qs = qs.filter(sub_county=sub_county)
     if chu:        qs = qs.filter(community_health_unit=chu)
 
-    data = list(qs.values(
-        'county', 'sub_county', 'community_health_unit',
-        'chp_name', 'username', 'reports_synced', 'latest_form_date', 'last_sync_date'
-    ).order_by('sub_county', 'community_health_unit', 'chp_name'))
-
-    for row in data:
-        row['latest_form_date'] = str(row['latest_form_date']) if row['latest_form_date'] else ''
-        row['last_sync_date']   = str(row['last_sync_date']) if row['last_sync_date'] else 'Pending'
+    data = [{
+        'county': r.county, 'sub_county': r.sub_county,
+        'community_health_unit': r.community_health_unit,
+        'chp_name': r.chp_name, 'username': r.username,
+        'reports_synced': r.reports_synced,
+        'latest_form_date': _last_report_display(r),
+        'last_sync_date': str(r.last_sync_date) if r.last_sync_date else 'Pending',
+    } for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name')]
 
     return JsonResponse({'results': data, 'count': len(data)})
 
@@ -1429,11 +1441,11 @@ def download_telemetry_issues(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="telemetry_issues_{batch.label}.csv"'
     writer = csv.writer(response)
-    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Latest Form Date', 'Last Successful Upload'])
+    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'CHP Name', 'Username', 'Forms Recorded', 'Latest Form Date', 'Last Successful Upload'])
     for r in qs.order_by('sub_county', 'community_health_unit', 'chp_name'):
         writer.writerow([r.county, r.sub_county, r.community_health_unit,
-                         r.chp_name, r.username,
-                         r.latest_form_date or '', r.last_sync_date or 'Pending'])
+                         r.chp_name, r.username, r.forms_recorded,
+                         _last_report_display(r), r.last_sync_date or 'Pending'])
     return response
 
 
@@ -1526,8 +1538,7 @@ def download_sync_report_pdf(request):
         """A compact two-column (CHP Name / Last Report Sent) table for one CHU."""
         data = [['CHP Name', date_label]]
         for r in sorted(rows, key=lambda x: x.chp_name):
-            d = r._report_date
-            data.append([r.chp_name, str(d) if d else 'Never'])
+            data.append([r.chp_name, r._report_date])
 
         t = Table(data, colWidths=[112 * mm, 50 * mm], repeatRows=1)
         row_styles = [
@@ -1549,7 +1560,7 @@ def download_sync_report_pdf(request):
         t.setStyle(TableStyle(row_styles))
         return t
 
-    def build_section(heading, band_color, light_color, text_color, records, date_field, date_label, empty_msg, first_page):
+    def build_section(heading, band_color, light_color, text_color, records, date_getter, date_label, empty_msg, first_page):
         sec_elements = []
         if not first_page:
             sec_elements.append(PageBreak())
@@ -1568,10 +1579,10 @@ def download_sync_report_pdf(request):
             sec_elements.append(Paragraph(empty_msg, empty_style))
             return sec_elements
 
-        # tag each record with the date value this section cares about, so
-        # chu_table() doesn't need to know which field to read
+        # tag each record with the display string this section cares about,
+        # so chu_table() doesn't need to know which field(s) to read
         for r in records:
-            r._report_date = getattr(r, date_field)
+            r._report_date = date_getter(r)
 
         grouped = {}
         for r in records:
@@ -1625,14 +1636,14 @@ def download_sync_report_pdf(request):
 
     elements += build_section(
         'CHPs Not Synced Completely', RED, RED_LIGHT, RED,
-        not_synced_qs, 'last_sync_date', 'Last Report Sent',
+        not_synced_qs, lambda r: 'Never', 'Last Report Sent',
         'No CHPs are fully unsynced for this selection — great news.',
         first_page=True,
     )
 
     elements += build_section(
         'Synced but Flagged with Telemetry Issues', YELLOW, ORANGE_LIGHT, YELLOW,
-        telemetry_qs, 'latest_form_date', 'Last Report Sent',
+        telemetry_qs, _last_report_display, 'Last Report Sent',
         'No CHPs with telemetry issues for this selection.',
         first_page=False,
     )

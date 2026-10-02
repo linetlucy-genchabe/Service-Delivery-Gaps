@@ -14,13 +14,17 @@ from .models import CHWRecord, SupervisionRecord
 # Sync-status Q objects — single source of truth, shared by compute_sync_indicators
 # and the drill-down/download views in views.py. A CHP counts as synced if a
 # report reached the server this week at all — either the upload-telemetry
-# shows a successful upload, or a form date was recorded, even if telemetry
+# shows a successful upload, or a form was submitted, even if telemetry
 # hasn't caught up to show that upload as successful yet (SYNCED_Q below).
-# TELEMETRY_ISSUE_Q narrows that to the "form arrived but telemetry hasn't
-# confirmed it" case specifically — still synced, just flagged for follow-up.
-SYNCED_Q          = Q(last_sync_date__isnull=False) | Q(latest_form_date__isnull=False)
-NEVER_SYNCED_Q    = Q(last_sync_date__isnull=True) & Q(latest_form_date__isnull=True)
-TELEMETRY_ISSUE_Q = Q(latest_form_date__isnull=False) & Q(last_sync_date__isnull=True)
+# "A form was submitted" is read from EITHER signal the report gives us —
+# a non-zero Forms recorded count, or a Latest form date — because the two
+# columns aren't always populated together. TELEMETRY_ISSUE_Q narrows that
+# to the "form arrived but telemetry hasn't confirmed it" case specifically
+# — still synced, just flagged for follow-up.
+HAS_SUBMITTED_FORM_Q = Q(forms_recorded__gt=0) | Q(latest_form_date__isnull=False)
+SYNCED_Q          = HAS_SUBMITTED_FORM_Q | Q(last_sync_date__isnull=False)
+NEVER_SYNCED_Q    = ~HAS_SUBMITTED_FORM_Q & Q(last_sync_date__isnull=True)
+TELEMETRY_ISSUE_Q = HAS_SUBMITTED_FORM_Q & Q(last_sync_date__isnull=True)
 
 
 # ---------------------------------------------------------------------------

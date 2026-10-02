@@ -290,18 +290,25 @@ class CHPSyncRecord(models.Model):
     def __str__(self):
         return f"{self.chp_name} – {self.community_health_unit} [{self.batch}]"
 
+    def has_submitted_form(self):
+        """Any sign a form came in this week — either the forms-recorded
+        count is non-zero, or a latest-form-date was captured. Either
+        signal alone is enough; the report format doesn't always populate
+        both together."""
+        return bool(self.forms_recorded) or bool(self.latest_form_date)
+
     def is_synced(self):
-        """A report reached the server this week — via a form date or a
-        successful upload, either one counts."""
-        return bool(self.latest_form_date or self.last_sync_date)
+        """A report reached the server this week — via a submitted form or
+        a confirmed successful upload, either one counts."""
+        return self.has_submitted_form() or bool(self.last_sync_date)
 
     def has_telemetry_issue(self):
         """Synced (a form came in this week) but the upload-telemetry
         fields haven't caught up to show a successful upload yet."""
-        return bool(self.latest_form_date and not self.last_sync_date)
+        return self.has_submitted_form() and not self.last_sync_date
 
     def is_unsynced(self):
-        """No form and no successful upload at all this week."""
+        """No form submitted and no successful upload at all this week."""
         return not self.is_synced()
 
 
