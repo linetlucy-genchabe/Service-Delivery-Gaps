@@ -114,25 +114,11 @@
     <button class="definition-btn" data-def="Not Synced Completely: CHPs with neither a form recorded this week nor a successful upload. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
   </div>
 
-  <div class="stat-card green">
-    <div class="stat-value">{{ indicators.fully_synced }}</div>
-    <div class="stat-label">Fully Synced</div>
-    <div class="stat-sub">Form recorded AND a confirmed successful upload this week — the clean state</div>
-    <button class="definition-btn" data-def="Fully Synced: CHPs with BOTH signals present this week — a form was recorded, AND the upload telemetry confirms a successful upload. No follow-up needed.">View definition</button>
-  </div>
-
   <div class="stat-card {% if indicators.telemetry_issues == 0 %}green{% elif indicators.telemetry_issues < 50 %}yellow{% else %}red{% endif %}">
     <div class="stat-value">{{ indicators.telemetry_issues }}</div>
     <div class="stat-label">Synced — Telemetry Issues</div>
     <div class="stat-sub">Form came in this week, but upload telemetry hasn't confirmed it yet</div>
     <button class="definition-btn" data-def="Telemetry Issues: CHPs whose phone reached the server this week (a form was recorded) but whose upload-telemetry fields are still blank — the sync itself worked, telemetry reporting is just lagging. These CHPs are counted as synced, but are flagged here for follow-up in case the gap doesn't close.">View definition</button>
-  </div>
-
-  <div class="stat-card {% if indicators.telemetry_only == 0 %}green{% elif indicators.telemetry_only < 50 %}yellow{% else %}cyan{% endif %}">
-    <div class="stat-value">{{ indicators.telemetry_only }}</div>
-    <div class="stat-label">Synced — Telemetry Only</div>
-    <div class="stat-sub">Confirmed successful upload this week, but no form activity recorded for the CHP</div>
-    <button class="definition-btn" data-def="Telemetry Only: CHPs with a confirmed successful upload this week (telemetry) but no form recorded for them at all. Still counted as synced — the mirror case of a Telemetry Issue — shown separately so it isn't silently folded into 'Fully Synced'.">View definition</button>
   </div>
 
   <div class="stat-card {% if indicators.days_level == 'high' %}green{% elif indicators.days_level == 'good' %}cyan{% elif indicators.days_level == 'moderate' %}yellow{% else %}red{% endif %}">
@@ -329,20 +315,6 @@
   </div>
 </div>
 
-<!-- SYNCED — TELEMETRY ONLY — always shown -->
-<div class="section-label">🔵 Synced — Telemetry Only — {{ indicators.telemetry_only }} CHP(s) with a confirmed upload but no form recorded</div>
-<div class="card">
-  <div class="card-header">
-    <div><h3 class="card-title">CHPs Synced via Telemetry Only</h3><p class="card-subtitle">Upload confirmed this week, but no form activity recorded for the CHP — synced, shown separately for visibility</p></div>
-    <a href="{% url 'download_telemetry_only' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
-  </div>
-  <div class="card-body no-pad">
-    <div class="table-scroll">
-      <div id="telemetry-only-container"><div class="table-loading">Loading…</div></div>
-    </div>
-  </div>
-</div>
-
 {% endif %}
 
 <div class="modal-overlay" id="def-modal" style="display:none;">
@@ -376,7 +348,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (SHOW_SC_CHART && SC_DATA.length > 0) buildSimpleChart('sc-bar-chart', 'sc-chart-wrap', SC_DATA, 'sub_county');
     loadNeverSynced();
     loadTelemetryIssues();
-    loadTelemetryOnly();
   }
   initDefinitionModal();
 });
@@ -515,36 +486,6 @@ function loadTelemetryIssues() {
     })
     .catch(() => {
       document.getElementById('telemetry-issues-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
-    });
-}
-
-// ── Telemetry-only table ──────────────────────────────────────
-function loadTelemetryOnly() {
-  const params = new URLSearchParams({ batch: BATCH_ID, county: COUNTY, sub_county: SUB_COUNTY, chu: CHU });
-  fetch('/api/telemetry-only/?' + params)
-    .then(r => r.json())
-    .then(data => {
-      const c = document.getElementById('telemetry-only-container');
-      if (!data.results || data.results.length === 0) {
-        c.innerHTML = '<div class="table-empty">No CHPs synced via telemetry-only this period.</div>';
-        return;
-      }
-      let h = `<table class="data-table"><thead><tr>
-        <th>#</th><th>Sub-County</th><th>Community Health Unit</th>
-        <th>CHP Name</th><th>Username</th>
-        <th>Last Successful Upload</th>
-      </tr></thead><tbody>`;
-      data.results.forEach((r, i) => {
-        h += `<tr><td class="zero">${i+1}</td><td>${esc(r.sub_county)}</td>
-          <td><strong>${esc(r.community_health_unit)}</strong></td>
-          <td>${esc(r.chp_name)}</td><td class="zero">${esc(r.username)}</td>
-          <td>${esc(r.last_sync_date)}</td></tr>`;
-      });
-      h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${data.count} CHP(s) synced with no form activity recorded</div>`;
-      c.innerHTML = h;
-    })
-    .catch(() => {
-      document.getElementById('telemetry-only-container').innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading data.</div>';
     });
 }
 
