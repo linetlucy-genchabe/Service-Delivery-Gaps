@@ -52,6 +52,28 @@ def _int(val):
         return 0
 
 
+def _disease_managed_referred(row, disease, has_combined_col):
+    """
+    HIHT counts children "treated and/or referred" for malaria, pneumonia
+    and diarrhea. Different CHW Detail export formats give this
+    differently:
+      - the monthly export has one pre-combined "<Disease> Treated/Referred"
+        column, or
+      - the weekly export has separate "<Disease> Managed"/"<Disease>
+        Treated" and "<Disease> Referred" columns.
+    `has_combined_col` says which format this file uses (checked once
+    against df.columns, not per row). Returns (managed, referred) so the
+    two model fields stay populated the same way either way, without
+    double-counting when the combined column is the one present.
+    """
+    if has_combined_col:
+        return _int(row.get(f'{disease} Treated/Referred', 0)), 0
+    managed = row.get(f'{disease} Managed')
+    if managed is None:
+        managed = row.get(f'{disease} Treated', 0)
+    return _int(managed), _int(row.get(f'{disease} Referred', 0))
+
+
 def _bool_yn(val):
     if val is None:
         return False
@@ -133,12 +155,19 @@ def parse_chw_file(batch, file_obj):
     errors  = []
     skipped = 0
 
+    has_malaria_combined   = 'Malaria Treated/Referred' in df.columns
+    has_pneumonia_combined = 'Pneumonia Treated/Referred' in df.columns
+    has_diarrhea_combined  = 'Diarrhea Treated/Referred' in df.columns
+
     for i, row in df.iterrows():
         # Skip CHPs with no county attached
         if not _str(row.get('County')):
             skipped += 1
             continue
         try:
+            malaria_managed, malaria_referred     = _disease_managed_referred(row, 'Malaria', has_malaria_combined)
+            pneumonia_managed, pneumonia_referred = _disease_managed_referred(row, 'Pneumonia', has_pneumonia_combined)
+            diarrhea_managed, diarrhea_referred   = _disease_managed_referred(row, 'Diarrhea', has_diarrhea_combined)
             record = CHWRecord(
                 batch=batch,
                 county=_normalize_county(row.get('County')),
@@ -174,14 +203,15 @@ def parse_chw_file(batch, file_obj):
                 malaria_diagnosed=_int(row.get('Malaria Diagnosed', 0)),
                 pneumonia_diagnosed=_int(row.get('Pneumonia Diagnosed', 0)),
                 diarrhea_diagnosed=_int(row.get('Diarrhea Diagnosed', 0)),
-                # 'Managed' and 'Treated' are the same concept under different column
-                # names depending on file version — accept either.
-                malaria_managed=_int(row.get('Malaria Managed') or row.get('Malaria Treated', 0)),
-                pneumonia_managed=_int(row.get('Pneumonia Managed') or row.get('Pneumonia Treated', 0)),
-                diarrhea_managed=_int(row.get('Diarrhea Managed') or row.get('Diarrhea Treated', 0)),
-                malaria_referred=_int(row.get('Malaria Referred', 0)),
-                pneumonia_referred=_int(row.get('Pneumonia Referred', 0)),
-                diarrhea_referred=_int(row.get('Diarrhea Referred', 0)),
+                # See _disease_managed_referred() — handles both the monthly
+                # export's combined "Treated/Referred" column and the
+                # weekly export's separate Managed/Treated + Referred columns.
+                malaria_managed=malaria_managed,
+                pneumonia_managed=pneumonia_managed,
+                diarrhea_managed=diarrhea_managed,
+                malaria_referred=malaria_referred,
+                pneumonia_referred=pneumonia_referred,
+                diarrhea_referred=diarrhea_referred,
                 danger_sign_referred=_int(row.get('Danger Sign Referred', 0)),
                 fever_cases=_int(row.get('Fever Cases', 0)),
                 fever_tested_rdt=_int(row.get('Fever Tested (RDT)', 0)),
