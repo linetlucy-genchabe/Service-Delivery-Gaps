@@ -1350,6 +1350,9 @@ def sync_dashboard_view(request):
         'show_sc_table':      bool(selected_county and not selected_subcounty),
         'show_chu_chart':     bool(selected_subcounty),
         'is_uploader':        is_uploader(request.user) if request.user.is_authenticated else False,
+        # The drill-down text ("no form or upload this week") should say
+        # "month" for a monthly batch instead of always saying "week".
+        'period_word':        'month' if selected_batch and selected_batch.period_type == 'monthly' else 'week',
     })
 
 
@@ -3861,7 +3864,13 @@ def _target_achievement_query(chw_qs, group_fields):
         u5_pd=Sum('positive_diagnoses_u5'),
         u1_pd=Sum('u1_positive_diagnoses'),
         iz_immunized=Sum('iz_fully_immunized'),
-        iz_assessed=Sum('iz_assessments'),
+        # Denominator for "% 9-23mo Fully Immunized" is children 9-23mo
+        # assessed (iz_children_9_23mo), per the Indicator Handbook —
+        # NOT iz_assessments, which is a different indicator (% of U2
+        # whose IZ status has been assessed by a CHW). Using the wrong
+        # field here left this indicator blank whenever a batch had no
+        # iz_assessments data, even though iz_children_9_23mo was present.
+        iz_assessed=Sum('iz_children_9_23mo'),
     )
     # Plus the 12 HIHT component fields, for total/non-FP HIHTs/CHW.
     for field, _key in HIHT_NON_FP_COMPONENTS:

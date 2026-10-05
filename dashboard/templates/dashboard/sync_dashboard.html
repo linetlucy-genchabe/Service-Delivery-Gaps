@@ -110,15 +110,15 @@
   <div class="stat-card {% if indicators.never_synced == 0 %}green{% elif indicators.never_synced < 50 %}yellow{% else %}red{% endif %}">
     <div class="stat-value">{{ indicators.never_synced }}</div>
     <div class="stat-label">Not Synced Completely</div>
-    <div class="stat-sub">No form and no successful upload this week — data completely absent from eCHIS</div>
-    <button class="definition-btn" data-def="Not Synced Completely: CHPs with neither a form recorded this week nor a successful upload. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
+    <div class="stat-sub">No form and no successful upload this {{ period_word }} — data completely absent from eCHIS</div>
+    <button class="definition-btn" data-def="Not Synced Completely: CHPs with neither a form recorded this {{ period_word }} nor a successful upload. All their work is invisible in eCHIS. These CHPs require immediate follow-up by their CHA or supervisor.">View definition</button>
   </div>
 
   <div class="stat-card {% if indicators.telemetry_issues == 0 %}green{% elif indicators.telemetry_issues < 50 %}yellow{% else %}red{% endif %}">
     <div class="stat-value">{{ indicators.telemetry_issues }}</div>
     <div class="stat-label">Synced — Telemetry Issues</div>
-    <div class="stat-sub">Form came in this week, but upload telemetry hasn't confirmed it yet</div>
-    <button class="definition-btn" data-def="Telemetry Issues: CHPs whose phone reached the server this week (a form was recorded) but whose upload-telemetry fields are still blank — the sync itself worked, telemetry reporting is just lagging. These CHPs are counted as synced, but are flagged here for follow-up in case the gap doesn't close.">View definition</button>
+    <div class="stat-sub">Form came in this {{ period_word }}, but upload telemetry hasn't confirmed it yet</div>
+    <button class="definition-btn" data-def="Telemetry Issues: CHPs whose phone reached the server this {{ period_word }} (a form was recorded) but whose upload-telemetry fields are still blank — the sync itself worked, telemetry reporting is just lagging. These CHPs are counted as synced, but are flagged here for follow-up in case the gap doesn't close.">View definition</button>
   </div>
 
   <div class="stat-card {% if indicators.days_level == 'high' %}green{% elif indicators.days_level == 'good' %}cyan{% elif indicators.days_level == 'moderate' %}yellow{% else %}red{% endif %}">
@@ -293,7 +293,7 @@
 {% endif %}
 
 <!-- NOT SYNCED COMPLETELY — always shown -->
-<div class="section-label">🔴 Not Synced Completely — {{ indicators.never_synced }} CHP(s) with no form and no upload this week</div>
+<div class="section-label">🔴 Not Synced Completely — {{ indicators.never_synced }} CHP(s) with no form and no upload this {{ period_word }}</div>
 <div class="card">
   <div class="card-header">
     <div><h3 class="card-title">CHPs Not Synced Completely</h3><p class="card-subtitle">Data completely absent from eCHIS — requires immediate follow-up</p></div>
@@ -310,10 +310,10 @@
 </div>
 
 <!-- SYNCED BUT TELEMETRY ISSUES — always shown -->
-<div class="section-label">🟠 Synced but Telemetry Issues — {{ indicators.telemetry_issues }} CHP(s) with a form this week but no confirmed upload yet</div>
+<div class="section-label">🟠 Synced but Telemetry Issues — {{ indicators.telemetry_issues }} CHP(s) with a form this {{ period_word }} but no confirmed upload yet</div>
 <div class="card">
   <div class="card-header">
-    <div><h3 class="card-title">CHPs Synced but Flagged with Telemetry Issues</h3><p class="card-subtitle">A report reached the server this week, but upload-telemetry hasn't caught up — counted as synced, worth a follow-up check</p></div>
+    <div><h3 class="card-title">CHPs Synced but Flagged with Telemetry Issues</h3><p class="card-subtitle">A report reached the server this {{ period_word }}, but upload-telemetry hasn't caught up — counted as synced, worth a follow-up check</p></div>
     <div style="display:flex;gap:8px;">
       <button type="button" class="btn btn-sm btn-outline" onclick="downloadTelemetryIssuesImage()" id="telemetry-issues-image-btn">🖼 Download Image</button>
       <a href="{% url 'download_telemetry_issues' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
@@ -345,6 +345,7 @@ const BATCH_ID          = "{{ selected_batch_id }}";
 const COUNTY            = "{{ selected_county }}";
 const SUB_COUNTY        = "{{ selected_subcounty }}";
 const CHU               = "{{ selected_chu }}";
+const PERIOD_WORD       = "{{ period_word }}";
 const HAS_DATA          = {% if indicators %}true{% else %}false{% endif %};
 const SHOW_CHART        = {% if show_chu_chart %}true{% else %}false{% endif %};
 const SHOW_COUNTY_CHART = {% if show_county_table %}true{% else %}false{% endif %};
@@ -637,7 +638,7 @@ function downloadTelemetryIssuesImage() {
   _downloadGroupedCHUImage('/api/telemetry-issues/', {
     btnId: 'telemetry-issues-image-btn',
     titleSuffix: 'CHPs Synced — Telemetry Issues',
-    subtitleHtml: 'eCHIS sync status &bull; Form submitted this week, upload not yet confirmed',
+    subtitleHtml: `eCHIS sync status &bull; Form submitted this ${PERIOD_WORD}, upload not yet confirmed`,
     color: '#D97706',
     lightColor: '#FEF0EB',
     countLabel: 'CHPs flagged',

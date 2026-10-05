@@ -193,8 +193,13 @@ def parse_chw_file(batch, file_obj):
                 u1_treated_visits=_int(row.get('U1 Treated Visits', 0)),
                 u1_sick_assessments=_int(row.get('U1 Sick Assessments', 0)),
                 iz_assessments=_int(row.get('IZ Assessments', 0)),
-                iz_fully_immunized=_int(row.get('IZ Fully Immunized 9-23mo', 0)),
-                iz_children_9_23mo=_int(row.get('IZ Children 9-23mo', 0)),
+                # The real CHW Detail export header is "... (9-23 Months)",
+                # not "... 9-23mo" — the old strings never matched any
+                # column, so these two fields silently parsed as 0 for
+                # every upload. Keep the old string as a fallback in case
+                # an older file export still uses it.
+                iz_fully_immunized=_int(row.get('IZ Fully Immunized (9-23 Months)') or row.get('IZ Fully Immunized 9-23mo', 0)),
+                iz_children_9_23mo=_int(row.get('IZ Children Assessed (9-23 Months)') or row.get('IZ Children 9-23mo', 0)),
                 iz_defaulters=_int(row.get('IZ Defaulters', 0)),
                 iz_defaulters_followed=_int(row.get('IZ Defaulters Followed Up', 0)),
                 iz_defaulters_completed=_int(row.get('IZ Defaulters Completed', 0)),
@@ -376,7 +381,11 @@ def compute_indicators(chw_qs, sup_qs, period_type='monthly'):
         facility_del=Sum('facility_deliveries'),
         pnc_48=Sum('pnc_48hr_ontime'),
         iccm=Sum('iccm_assessments'),
-        iz_assessed=Sum('iz_assessments'),
+        # Denominator for "% 9-23mo Fully Immunized" is children 9-23mo
+        # assessed (iz_children_9_23mo), per the Indicator Handbook —
+        # NOT iz_assessments, which is a different indicator (% of U2
+        # whose IZ status has been assessed by a CHW).
+        iz_assessed=Sum('iz_children_9_23mo'),
         iz_immunized=Sum('iz_fully_immunized'),
         iz_defaulters=Sum('iz_defaulters'),
         iz_def_followup=Sum('iz_defaulters_followed'),
