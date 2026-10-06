@@ -4685,65 +4685,90 @@ def pa_scorecard_pptx(request):
     return response
 
 
+def _reprocess_one_batch(batch):
+    """Re-parse a single batch's saved files with the current parser code
+    and recompute its indicators. Kept to one batch per call so a reprocess
+    request finishes well under the web server's timeout — reprocessing
+    every batch in one request got killed by gunicorn's worker timeout
+    (120s) once there were enough months of files, and because that tied
+    up one of only two web workers for minutes at a time, it made the rest
+    of the site time out too."""
+    from .parsers import parse_chw_file, parse_supervision_file
+
+    batch_results = {'label': batch.label, 'chw': None, 'sup': None, 'errors': []}
+
+    if batch.chw_file:
+        try:
+            CHWRecord.objects.filter(batch=batch).delete()
+            batch.chw_file.seek(0)
+            rows, errors = parse_chw_file(batch, batch.chw_file)
+            batch_results['chw'] = f"{rows} rows"
+            if errors:
+                batch_results['errors'] += errors[:3]
+        except Exception as e:
+            batch_results['errors'].append(f"CHW error: {e}")
+
+    if batch.supervision_file:
+        try:
+            from .models import SupervisionRecord
+            SupervisionRecord.objects.filter(batch=batch).delete()
+            batch.supervision_file.seek(0)
+            rows, errors = parse_supervision_file(batch, batch.supervision_file)
+            batch_results['sup'] = f"{rows} rows"
+            if errors:
+                batch_results['errors'] += errors[:3]
+        except Exception as e:
+            batch_results['errors'].append(f"Supervision error: {e}")
+
+    # Indicators (compute_indicators) are computed on the fly at render
+    # time from CHWRecord/SupervisionRecord, not stored, so there is
+    # nothing further to recompute/save here once the records above are
+    # re-parsed.
+
+    return batch_results
+
+
 @login_required
 def admin_reprocess_view(request):
-    """Temporary admin endpoint to reprocess all batches on Railway."""
+    """Admin page to re-run a batch's saved files through the current
+    parser code (e.g. after a parser bug fix). Processes ONE batch per
+    request — reprocessing every batch at once is what caused the site-wide
+    outage on 6 Oct 2026 (see _reprocess_one_batch's docstring), so this
+    page lists the batches and reprocesses only the one you pick."""
     if not request.user.is_staff:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("Staff only.")
 
-    from .parsers import parse_chw_file, parse_supervision_file
     from django.utils.timezone import now
 
-    results = []
-    batches = UploadBatch.objects.all().order_by('year', 'month', 'week_start_date')
+    batches = UploadBatch.objects.all().order_by('-year', '-month', '-week_start_date')
+    batch_id = request.GET.get('batch_id')
 
-    for batch in batches:
-        batch_results = {'label': batch.label, 'chw': None, 'sup': None, 'errors': []}
+    if not batch_id:
+        # Picker page — no reprocessing happens here, so it's always fast.
+        html = '<html><body style="font-family:monospace;padding:20px;">'
+        html += '<h2>Reprocess a Batch</h2>'
+        html += '<p>Pick one batch to re-parse with the current code. ' \
+                'Each one runs on its own so a slow file can\'t time out the whole site.</p>'
+        html += '<table border="1" cellpadding="6"><tr><th>Batch</th><th>Uploaded</th><th></th></tr>'
+        for b in batches:
+            uploaded = b.uploaded_at.strftime('%Y-%m-%d %H:%M') if b.uploaded_at else '—'
+            html += (f'<tr><td>{b.label}</td><td>{uploaded}</td>'
+                     f'<td><a href="?batch_id={b.pk}">Reprocess this batch</a></td></tr>')
+        html += '</table><br><a href="/">← Back to Dashboard</a></body></html>'
+        return HttpResponse(html)
 
-        # Reprocess CHW file
-        if batch.chw_file:
-            try:
-                CHWRecord.objects.filter(batch=batch).delete()
-                batch.chw_file.seek(0)
-                rows, errors = parse_chw_file(batch, batch.chw_file)
-                batch_results['chw'] = f"{rows} rows"
-                if errors:
-                    batch_results['errors'] += errors[:3]
-            except Exception as e:
-                batch_results['errors'].append(f"CHW error: {e}")
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    r = _reprocess_one_batch(batch)
 
-        # Reprocess supervision file
-        if batch.supervision_file:
-            try:
-                from .models import SupervisionRecord
-                SupervisionRecord.objects.filter(batch=batch).delete()
-                batch.supervision_file.seek(0)
-                rows, errors = parse_supervision_file(batch, batch.supervision_file)
-                batch_results['sup'] = f"{rows} rows"
-                if errors:
-                    batch_results['errors'] += errors[:3]
-            except Exception as e:
-                batch_results['errors'].append(f"Supervision error: {e}")
-
-        # Recompute indicators
-        try:
-            from .parsers import compute_indicators
-            compute_indicators(batch)
-        except Exception as e:
-            batch_results['errors'].append(f"Indicators error: {e}")
-
-        results.append(batch_results)
-
-    # Render simple HTML result
     html = '<html><body style="font-family:monospace;padding:20px;">'
-    html += f'<h2>Reprocess Results — {now().strftime("%Y-%m-%d %H:%M:%S")}</h2>'
-    html += f'<p>Processed {len(results)} batches</p><table border="1" cellpadding="6">'
+    html += f'<h2>Reprocess Result — {now().strftime("%Y-%m-%d %H:%M:%S")}</h2>'
+    html += '<table border="1" cellpadding="6">'
     html += '<tr><th>Batch</th><th>CHW Rows</th><th>Supervision Rows</th><th>Errors</th></tr>'
-    for r in results:
-        err_str = '<br>'.join(r['errors']) if r['errors'] else '✅ OK'
-        html += f"<tr><td>{r['label']}</td><td>{r['chw'] or '—'}</td><td>{r['sup'] or '—'}</td><td>{err_str}</td></tr>"
-    html += '</table><br><a href="/">← Back to Dashboard</a></body></html>'
+    err_str = '<br>'.join(r['errors']) if r['errors'] else '✅ OK'
+    html += f"<tr><td>{r['label']}</td><td>{r['chw'] or '—'}</td><td>{r['sup'] or '—'}</td><td>{err_str}</td></tr>"
+    html += '</table><br><a href="/admin-reprocess/">← Reprocess another batch</a>' \
+            ' &nbsp;|&nbsp; <a href="/">Back to Dashboard</a></body></html>'
     return HttpResponse(html)
 
 # ===========================================================================
