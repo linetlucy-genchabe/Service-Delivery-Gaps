@@ -81,7 +81,7 @@
   <button class="cat-btn" data-section="maternal">🤱 Maternal Health</button>
   <button class="cat-btn" data-section="fp">💊 Family Planning</button>
   <button class="cat-btn" data-section="immunization">💉 Immunization</button>
-  <button class="cat-btn cat-btn-standalone" data-section="hiht">🎯 HIHTs</button>
+  <button class="cat-btn" data-section="hiht">🎯 HIHTs</button>
 </div>
 
 <!-- WORKFORCE -->
@@ -367,7 +367,11 @@
   </div>
 </div>
 
-<!-- DRILL-DOWN — always visible, categorized -->
+<!-- DRILL-DOWN — shown for the categories it has tabs for (Workforce,
+     Supervision, Child Health, Maternal, Immunization); hidden for any
+     top tab with no matching dd-* panel below, e.g. HIHTs, which already
+     has its own drill-down built into its ranking tables. -->
+<div id="drilldown-details-wrap">
 <div class="section-label">📋 Drill-Down Details</div>
 
 <!-- Drill-down category nav -->
@@ -552,6 +556,7 @@
     </div><div class="card-body no-pad"><div class="table-scroll"><div id="iz-not-completed-container"><div class="table-loading">Loading…</div></div></div></div></div>
   </div>
 </div>
+</div><!-- /drilldown-details-wrap -->
 
 {% endif %}
 

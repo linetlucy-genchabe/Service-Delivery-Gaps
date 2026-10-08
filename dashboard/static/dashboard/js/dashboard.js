@@ -72,6 +72,18 @@ function submitFilters() {
 function initCategoryNav() {
   const btns     = document.querySelectorAll('.cat-btn');
   const sections = document.querySelectorAll('.cat-section');
+  const ddWrap   = document.getElementById('drilldown-details-wrap');
+
+  // The "Drill-Down Details" panel at the bottom only has tabs for some
+  // categories (Workforce, Supervision, Child Health, Maternal,
+  // Immunization) — show it only when the active top tab has a matching
+  // dd-<section> panel down there, so it doesn't show up underneath a
+  // section (like HIHTs) it has nothing to do with.
+  function syncDrilldownVisibility(section) {
+    if (!ddWrap) return;
+    ddWrap.style.display = document.getElementById('dd-' + section) ? '' : 'none';
+  }
+
   btns.forEach(btn => {
     btn.addEventListener('click', function () {
       btns.forEach(b => b.classList.remove('active'));
@@ -79,8 +91,12 @@ function initCategoryNav() {
       this.classList.add('active');
       const sec = document.getElementById('section-' + this.dataset.section);
       if (sec) sec.classList.add('active');
+      syncDrilldownVisibility(this.dataset.section);
     });
   });
+
+  const activeBtn = document.querySelector('.cat-btn.active');
+  if (activeBtn) syncDrilldownVisibility(activeBtn.dataset.section);
 }
 
 // ── Drill-down category nav ───────────────────────────────────

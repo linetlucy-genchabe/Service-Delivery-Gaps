@@ -514,19 +514,6 @@ button.ms-dropdown-item {
   border-color: var(--navy);
   font-weight: 700;
 }
-/* Pushed to the end of the row and set off with a divider, so it reads
-   as its own thing rather than one more tab in the sequence. */
-.cat-btn-standalone {
-  margin-left: auto;
-  position: relative;
-}
-.cat-btn-standalone::before {
-  content: '';
-  position: absolute;
-  left: -9px; top: 50%; transform: translateY(-50%);
-  width: 1px; height: 22px;
-  background: var(--border);
-}
 .cat-section { display: none; }
 .cat-section.active { display: block; }
 
