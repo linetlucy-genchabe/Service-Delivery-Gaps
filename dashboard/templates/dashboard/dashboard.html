@@ -77,11 +77,11 @@
 <div class="category-nav">
   <button class="cat-btn active" data-section="workforce">👥 CHW Activity</button>
   <button class="cat-btn" data-section="supervision">🔍 Supervision</button>
-  <button class="cat-btn" data-section="hiht">🎯 HIHTs</button>
   <button class="cat-btn" data-section="childhealth">🧒 Child Health</button>
   <button class="cat-btn" data-section="maternal">🤱 Maternal Health</button>
   <button class="cat-btn" data-section="fp">💊 Family Planning</button>
   <button class="cat-btn" data-section="immunization">💉 Immunization</button>
+  <button class="cat-btn cat-btn-standalone" data-section="hiht">🎯 HIHTs</button>
 </div>
 
 <!-- WORKFORCE -->
@@ -183,24 +183,25 @@
   </div>
 
   <div class="hiht-breakdown-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 8px;">
-    <span style="font-size:13px;color:var(--text-muted)">Break down by:</span>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="county">County</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="sub_county">Sub-County</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chu">Community Health Unit</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chp">CHP</button>
 
-    <span style="font-size:13px;color:var(--text-muted);margin-left:12px">Rank by:</span>
-    <select id="hiht-rankby-select" class="btn btn-sm btn-outline" style="padding:4px 8px">
+    <select id="hiht-rankby-select" class="btn btn-sm btn-outline" style="padding:4px 8px;margin-left:8px" title="Rank by">
       {% for key, meta in target_metrics.items %}
       <option value="{{ key }}">{{ meta.label }}</option>
       {% endfor %}
     </select>
 
-    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">
-      <a id="hiht-ranked-download-csv" href="#" class="btn btn-sm btn-outline">⬇ CSV</a>
-      <button id="hiht-ranked-download-png-1" type="button" class="btn btn-sm btn-outline">⬇ PNG (Indicators)</button>
-      <button id="hiht-ranked-download-png-2" type="button" class="btn btn-sm btn-outline">⬇ PNG (Raw HIHTs)</button>
-      <a id="hiht-ranked-download-pptx" href="#" class="btn btn-sm btn-outline">⬇ PPT</a>
+    <div class="ms-dropdown ms-dropdown-right" style="margin-left:auto;">
+      <button type="button" class="btn btn-sm btn-outline ms-dropdown-btn" onclick="toggleMsDd(this)">⬇ Export ▾</button>
+      <div class="ms-dropdown-menu">
+        <a id="hiht-ranked-download-csv" href="#" class="ms-dropdown-item">⬇ CSV (both tables)</a>
+        <button id="hiht-ranked-download-png-1" type="button" class="ms-dropdown-item">🖼 PNG — Target Achievement</button>
+        <button id="hiht-ranked-download-png-2" type="button" class="ms-dropdown-item">🖼 PNG — Raw HIHTs</button>
+        <a id="hiht-ranked-download-pptx" href="#" class="ms-dropdown-item">📊 PowerPoint (both tables)</a>
+      </div>
     </div>
   </div>
 

@@ -159,6 +159,15 @@ body {
 }
 .ms-dropdown-item:hover { background: rgba(255,255,255,0.08); }
 .ms-dropdown-item input { cursor: pointer; }
+/* A <button> used as a menu item (e.g. a PNG export action, not a link)
+   needs its native chrome stripped so it matches the <a> items beside it. */
+button.ms-dropdown-item {
+  background: none; border: none; width: 100%; font: inherit;
+  text-align: left; text-decoration: none;
+}
+/* Menu hangs off a button pinned to the right edge of its row — open it
+   right-aligned too, so it doesn't spill past the viewport. */
+.ms-dropdown-right .ms-dropdown-menu { left: auto; right: 0; }
 
 /* Target Achievement ranking table */
 .ta-table .ta-cell { font-weight: 600; }
@@ -182,8 +191,8 @@ body {
 
 /* ======================== SECTION LABELS ======================== */
 .section-label {
-  font-size: 11px; font-weight: 700; color: var(--navy);
-  text-transform: uppercase; letter-spacing: .08em;
+  font-size: 14px; font-weight: 800; color: var(--navy);
+  text-transform: uppercase; letter-spacing: .05em;
   margin: 24px 0 10px;
   display: flex; align-items: center; gap: 8px;
 }
@@ -505,6 +514,19 @@ body {
   border-color: var(--navy);
   font-weight: 700;
 }
+/* Pushed to the end of the row and set off with a divider, so it reads
+   as its own thing rather than one more tab in the sequence. */
+.cat-btn-standalone {
+  margin-left: auto;
+  position: relative;
+}
+.cat-btn-standalone::before {
+  content: '';
+  position: absolute;
+  left: -9px; top: 50%; transform: translateY(-50%);
+  width: 1px; height: 22px;
+  background: var(--border);
+}
 .cat-section { display: none; }
 .cat-section.active { display: block; }
 
@@ -675,7 +697,7 @@ body {
   .stat-sub   { font-size: 10px; min-height: unset; }
 
   /* Section label */
-  .section-label { font-size: 11px; margin: 16px 0 8px; }
+  .section-label { font-size: 12px; margin: 16px 0 8px; }
 
   /* Tab bar */
   .tab-bar {

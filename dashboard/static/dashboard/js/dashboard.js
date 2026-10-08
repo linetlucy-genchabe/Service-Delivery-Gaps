@@ -559,6 +559,24 @@ function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Small dropdown menus (e.g. the HIHT section's "Export" menu) — same
+// toggle/outside-click convention used on the HIHT Trends page.
+function toggleMsDd(btn) {
+  const menu = btn.nextElementSibling;
+  const isOpen = menu.style.display === 'block';
+  document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.style.display = 'none');
+  menu.style.display = isOpen ? 'none' : 'block';
+}
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.ms-dropdown')) {
+    document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.style.display = 'none');
+  } else if (e.target.closest('.ms-dropdown-item')) {
+    // Picking an export option (CSV/PNG/PPT link or button) should close
+    // the menu too, same as picking a filter checkbox does elsewhere.
+    document.querySelectorAll('.ms-dropdown-menu').forEach(m => m.style.display = 'none');
+  }
+});
+
 // ============================================================
 // HIHT tab — ranked Target Achievement + raw components (weekly or
 // monthly), plus the multi-month trend on its own page.
@@ -569,16 +587,25 @@ const HIHT_TREND_COLORS = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#1
 function initHihtSection() {
   const levelBtns = document.querySelectorAll('.hiht-level-btn');
   if (levelBtns.length) {
-    // Jump straight to the next drill-down level below whatever the
-    // top-level filters have already narrowed to, instead of always
-    // resetting to a fixed level and making the person re-pick what
-    // they already selected up top.
+    // The filter bar up top already pins county/sub-county/CHU once one's
+    // selected (it's right there in the breadcrumb), so offering that same
+    // level as a "breakdown" here would just repeat a single row of what's
+    // already showing. Only the levels still below the current filter add
+    // anything, so hide the rest instead of listing them all every time.
+    const hideLevels = [];
+    if (CHU) hideLevels.push('county', 'sub_county', 'chu');
+    else if (SUB_COUNTY) hideLevels.push('county', 'sub_county');
+    else if (COUNTY) hideLevels.push('county');
+
     let defaultLevel = 'county';
     if (CHU) defaultLevel = 'chp';
     else if (SUB_COUNTY) defaultLevel = 'chu';
     else if (COUNTY) defaultLevel = 'sub_county';
 
-    levelBtns.forEach(b => b.classList.toggle('active', b.dataset.level === defaultLevel));
+    levelBtns.forEach(b => {
+      b.style.display = hideLevels.includes(b.dataset.level) ? 'none' : '';
+      b.classList.toggle('active', b.dataset.level === defaultLevel);
+    });
     levelBtns.forEach(btn => {
       btn.addEventListener('click', function () {
         levelBtns.forEach(b => b.classList.remove('active'));
