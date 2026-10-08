@@ -170,6 +170,7 @@ def dashboard_view(request):
         'indicators': indicators,
         'hiht_summary': hiht_summary,
         'is_uploader': is_uploader(request.user),
+        'target_metrics': TARGET_METRICS,
     }
     return render(request, 'dashboard/dashboard.html', context)
 
@@ -3701,6 +3702,31 @@ HIHT_GEO_LEVELS = {
     'chp':        ['county', 'sub_county', 'community_health_unit', 'chw_name'],
 }
 
+# Labels for the 12 raw HIHT component counts (the output keys from
+# HIHT_NON_FP_COMPONENTS / HIHT_DISEASE_PAIRS / HIHT_FP_COMPONENT above),
+# used by the Gaps Dashboard's HIHT ranking table, its CSV and its PPTX
+# export — one source of truth so headers match everywhere.
+HIHT_COMPONENT_LABELS = {
+    'pregnancy_registrations':     {'label': 'Pregnancies Registered',        'abbr': 'Preg Reg'},
+    'pregnancy_visits':            {'label': 'Pregnancy Visits',              'abbr': 'Preg Visits'},
+    'facility_deliveries':         {'label': 'Facility Deliveries',           'abbr': 'Fac Del'},
+    'pnc_48hr':                    {'label': 'PNC 48hr On-Time',              'abbr': 'PNC 48h'},
+    'pnc_3_7d':                    {'label': 'PNC 3-7d On-Time',              'abbr': 'PNC 3-7d'},
+    'u2_completed_referrals':      {'label': 'U2 iCCM Referrals Completed',   'abbr': 'U2 Ref Comp'},
+    'mam_sam_completed_referrals': {'label': 'MAM/SAM Referrals Completed',   'abbr': 'MAM/SAM Ref'},
+    'iz_completed_referrals':      {'label': 'IZ Defaulter Referrals Completed', 'abbr': 'IZ Ref Comp'},
+    'malaria_treated_or_referred': {'label': 'Malaria Treated/Referred',      'abbr': 'Malaria Tx'},
+    'pneumonia_treated_or_referred': {'label': 'Pneumonia Treated/Referred',  'abbr': 'Pneumonia Tx'},
+    'diarrhea_treated_or_referred': {'label': 'Diarrhea Treated/Referred',    'abbr': 'Diarrhea Tx'},
+    'fp_unique_users_method':      {'label': 'FP Unique Users (Method Uptake)', 'abbr': 'FP Uptake'},
+}
+# Order the 12 components should display in (matches how they're computed).
+HIHT_COMPONENT_ORDER = (
+    [key for _field, key in HIHT_NON_FP_COMPONENTS]
+    + [key for _f1, _f2, key in HIHT_DISEASE_PAIRS]
+    + [HIHT_FP_COMPONENT[1]]
+)
+
 
 def _hiht_breakdown_query(chw_qs, group_fields):
     """
@@ -3823,17 +3849,17 @@ def compute_hiht_trend(level='county', batches=None):
 # ===========================================================================
 
 TARGET_METRICS = {
-    'total_hihts_per_chw':    {'label': 'HIHTs/CHW (Total)',           'unit': ''},
-    'non_fp_hihts_per_chw':   {'label': 'HIHTs/CHW (Non-FP)',          'unit': ''},
-    'preg_per_chp':           {'label': 'Pregnancies Registered/CHW',  'unit': ''},
-    'supervision_pct':        {'label': '% CHWs Supervised',          'unit': '%'},
-    'iccm_referral_pct':      {'label': '% Sick Child Referrals Completed', 'unit': '%'},
-    'pnc_blend_pct':          {'label': 'On-Time PNC (48hr & 3-7d blend)', 'unit': '%'},
-    'fp_cyp_per_chw':         {'label': 'CYP per FP-Trained CHW',      'unit': ''},
-    'anc_4plus_pct':          {'label': 'ANC 4+ Coverage',             'unit': '%'},
-    'u5_pd_per_chw':          {'label': 'U5 Positive Diagnoses/CHW',   'unit': ''},
-    'u1_pd_per_chw':          {'label': 'U1 Positive Diagnoses/CHW',   'unit': ''},
-    'iz_fully_immunized_pct': {'label': '% 9-23mo Fully Immunized',    'unit': '%'},
+    'total_hihts_per_chw':    {'label': 'HIHTs/CHW (Total)',           'unit': '', 'abbr': 'Tot HIHT/CHW'},
+    'non_fp_hihts_per_chw':   {'label': 'HIHTs/CHW (Non-FP)',          'unit': '', 'abbr': 'NonFP HIHT/CHW'},
+    'preg_per_chp':           {'label': 'Pregnancies Registered/CHW',  'unit': '', 'abbr': 'Preg Reg/CHW'},
+    'supervision_pct':        {'label': '% CHWs Supervised',          'unit': '%', 'abbr': 'Superv %'},
+    'iccm_referral_pct':      {'label': '% Sick Child Referrals Completed', 'unit': '%', 'abbr': 'iCCM Ref %'},
+    'pnc_blend_pct':          {'label': 'On-Time PNC (48hr & 3-7d blend)', 'unit': '%', 'abbr': 'PNC OnTime %'},
+    'fp_cyp_per_chw':         {'label': 'CYP per FP-Trained CHW',      'unit': '', 'abbr': 'CYP/CHW'},
+    'anc_4plus_pct':          {'label': 'ANC 4+ Coverage',             'unit': '%', 'abbr': 'ANC4+ %'},
+    'u5_pd_per_chw':          {'label': 'U5 Positive Diagnoses/CHW',   'unit': '', 'abbr': 'U5 PosDx/CHW'},
+    'u1_pd_per_chw':          {'label': 'U1 Positive Diagnoses/CHW',   'unit': '', 'abbr': 'U1 PosDx/CHW'},
+    'iz_fully_immunized_pct': {'label': '% 9-23mo Fully Immunized',    'unit': '%', 'abbr': '9-23mo FI %'},
 }
 # All 11 are "higher is better" per the April KPI report — no inverse indicators.
 
@@ -4060,6 +4086,336 @@ def download_target_achievement(request):
             row_out += [s['value'], s['target'], s['colour']]
         row_out += [f"{r['achieved_count']}/{r['scoreable_count']}", r['overall_pct'], r['overall_colour']]
         writer.writerow(row_out)
+    return response
+
+
+# ===========================================================================
+# Gaps Dashboard HIHT ranking table — the 11 Target Achievement indicators
+# plus the 12 raw HIHT components, ranked best to worst, for whatever batch
+# (weekly or monthly) and geography the dashboard's own filters + level
+# button have selected. Replaces the old simple Non-FP/FP/Total breakdown
+# (api_hiht_breakdown / download_hiht_breakdown, left in place but unused)
+# on the main Gaps Dashboard's HIHT section — unlike the separate HIHTs
+# Trends page's Target Achievement tab, this one works for weekly batches.
+# ===========================================================================
+
+# A week is roughly 1/4.3 of a month (30.4 days / 7 days). Monthly targets
+# for count-style indicators (HIHTs/CHW, Pregnancies Registered/CHW, etc.)
+# are divided by this when scoring a weekly batch, so a week's naturally
+# smaller raw volume isn't scored red against a full month's target.
+# Percentage-style indicators (unit == '%') are NOT prorated — a coverage
+# or completion rate is already period-independent (0-100 either way).
+WEEKLY_HIHT_PRORATION = 4.3
+
+
+def _prorate_targets_for_period(targets_by_county, period_type):
+    """
+    Returns a copy of `targets_by_county` (county -> {metric_key: target})
+    with every non-percentage TARGET_METRICS target divided by
+    WEEKLY_HIHT_PRORATION when `period_type` is 'weekly'. Monthly batches
+    get the targets back unchanged (same dict, not even copied).
+    """
+    if period_type != 'weekly':
+        return targets_by_county
+    prorated = {}
+    for county, metrics in targets_by_county.items():
+        prorated[county] = {}
+        for key, target in metrics.items():
+            meta = TARGET_METRICS.get(key, {})
+            if meta.get('unit') == '%' or target is None:
+                prorated[county][key] = target
+            else:
+                prorated[county][key] = round(target / WEEKLY_HIHT_PRORATION, 2)
+    return prorated
+
+
+def _hiht_ranked_data(request, batch):
+    """
+    Shared computation behind the Gaps Dashboard's HIHT ranking table: the
+    11 Target Achievement indicators (scored/coloured against targets,
+    prorated for weekly batches) plus the 12 raw HIHT components, for
+    whichever geography the page's own county/sub_county/chu filters +
+    level button have selected. Used by the JSON API, the CSV download and
+    the PPTX download so all three always agree.
+    """
+    from .models import IndicatorTarget
+
+    county     = request.GET.get('county', '')
+    sub_county = request.GET.get('sub_county', '')
+    chu        = request.GET.get('chu', '')
+    level = request.GET.get('level') or (
+        'chp' if chu else 'chu' if sub_county else 'sub_county' if county else 'county'
+    )
+    if level not in HIHT_GEO_LEVELS:
+        level = 'sub_county'
+    rank_by = request.GET.get('rank_by', 'total_hihts_per_chw')
+    if rank_by not in TARGET_METRICS:
+        rank_by = 'total_hihts_per_chw'
+
+    qs = CHWRecord.objects.filter(batch=batch)
+    if county:     qs = qs.filter(county=county)
+    if sub_county: qs = qs.filter(sub_county=sub_county)
+    if chu:        qs = qs.filter(community_health_unit=chu)
+
+    group_fields = HIHT_GEO_LEVELS[level]
+
+    target_rows    = _target_achievement_query(qs, group_fields)
+    component_rows = _hiht_breakdown_query(qs, group_fields)
+    components_by_key = {tuple(r[f] for f in group_fields): r for r in component_rows}
+
+    targets_by_county = {}
+    for t in IndicatorTarget.objects.all():
+        targets_by_county.setdefault(t.county, {})[t.metric_key] = t.target
+    targets_by_county = _prorate_targets_for_period(targets_by_county, batch.period_type)
+
+    rows = []
+    for row in target_rows:
+        row = _score_against_targets(row, targets_by_county, rank_by)
+        key = tuple(row[f] for f in group_fields)
+        comp_row = components_by_key.get(key, {})
+        row['components']  = comp_row.get('components', {})
+        row['total_hihts'] = comp_row.get('total_hihts', 0)
+        rows.append(row)
+
+    # Best to worst — rows with no scoreable indicators (grey) sink to the
+    # bottom, same convention as the Target Achievement page.
+    rows.sort(key=lambda r: (r['overall_pct'] is None, -(r['overall_pct'] or 0)))
+
+    return {
+        'rows':       rows,
+        'level':      level,
+        'rank_by':    rank_by,
+        'geo_fields': group_fields,
+        'is_weekly':  batch.period_type == 'weekly',
+    }
+
+
+HIHT_RANKED_GEO_LABELS = {
+    'county': 'County', 'sub_county': 'Sub-County',
+    'chu': 'Community Health Unit', 'chp': 'CHW',
+}
+
+
+@login_required
+@require_GET
+def api_hiht_ranked(request):
+    """
+    JSON for the Gaps Dashboard's HIHT ranking table: the 11 Target
+    Achievement indicators (coloured vs target) plus the 12 raw HIHT
+    components, ranked best to worst. Works for weekly or monthly batches.
+    """
+    batch_id = request.GET.get('batch')
+    if not batch_id:
+        return JsonResponse({'error': 'batch required'}, status=400)
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+
+    data = _hiht_ranked_data(request, batch)
+    geo_fields = data['geo_fields']
+    geo_field  = geo_fields[-1]
+    parent_field = geo_fields[-2] if len(geo_fields) > 1 else None
+    geo_label  = HIHT_RANKED_GEO_LABELS.get(data['level'], 'Geography')
+
+    results = []
+    for r in data['rows']:
+        results.append({
+            'geo':             r.get(geo_field),
+            'parent_geo':      r.get(parent_field) if parent_field else None,
+            'scored':          r['scored'],
+            'achieved_count':  r['achieved_count'],
+            'scoreable_count': r['scoreable_count'],
+            'overall_pct':     r['overall_pct'],
+            'overall_colour':  r['overall_colour'],
+            'components':      r['components'],
+            'total_hihts':     r['total_hihts'],
+            'active_all':      r.get('active_all'),
+        })
+
+    return JsonResponse({
+        'results':          results,
+        'count':            len(results),
+        'level':            data['level'],
+        'rank_by':          data['rank_by'],
+        'geo_label':        geo_label,
+        'is_weekly':        data['is_weekly'],
+        'target_metrics':   TARGET_METRICS,
+        'component_labels': HIHT_COMPONENT_LABELS,
+        'component_order':  HIHT_COMPONENT_ORDER,
+    })
+
+
+@login_required
+def download_hiht_ranked_csv(request):
+    """CSV for the HIHT ranking table — both the 11 scored indicators and
+    the 12 raw HIHT components, in one file."""
+    batch_id = request.GET.get('batch')
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    data = _hiht_ranked_data(request, batch)
+    geo_fields = data['geo_fields']
+
+    response = HttpResponse(content_type='text/csv')
+    filename = f'hiht_ranked_{data["level"]}_{batch.label}.csv'.replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    header = ['Rank'] + [f.replace('_', ' ').title() for f in geo_fields]
+    for key, meta in TARGET_METRICS.items():
+        header += [f"{meta['label']} (Actual)", f"{meta['label']} (Target)", f"{meta['label']} (Status)"]
+    header += ['Indicators Achieved', 'Overall %', 'Overall Status']
+    for key in HIHT_COMPONENT_ORDER:
+        header.append(HIHT_COMPONENT_LABELS[key]['label'])
+    header.append('Total HIHTs')
+    writer.writerow(header)
+
+    for i, r in enumerate(data['rows'], start=1):
+        row_out = [i] + [r.get(f) for f in geo_fields]
+        for key in TARGET_METRICS:
+            s = r['scored'][key]
+            row_out += [s['value'], s['target'], s['colour']]
+        row_out += [f"{r['achieved_count']}/{r['scoreable_count']}", r['overall_pct'], r['overall_colour']]
+        for key in HIHT_COMPONENT_ORDER:
+            row_out.append(r['components'].get(key, 0))
+        row_out.append(r['total_hihts'])
+        writer.writerow(row_out)
+    return response
+
+
+@login_required
+def download_hiht_ranked_pptx(request):
+    """
+    PPTX export of the HIHT ranking table: one set of slides for the 11
+    coloured Target Achievement indicators, one set for the 12 plain raw
+    HIHT component counts, paginated across slides when there are more
+    rows than fit on one (e.g. ranking every CHW in a CHU).
+    """
+    import io
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+
+    def rgb(h):
+        return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    NAVY = '1B3A6B'; WHITE = 'FFFFFF'
+    GREEN = 'D7F4E0'; GREEN_T = '15803D'
+    YELLOW = 'FDF3D0'; YELLOW_T = 'A16207'
+    RED = 'FBDADA'; RED_T = 'B91C1C'
+    GREY = 'F1F2F4'; GREY_T = '6B7280'
+
+    def colour_bg_txt(colour):
+        return {'green': (GREEN, GREEN_T), 'yellow': (YELLOW, YELLOW_T),
+                'red': (RED, RED_T)}.get(colour, (GREY, GREY_T))
+
+    batch_id = request.GET.get('batch')
+    batch = get_object_or_404(UploadBatch, pk=batch_id)
+    data = _hiht_ranked_data(request, batch)
+    geo_fields = data['geo_fields']
+    geo_field  = geo_fields[-1]
+    level      = data['level']
+    geo_label  = HIHT_RANKED_GEO_LABELS.get(level, 'Geography')
+    rows       = data['rows']
+
+    prs = Presentation()
+    prs.slide_width  = Inches(13.3)
+    prs.slide_height = Inches(7.5)
+    MARGIN = Inches(0.2)
+
+    def add_cell(slide, x, y, w, h, text, bg, txt_color, bold=True, font_size=7, align=PP_ALIGN.CENTER):
+        shape = slide.shapes.add_shape(1, x, y, w, h)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = rgb(bg)
+        shape.line.color.rgb = rgb(WHITE)
+        shape.line.width = Pt(0.75)
+        tf = shape.text_frame
+        tf.word_wrap = True
+        tf.margin_left = Pt(2); tf.margin_right = Pt(2)
+        tf.margin_top = Pt(1); tf.margin_bottom = Pt(1)
+        p = tf.paragraphs[0]; p.alignment = align
+        run = p.add_run()
+        run.text = str(text) if text not in (None, '') else '—'
+        run.font.size = Pt(font_size); run.font.color.rgb = rgb(txt_color)
+        run.font.bold = bold; run.font.name = 'Calibri'
+
+    ROWS_PER_SLIDE = 16
+
+    def build_table_slides(title, col_headers, col_widths, row_values_fn):
+        n = len(rows)
+        chunks = [rows[i:i + ROWS_PER_SLIDE] for i in range(0, n, ROWS_PER_SLIDE)] or [[]]
+        for ci, chunk in enumerate(chunks):
+            slide = prs.slides.add_slide(prs.slide_layouts[6])
+            slide_title = title if len(chunks) == 1 else (
+                f"{title} ({ci*ROWS_PER_SLIDE+1}-{ci*ROWS_PER_SLIDE+len(chunk)} of {n})"
+            )
+            tb = slide.shapes.add_textbox(MARGIN, Inches(0.05), prs.slide_width - 2*MARGIN, Inches(0.3))
+            tb.text_frame.text = slide_title
+            tb.text_frame.paragraphs[0].font.size = Pt(13)
+            tb.text_frame.paragraphs[0].font.bold = True
+            tb.text_frame.paragraphs[0].font.color.rgb = rgb(NAVY)
+
+            y0 = Inches(0.45)
+            H_HDR = Inches(0.4)
+            xs = [MARGIN]
+            for w in col_widths[:-1]:
+                xs.append(xs[-1] + w)
+            for cx, cw, htxt in zip(xs, col_widths, col_headers):
+                add_cell(slide, cx, y0, cw, H_HDR, htxt, NAVY, WHITE, bold=True, font_size=7,
+                         align=PP_ALIGN.LEFT if cx in (xs[0], xs[1]) else PP_ALIGN.CENTER)
+
+            h_row = int((prs.slide_height - y0 - H_HDR - MARGIN) / max(ROWS_PER_SLIDE, 1))
+            y = y0 + H_HDR
+            for ri, r in enumerate(chunk):
+                rank = ci * ROWS_PER_SLIDE + ri + 1
+                cells = row_values_fn(r, rank)
+                for cx, cw, (text, bg, txt_c) in zip(xs, col_widths, cells):
+                    add_cell(slide, cx, y, cw, h_row, text, bg, txt_c, bold=False, font_size=7,
+                             align=PP_ALIGN.LEFT if cx in (xs[0], xs[1]) else PP_ALIGN.CENTER)
+                y += h_row
+
+    usable_w = prs.slide_width - 2 * MARGIN
+    W_RANK = Inches(0.4); W_GEO = Inches(1.5)
+
+    # --- Table 1: 11 Target Achievement indicators, coloured ---
+    n_ind = len(TARGET_METRICS)
+    w_ind = int((usable_w - W_RANK - W_GEO - Inches(0.55) - Inches(0.6)) / n_ind)
+    col_widths_1 = [W_RANK, W_GEO] + [w_ind] * n_ind + [Inches(0.55), Inches(0.6)]
+    headers_1 = ['#', geo_label] + [meta['abbr'] for meta in TARGET_METRICS.values()] + ['Ach.', 'Ovr %']
+
+    def row_values_1(r, rank):
+        cells = [(str(rank), GREY, GREY_T), (str(r.get(geo_field) or '—'), GREY, NAVY)]
+        for key in TARGET_METRICS:
+            s = r['scored'][key]
+            bg, txt = colour_bg_txt(s['colour'])
+            cells.append((s['value'] if s['value'] is not None else '—', bg, txt))
+        cells.append((f"{r['achieved_count']}/{r['scoreable_count']}", GREY, GREY_T))
+        bg, txt = colour_bg_txt(r['overall_colour'])
+        cells.append((f"{r['overall_pct']}%" if r['overall_pct'] is not None else '—', bg, txt))
+        return cells
+
+    build_table_slides(f"HIHT Target Achievement — {geo_label} ranking — {batch.label}",
+                        headers_1, col_widths_1, row_values_1)
+
+    # --- Table 2: 12 raw HIHT components, plain counts ---
+    n_comp = len(HIHT_COMPONENT_ORDER)
+    w_comp = int((usable_w - W_RANK - W_GEO - Inches(0.7)) / n_comp)
+    col_widths_2 = [W_RANK, W_GEO] + [w_comp] * n_comp + [Inches(0.7)]
+    headers_2 = ['#', geo_label] + [HIHT_COMPONENT_LABELS[k]['abbr'] for k in HIHT_COMPONENT_ORDER] + ['Tot HIHT']
+
+    def row_values_2(r, rank):
+        cells = [(str(rank), GREY, GREY_T), (str(r.get(geo_field) or '—'), GREY, NAVY)]
+        for key in HIHT_COMPONENT_ORDER:
+            cells.append((str(r['components'].get(key, 0)), WHITE, '374151'))
+        cells.append((str(r['total_hihts']), GREY, NAVY))
+        return cells
+
+    build_table_slides(f"Raw HIHT Components — {geo_label} ranking — {batch.label}",
+                        headers_2, col_widths_2, row_values_2)
+
+    buf = io.BytesIO()
+    prs.save(buf); buf.seek(0)
+    filename = f"HIHT_Ranked_{level}_{batch.label}.pptx".replace(' ', '_')
+    response = HttpResponse(buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
 

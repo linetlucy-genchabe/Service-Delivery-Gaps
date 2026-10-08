@@ -560,17 +560,19 @@ function esc(str) {
 }
 
 // ============================================================
-// HIHT tab — geography breakdown + multi-month trend
+// HIHT tab — ranked Target Achievement + raw components (weekly or
+// monthly), plus the multi-month trend on its own page.
 // ============================================================
+let hihtTrendChart = null;
+const HIHT_TREND_COLORS = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#198754','#dc3545','#0dcaf0','#6c757d','#ffc107','#343a40','#adb5bd'];
+
 function initHihtSection() {
   const levelBtns = document.querySelectorAll('.hiht-level-btn');
   if (levelBtns.length) {
     // Jump straight to the next drill-down level below whatever the
     // top-level filters have already narrowed to, instead of always
     // resetting to a fixed level and making the person re-pick what
-    // they already selected up top. With no county chosen yet, compare
-    // by county first rather than dumping every sub-county from every
-    // county onto one cramped chart.
+    // they already selected up top.
     let defaultLevel = 'county';
     if (CHU) defaultLevel = 'chp';
     else if (SUB_COUNTY) defaultLevel = 'chu';
@@ -581,155 +583,175 @@ function initHihtSection() {
       btn.addEventListener('click', function () {
         levelBtns.forEach(b => b.classList.remove('active'));
         this.classList.add('active');
-        loadHihtBreakdown(this.dataset.level);
+        loadHihtRanked(this.dataset.level, getHihtRankBy());
       });
     });
-    loadHihtBreakdown(defaultLevel);
+  }
+
+  const rankSel = document.getElementById('hiht-rankby-select');
+  if (rankSel) {
+    rankSel.addEventListener('change', function () {
+      loadHihtRanked(getHihtLevel(), this.value);
+    });
+  }
+
+  const pngBtn1 = document.getElementById('hiht-ranked-download-png-1');
+  if (pngBtn1) pngBtn1.addEventListener('click', function () {
+    downloadChartAsImage('hiht-ranked-table-1', `hiht_target_achievement_${getHihtLevel()}.png`, this);
+  });
+  const pngBtn2 = document.getElementById('hiht-ranked-download-png-2');
+  if (pngBtn2) pngBtn2.addEventListener('click', function () {
+    downloadChartAsImage('hiht-ranked-table-2', `hiht_raw_components_${getHihtLevel()}.png`, this);
+  });
+
+  if (levelBtns.length) {
+    loadHihtRanked(getHihtLevel(), getHihtRankBy());
   }
   // The multi-month trend (loadHihtTrend) lives on its own "HIHTs Trends"
-  // page now, with a single cascading county/sub-county/CHU filter bar
-  // instead of a separate level toggle here — see hiht_trends.html, which
-  // calls loadHihtTrend directly with the level implied by its filters.
+  // page, with a single cascading county/sub-county/CHU filter bar instead
+  // of a separate level toggle here — see hiht_trends.html, which calls
+  // loadHihtTrend directly with the level implied by its filters.
 }
 
-function loadHihtBreakdown(level) {
-  const c = document.getElementById('hiht-breakdown-container');
-  if (!c) return;
-  c.innerHTML = '<div class="table-loading">Loading…</div>';
+function getHihtLevel() {
+  const active = document.querySelector('.hiht-level-btn.active');
+  return active ? active.dataset.level : 'county';
+}
 
-  const dl = document.getElementById('hiht-download-link');
-  if (dl) {
-    const params = new URLSearchParams({
-      batch: BATCH_ID || '', county: COUNTY || '',
-      sub_county: SUB_COUNTY || '', chu: CHU || '', level: level,
-    });
-    dl.href = '/download/hiht-breakdown/?' + params.toString();
-  }
+function getHihtRankBy() {
+  const sel = document.getElementById('hiht-rankby-select');
+  return sel ? sel.value : 'total_hihts_per_chw';
+}
+
+function loadHihtRanked(level, rankBy) {
+  const c1 = document.getElementById('hiht-ranked-table-1');
+  const c2 = document.getElementById('hiht-ranked-table-2');
+  if (!c1 || !c2) return;
+  c1.innerHTML = '<div class="table-loading">Loading…</div>';
+  c2.innerHTML = '';
 
   const params = new URLSearchParams({
     batch: BATCH_ID || '', county: COUNTY || '',
-    sub_county: SUB_COUNTY || '', chu: CHU || '', level: level,
+    sub_county: SUB_COUNTY || '', chu: CHU || '',
+    level: level, rank_by: rankBy,
   });
-  fetch('/api/hiht-breakdown/?' + params.toString())
+
+  const csvLink = document.getElementById('hiht-ranked-download-csv');
+  if (csvLink) csvLink.href = '/download/hiht-ranked/csv/?' + params.toString();
+  const pptxLink = document.getElementById('hiht-ranked-download-pptx');
+  if (pptxLink) pptxLink.href = '/download/hiht-ranked/pptx/?' + params.toString();
+
+  fetch('/api/hiht-ranked/?' + params.toString())
     .then(r => r.json())
-    .then(data => renderHihtBreakdown(c, data.results, level))
-    .catch(() => { c.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading HIHT breakdown.</div>'; });
+    .then(data => renderHihtRanked(c1, c2, data))
+    .catch(() => {
+      c1.innerHTML = '<div class="table-empty" style="color:var(--red)">Error loading HIHT ranking.</div>';
+      c2.innerHTML = '';
+    });
 }
 
-// Chart.js instances for the HIHT tab — kept around so a re-render (level
-// switch, filter change) destroys the old chart(s) before drawing new ones,
-// rather than stacking canvases on top of each other. The breakdown chart
-// can be split across several canvases (see renderHihtBreakdownChart), so
-// it's an array; the trend chart is always exactly one.
-let hihtBreakdownCharts = [];
-let hihtTrendChart = null;
-const HIHT_TREND_COLORS = ['#0d6efd','#20c997','#fd7e14','#e83e8c','#6f42c1','#198754','#dc3545','#0dcaf0','#6c757d','#ffc107','#343a40','#adb5bd'];
+function renderHihtRanked(c1, c2, data) {
+  const note = document.getElementById('hiht-ranked-weekly-note');
+  if (note) note.style.display = data.is_weekly ? 'block' : 'none';
 
-function renderHihtBreakdown(c, rows, level) {
-  if (!rows || rows.length === 0) {
-    c.innerHTML = '<div class="table-empty">No data for this selection.</div>';
-    hihtBreakdownCharts.forEach(ch => ch.destroy());
-    hihtBreakdownCharts = [];
-    const chartsC = document.getElementById('hiht-breakdown-charts');
-    if (chartsC) chartsC.innerHTML = '';
+  const rows = data.results || [];
+  if (rows.length === 0) {
+    c1.innerHTML = '<div class="table-empty">No data for this selection.</div>';
+    c2.innerHTML = '';
     return;
   }
-  const geoLabel = { county: 'County', sub_county: 'Sub-County', chu: 'Community Health Unit', chp: 'CHP' }[level] || 'Geography';
-  const geoField = { county: 'county', sub_county: 'sub_county', chu: 'community_health_unit', chp: 'chw_name' }[level] || 'county';
 
-  renderHihtBreakdownChart(rows, geoLabel, geoField);
+  const metrics  = data.target_metrics || {};
+  const geoLabel = data.geo_label || 'Geography';
 
-  let h = `<table class="data-table"><thead><tr>
-    <th>#</th><th>${geoLabel}</th>
-    <th class="num">Non-FP HIHTs/CHW</th><th class="num">FP HIHTs/CHW</th>
-    <th class="num">Total HIHTs/CHW</th><th class="num">Total HIHTs</th><th class="num">Active CHWs</th>
-  </tr></thead><tbody>`;
-  rows.forEach((r, i) => {
-    const rate = r.total_hihts_per_chw;
-    const cls = rate == null ? '' : rate >= 8 ? 'good' : rate >= 4 ? 'warn' : 'bad';
-    h += `<tr><td class="zero">${i+1}</td><td><strong>${esc(r[geoField])}</strong></td>
-      <td class="num">${r.non_fp_hihts_per_chw ?? '—'}</td>
-      <td class="num">${r.fp_hihts_per_chw ?? '—'}</td>
-      <td class="num ${cls}">${rate ?? '—'}</td>
-      <td class="num">${r.total_hihts}</td>
-      <td class="num">${r.active_all}</td></tr>`;
+  // Table 1 — the 11 Target Achievement indicators, colour-coded vs target.
+  let h1 = `<table class="data-table ta-table"><thead><tr><th>#</th><th>${esc(geoLabel)}</th>`;
+  Object.keys(metrics).forEach(key => {
+    h1 += `<th class="num" title="${esc(metrics[key].label)}">${esc(metrics[key].abbr || metrics[key].label)}</th>`;
   });
-  h += `</tbody></table><div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} ${geoLabel.toLowerCase()}(s), ranked by Total HIHTs/CHW</div>`;
-  c.innerHTML = h;
+  h1 += `<th class="num">Achieved</th><th>Rank Score</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h1 += `<tr><td class="zero">${i+1}</td><td><strong>${esc(r.geo)}</strong>${r.parent_geo ? ` <span style="color:var(--text-muted);font-size:11px;">(${esc(r.parent_geo)})</span>` : ''}</td>`;
+    Object.keys(metrics).forEach(key => {
+      const cell = (r.scored && r.scored[key]) || {};
+      const unit = metrics[key].unit || '';
+      h1 += `<td class="num ta-cell ta-${cell.colour || 'grey'}">${cell.value != null ? esc(cell.value) + unit : '—'}</td>`;
+    });
+    h1 += `<td class="num">${r.achieved_count}/${r.scoreable_count}</td>`;
+    h1 += `<td><span class="status-dot status-${r.overall_colour}"></span> ${r.overall_pct != null ? r.overall_pct + '%' : '—'}</td></tr>`;
+  });
+  h1 += `</tbody></table>`;
+  c1.innerHTML = `<div class="table-scroll table-scroll-tall">${h1}</div>
+    <div style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${rows.length} ${geoLabel.toLowerCase()}(s), ranked best to worst.</div>`;
+
+  // Table 2 — the 12 raw HIHT components, plain counts, same row order.
+  const compLabels = data.component_labels || {};
+  const compOrder  = data.component_order || Object.keys(compLabels);
+  let h2 = `<table class="data-table"><thead><tr><th>#</th><th>${esc(geoLabel)}</th>`;
+  compOrder.forEach(key => {
+    const meta = compLabels[key] || {};
+    h2 += `<th class="num" title="${esc(meta.label || key)}">${esc(meta.abbr || meta.label || key)}</th>`;
+  });
+  h2 += `<th class="num">Total HIHTs</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    h2 += `<tr><td class="zero">${i+1}</td><td><strong>${esc(r.geo)}</strong></td>`;
+    compOrder.forEach(key => {
+      h2 += `<td class="num">${(r.components && r.components[key]) ?? 0}</td>`;
+    });
+    h2 += `<td class="num">${r.total_hihts}</td></tr>`;
+  });
+  h2 += `</tbody></table>`;
+  c2.innerHTML = `<div class="table-scroll table-scroll-tall">${h2}</div>`;
 }
 
-// Grouped bar chart(s) of Non-FP / FP / Total HIHTs per CHW, so it's easy
-// to see at a glance which geographies are pulling the number up or down —
-// the table underneath still has every row and the CSV has the full detail.
-//
-// A single chart with 40+ bars squeezed onto it is unreadable (labels
-// overlap, bars shrink to slivers), so every geography still gets its own
-// bar: rows are split into pages of CHUNK_SIZE, each rendered as its own
-// full-width chart stacked one under another (rows 1–10, 11–20, ...).
-function renderHihtBreakdownChart(rows, geoLabel, geoField) {
-  const container = document.getElementById('hiht-breakdown-charts');
-  if (!container || typeof Chart === 'undefined') return;
+// On a phone, a plain anchor-download often lands in a Downloads folder
+// the person can't easily find, or on iOS Safari just opens the image
+// instead of saving it. Where the device supports sharing a file, this
+// opens the native share sheet so the person can choose "Save Image" /
+// "Save to Files" themselves. Desktop browsers fall back to a normal
+// download.
+function _saveCanvasAsPng(canvas, filename) {
+  return new Promise((resolve) => {
+    canvas.toBlob(function(blob) {
+      if (!blob) { resolve(); return; }
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([blob], filename, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: filename }).catch(() => {}).then(resolve, resolve);
+            return;
+          }
+        } catch (e) { /* unsupported — fall through to download */ }
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      resolve();
+    }, 'image/png');
+  });
+}
 
-  hihtBreakdownCharts.forEach(ch => ch.destroy());
-  hihtBreakdownCharts = [];
-  container.innerHTML = '';
-
-  const CHUNK_SIZE = 10;
-  const chunks = [];
-  for (let i = 0; i < rows.length; i += CHUNK_SIZE) chunks.push(rows.slice(i, i + CHUNK_SIZE));
-
-  chunks.forEach((chunk, idx) => {
-    const start = idx * CHUNK_SIZE + 1;
-    const end = idx * CHUNK_SIZE + chunk.length;
-    const card = document.createElement('div');
-    card.className = 'chart-card';
-    card.style.marginBottom = '14px';
-    const canvasId = `hiht-breakdown-chart-${idx}`;
-    card.innerHTML = `<div style="height:320px"><canvas id="${canvasId}"></canvas></div>`;
-    container.appendChild(card);
-
-    const labels = chunk.map(r => r[geoField]);
-    // Always vertical bars — chunks are capped at CHUNK_SIZE rows, so
-    // labels along the bottom stay readable without switching to
-    // horizontal bars for larger chunks.
-    const horizontal = false;
-    const categoryScale = { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0, font: { size: 10 } } };
-    const valueScale = { beginAtZero: true, title: { display: true, text: 'HIHTs per CHW' } };
-
-    const chart = new Chart(document.getElementById(canvasId).getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          // Same palette as the trend line chart below, so the two charts
-          // feel like one consistent set rather than two different schemes.
-          { label: 'Non-FP HIHTs/CHW', data: chunk.map(r => r.non_fp_hihts_per_chw ?? 0), backgroundColor: HIHT_TREND_COLORS[0] },
-          { label: 'FP HIHTs/CHW',     data: chunk.map(r => r.fp_hihts_per_chw ?? 0),     backgroundColor: HIHT_TREND_COLORS[2] },
-          { label: 'Total HIHTs/CHW',  data: chunk.map(r => r.total_hihts_per_chw ?? 0),  backgroundColor: HIHT_TREND_COLORS[4] },
-        ],
-      },
-      options: {
-        indexAxis: horizontal ? 'y' : 'x',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: {
-            display: true,
-            text: chunks.length > 1
-              ? `${geoLabel} ${start}–${end} of ${rows.length}, by Total HIHTs/CHW`
-              : `${geoLabel} comparison — HIHTs per CHW`,
-          },
-          legend: { display: idx === 0, position: 'bottom' },
-        },
-        // Chart.js keeps calling them "x" and "y" even when indexAxis is
-        // flipped — the category scale just swaps from x to y, so build
-        // the scales object to match instead of hard-coding x/y meanings.
-        scales: horizontal
-          ? { x: valueScale, y: categoryScale }
-          : { x: categoryScale, y: valueScale },
-      },
-    });
-    hihtBreakdownCharts.push(chart);
+// Generic DOM-element-to-PNG export, used for the two HIHT ranking tables.
+function downloadChartAsImage(elementId, filename, btn) {
+  const el = document.getElementById(elementId);
+  if (!el || typeof html2canvas === 'undefined') return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Building…';
+  const safeFilename = (filename || 'chart.png').replace(/[^a-zA-Z0-9._-]+/g, '_');
+  html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+    return _saveCanvasAsPng(canvas, safeFilename);
+  }).then(() => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+  }).catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
   });
 }
 

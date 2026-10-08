@@ -182,16 +182,37 @@
     </div>
   </div>
 
-  <div class="hiht-breakdown-controls" style="display:flex;gap:8px;align-items:center;margin:16px 0 8px;">
+  <div class="hiht-breakdown-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 8px;">
     <span style="font-size:13px;color:var(--text-muted)">Break down by:</span>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="county">County</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="sub_county">Sub-County</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chu">Community Health Unit</button>
     <button class="btn btn-sm btn-outline hiht-level-btn" data-level="chp">CHP</button>
-    <a id="hiht-download-link" href="{% url 'download_hiht_breakdown' %}?batch={{ selected_batch_id }}&county={{ selected_county }}&sub_county={{ selected_subcounty }}&chu={{ selected_chu }}&level=sub_county" class="btn btn-sm btn-outline" style="margin-left:auto">⬇ Download CSV</a>
+
+    <span style="font-size:13px;color:var(--text-muted);margin-left:12px">Rank by:</span>
+    <select id="hiht-rankby-select" class="btn btn-sm btn-outline" style="padding:4px 8px">
+      {% for key, meta in target_metrics.items %}
+      <option value="{{ key }}">{{ meta.label }}</option>
+      {% endfor %}
+    </select>
+
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">
+      <a id="hiht-ranked-download-csv" href="#" class="btn btn-sm btn-outline">⬇ CSV</a>
+      <button id="hiht-ranked-download-png-1" type="button" class="btn btn-sm btn-outline">⬇ PNG (Indicators)</button>
+      <button id="hiht-ranked-download-png-2" type="button" class="btn btn-sm btn-outline">⬇ PNG (Raw HIHTs)</button>
+      <a id="hiht-ranked-download-pptx" href="#" class="btn btn-sm btn-outline">⬇ PPT</a>
+    </div>
   </div>
-  <div id="hiht-breakdown-charts"></div>
-  <div id="hiht-breakdown-container"><div class="table-loading">Loading…</div></div>
+
+  <div id="hiht-ranked-weekly-note" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+    Weekly batch — targets shown are prorated (monthly target ÷ 4.3) for count/rate indicators; percentage indicators are not prorated.
+  </div>
+
+  <div style="font-size:13px;font-weight:600;color:var(--text-dark);margin-top:4px;">🎯 Target Achievement — ranked best to worst</div>
+  <div id="hiht-ranked-table-1"><div class="table-loading">Loading…</div></div>
+
+  <div style="font-size:13px;font-weight:600;color:var(--text-dark);margin-top:18px;">📋 Raw HIHT Components</div>
+  <div id="hiht-ranked-table-2"></div>
 
   <p style="font-size:12px;color:var(--text-muted);margin-top:16px">Looking for the multi-month trend? It's now on its own page — <a href="{% url 'hiht_trends' %}">🎯 HIHTs Trends</a>, under Scorecards.</p>
 </div>
@@ -544,6 +565,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 const BATCH_ID   = "{{ selected_batch_id }}";
 const COUNTY     = "{{ selected_county }}";

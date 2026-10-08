@@ -64,6 +64,9 @@ urlpatterns = [
     # HIHT
     path('api/hiht-breakdown/',            views.api_hiht_breakdown,      name='api_hiht_breakdown'),
     path('download/hiht-breakdown/',       views.download_hiht_breakdown, name='download_hiht_breakdown'),
+    path('api/hiht-ranked/',               views.api_hiht_ranked,            name='api_hiht_ranked'),
+    path('download/hiht-ranked/csv/',      views.download_hiht_ranked_csv,   name='download_hiht_ranked_csv'),
+    path('download/hiht-ranked/pptx/',     views.download_hiht_ranked_pptx,  name='download_hiht_ranked_pptx'),
     path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
     path('hiht-trends/',                   views.hiht_trends_view,        name='hiht_trends'),
     path('hiht-trends/target-achievement/download/', views.download_target_achievement, name='download_target_achievement'),
