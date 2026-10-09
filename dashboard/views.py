@@ -2903,6 +2903,181 @@ def compute_kpi_scorecard_metrics(county, sub_county, year, month, report_ids):
     }
 
 
+# ===========================================================================
+# KPI Report page — "HIHTs Trends" ranking table. Same look, filtering and
+# scoring as the existing HIHT Trends page's Target Achievement tab
+# (TARGET_METRICS / _score_against_targets, reused as-is below), but sourced
+# from KPIDataPoint (KPI report uploads) instead of CHWRecord (CHW upload
+# batches) — so it only ever drills to county -> sub_county, since that's
+# all the geography a KPI report has (no community health unit / CHW level).
+# ===========================================================================
+
+KPI_TARGET_ACHIEVEMENT_GEO_LEVELS = {
+    'county':     ['county'],
+    'sub_county': ['county', 'sub_county'],
+}
+
+
+def _kpi_build_target_metrics(county, sub_county, year, month, report_ids):
+    """
+    Build a TARGET_METRICS-shaped metrics dict for one geography/period
+    from KPIDataPoint records, using the same per-metric conventions
+    (percentage fields stored as 0-1 fractions needing ×100; the PNC
+    48hr/3-7d blend computed from raw counts) already established in
+    compute_kpi_scorecard_metrics above.
+    """
+    def g(key):
+        return get_kpi_value(county, sub_county, key, year, month, report_ids)
+
+    def pct100(v):
+        return round(v * 100, 1) if v is not None else None
+
+    pnc_48     = g('pnc_48hr')
+    pnc_37     = g('pnc_3_7d')
+    deliveries = g('facility_deliveries')
+    pnc_48_pct = round(pnc_48 / deliveries * 100, 1) if pnc_48 is not None and deliveries else None
+    pnc_37_pct = round(pnc_37 / deliveries * 100, 1) if pnc_37 is not None and deliveries else None
+    pnc_blend  = round((pnc_48_pct + pnc_37_pct) / 2, 1) if pnc_48_pct is not None and pnc_37_pct is not None else None
+
+    return {
+        'total_hihts_per_chw':    g('total_hihts_per_chw'),
+        'non_fp_hihts_per_chw':   g('non_fp_hihts_per_chw'),
+        'preg_per_chp':           g('preg_per_chp'),
+        'supervision_pct':        pct100(g('supervision_pct')),
+        'iccm_referral_pct':      pct100(g('iccm_ref_completed')),
+        'pnc_blend_pct':          pnc_blend,
+        'fp_cyp_per_chw':         g('fp_cyp_per_chw'),
+        'anc_4plus_pct':          pct100(g('anc_4plus_pct')),
+        'u5_pd_per_chw':          g('u5_pd_per_chw'),
+        'u1_pd_per_chw':          g('u1_pd_per_chw'),
+        'iz_fully_immunized_pct': pct100(g('iz_fully_immunized_pct')),
+    }
+
+
+def _kpi_target_achievement_filters(request):
+    """
+    Shared multi-select + level + period parsing for the KPI Report page's
+    HIHTs Trends table (and its CSV download) — the KPI-data-backed
+    parallel to _target_achievement_filters above. Namespaced with a kta_
+    prefix so these params never clash with the page's own kpi_* trend
+    filters, which live on the same URL/page.
+    """
+    from .models import IndicatorTarget, KPIReport, KPIDataPoint
+
+    all_reports = KPIReport.objects.all()
+    report_ids  = list(all_reports.values_list('id', flat=True))
+
+    available_months = list(
+        KPIDataPoint.objects.filter(report_id__in=report_ids)
+        .values('year', 'month').distinct().order_by('year', 'month')
+    )
+
+    period = request.GET.get('kta_period', '')
+    year = month = None
+    if period:
+        try:
+            y, m = period.split('-')
+            year, month = int(y), int(m)
+        except (ValueError, TypeError):
+            year = month = None
+    if year is None and available_months:
+        year, month = available_months[-1]['year'], available_months[-1]['month']
+
+    counties     = request.GET.getlist('kta_county')
+    sub_counties = request.GET.getlist('kta_sub_county')
+
+    kta_at_top_level = not counties
+    if counties:
+        level = 'sub_county'
+    elif request.GET.get('kta_view') == 'sub_county':
+        level = 'sub_county'
+    else:
+        level = 'county'
+
+    dp_qs = (KPIDataPoint.objects.filter(report_id__in=report_ids, year=year, month=month)
+             if year is not None else KPIDataPoint.objects.none())
+
+    if level == 'county':
+        combo_qs = dp_qs.exclude(county='').filter(sub_county='')
+        combos = [(c, '') for c in combo_qs.values_list('county', flat=True).distinct().order_by('county')]
+    else:
+        combo_qs = dp_qs.exclude(county='').exclude(sub_county='')
+        if counties:
+            combo_qs = combo_qs.filter(county__in=counties)
+        if sub_counties:
+            combo_qs = combo_qs.filter(sub_county__in=sub_counties)
+        combos = list(combo_qs.values_list('county', 'sub_county').distinct().order_by('county', 'sub_county'))
+
+    rows = []
+    for county, sub_county in combos:
+        metrics = _kpi_build_target_metrics(county, sub_county, year, month, report_ids)
+        rows.append({'county': county, 'sub_county': sub_county, 'metrics': metrics})
+
+    targets_by_county = {}
+    for t in IndicatorTarget.objects.all():
+        targets_by_county.setdefault(t.county, {})[t.metric_key] = t.target
+
+    rank_by = request.GET.get('kta_rank_by', 'total_hihts_per_chw')
+    if rank_by not in TARGET_METRICS:
+        rank_by = 'total_hihts_per_chw'
+
+    rows = [_score_against_targets(r, targets_by_county, rank_by) for r in rows]
+    rows.sort(key=lambda r: (r['overall_pct'] is None, -(r['overall_pct'] or 0)))
+
+    # Cascading dropdown option lists.
+    kta_counties = list(
+        KPIDataPoint.objects.filter(report_id__in=report_ids)
+        .exclude(county='').values_list('county', flat=True).distinct().order_by('county')
+    )
+    kta_sub_counties = []
+    if counties:
+        kta_sub_counties = list(
+            KPIDataPoint.objects.filter(report_id__in=report_ids, county__in=counties)
+            .exclude(sub_county='').values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        )
+
+    return {
+        'rows':              rows,
+        'level':             level,
+        'rank_by':           rank_by,
+        'year':              year,
+        'month':             month,
+        'period':            f"{year}-{month}" if year and month else '',
+        'available_months':  available_months,
+        'counties':          counties,
+        'sub_counties':      sub_counties,
+        'kta_counties':      kta_counties,
+        'kta_sub_counties':  kta_sub_counties,
+        'kta_at_top_level':  kta_at_top_level,
+        'kta_view':          request.GET.get('kta_view', 'county') if kta_at_top_level else 'county',
+    }
+
+
+@login_required
+def download_kpi_target_achievement(request):
+    """CSV download for the KPI Report page's HIHTs Trends table."""
+    data = _kpi_target_achievement_filters(request)
+    geo_fields = KPI_TARGET_ACHIEVEMENT_GEO_LEVELS.get(data['level'], ['county', 'sub_county'])
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="kpi_hiht_target_achievement.csv"'
+    writer = csv.writer(response)
+    header = [f.replace('_', ' ').title() for f in geo_fields]
+    for key, meta in TARGET_METRICS.items():
+        header += [f"{meta['label']} (Actual)", f"{meta['label']} (Target)", f"{meta['label']} (Status)"]
+    header += ['Indicators Achieved', 'Overall %', 'Overall Status']
+    writer.writerow(header)
+
+    for r in data['rows']:
+        row_out = [r.get(f) for f in geo_fields]
+        for key in TARGET_METRICS:
+            s = r['scored'][key]
+            row_out += [s['value'], s['target'], s['colour']]
+        row_out += [f"{r['achieved_count']}/{r['scoreable_count']}", r['overall_pct'], r['overall_colour']]
+        writer.writerow(row_out)
+    return response
+
+
 @login_required
 def kpi_scorecard_view(request):
     """KPI Trends scorecard — reads from KPIDataPoint records."""
@@ -2912,7 +3087,7 @@ def kpi_scorecard_view(request):
     selected_county    = request.GET.get('kpi_county', '')
     selected_subcounty = request.GET.get('kpi_subcounty', '')
 
-    # Month selection — default last 6 available months
+    # Month selection — default Jan-of-latest-year-with-data through now
     selected_months = request.GET.getlist('kpi_month')  # list of "YYYY-MM"
 
     # Get all available reports
@@ -2938,10 +3113,18 @@ def kpi_scorecard_view(request):
             except Exception:
                 pass
     else:
-        last6 = available_months[-6:] if len(available_months) > 6 else available_months
+        # Default to "January up to now": every available month in the
+        # most recent year that has data, rather than a fixed last-6
+        # window. Using the data's own latest year (not wall-clock "this
+        # year") keeps this correct for test/demo data too.
+        if available_months:
+            latest_year = available_months[-1]['year']
+            default_months = [m for m in available_months if m['year'] == latest_year]
+        else:
+            default_months = []
         month_cols = [{'year': m['year'], 'month': m['month'],
                        'label': f"{MONTH_NAMES.get(m['month'], m['month'])} {m['year']}"}
-                      for m in last6]
+                      for m in default_months]
 
     # Geo resolution
     if selected_subcounty:
@@ -3080,6 +3263,10 @@ def kpi_scorecard_view(request):
         if any(cell.get('pct_target') is not None for cell in row['months'])
     ]
 
+    # HIHTs Trends ranking table — Target Achievement, sourced from this
+    # same KPI report data (see _kpi_target_achievement_filters above).
+    kta = _kpi_target_achievement_filters(request)
+
     return render(request, 'dashboard/kpi_scorecard.html', {
         'rows':              rows,
         'kpi_columns':       kpi_columns,
@@ -3094,6 +3281,25 @@ def kpi_scorecard_view(request):
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
         'trend_labels_json': json.dumps(trend_labels),
         'trend_series_json': json.dumps(trend_series),
+
+        # HIHTs Trends (Target Achievement) table
+        'ta_metrics':           TARGET_METRICS,
+        'kta_rows':             kta['rows'],
+        'kta_level':            kta['level'],
+        'kta_rank_by':          kta['rank_by'],
+        'kta_rank_by_label':    TARGET_METRICS.get(kta['rank_by'], {}).get('label', ''),
+        'kta_period':           kta['period'],
+        'kta_available_months': kta['available_months'],
+        'kta_selected_counties':     kta['counties'],
+        'kta_selected_sub_counties': kta['sub_counties'],
+        'kta_counties':         kta['kta_counties'],
+        'kta_sub_counties':     kta['kta_sub_counties'],
+        'kta_at_top_level':     kta['kta_at_top_level'],
+        'kta_view':             kta['kta_view'],
+        'kta_green_count':  sum(1 for r in kta['rows'] if r['overall_colour'] == 'green'),
+        'kta_yellow_count': sum(1 for r in kta['rows'] if r['overall_colour'] == 'yellow'),
+        'kta_red_count':    sum(1 for r in kta['rows'] if r['overall_colour'] == 'red'),
+        'kta_total_count':  len(kta['rows']),
     })
 
 

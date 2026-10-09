@@ -1,4 +1,5 @@
 {% extends 'dashboard/base.html' %}
+{% load dashboard_extras %}
 {% block title %}KPI Trends Scorecard{% endblock %}
 {% block body_class %}scorecard-page{% endblock %}
 
@@ -50,7 +51,7 @@
   {% endif %}
 
   <div class="filter-group">
-    <label class="filter-label">Months (select up to 6)</label>
+    <label class="filter-label">Months (defaults to Jan–now)</label>
     <select name="kpi_month" class="filter-select" multiple size="4" style="height:auto;min-width:200px;">
       {% for m in available_months %}
       {% with ym=m.year|stringformat:"s"|add:"-"|add:m.month|stringformat:"s" %}
@@ -170,6 +171,171 @@
     </div>
   </div>
 </div>
+
+<!-- ======================= HIHTs TRENDS (TARGET ACHIEVEMENT) ======================= -->
+<div class="section-label" style="margin-top:22px;">📋 HIHTs Trends — Target Achievement</div>
+<p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px">
+  Same ranking as the HIHTs Trends page — derived from this KPI report data instead, so it only drills to county → sub-county (a KPI report has no community health unit / CHW breakdown).
+</p>
+
+{% if not kta_available_months %}
+  <div class="table-empty">No KPI report data yet to rank against targets.</div>
+{% else %}
+
+<div class="filter-bar">
+  <form method="get" id="kta-filter-form" class="filter-form">
+    {% if selected_county %}<input type="hidden" name="kpi_county" value="{{ selected_county }}">{% endif %}
+    {% if selected_subcounty %}<input type="hidden" name="kpi_subcounty" value="{{ selected_subcounty }}">{% endif %}
+    {% for ym in selected_months %}<input type="hidden" name="kpi_month" value="{{ ym }}">{% endfor %}
+
+    <div class="filter-group">
+      <label class="filter-label">Month</label>
+      <select name="kta_period" class="filter-select" onchange="this.form.submit()">
+        {% for m in kta_available_months reversed %}
+          {% with y=m.year|stringformat:"s" mo=m.month|stringformat:"s" %}
+          {% with ym=y|add:"-"|add:mo %}
+          <option value="{{ m.year }}-{{ m.month }}" {% if kta_period == ym %}selected{% endif %}>
+            {% with mn=m.month %}
+              {% if mn == 1 %}Jan{% elif mn == 2 %}Feb{% elif mn == 3 %}Mar{% elif mn == 4 %}Apr{% elif mn == 5 %}May{% elif mn == 6 %}Jun{% elif mn == 7 %}Jul{% elif mn == 8 %}Aug{% elif mn == 9 %}Sep{% elif mn == 10 %}Oct{% elif mn == 11 %}Nov{% else %}Dec{% endif %}
+            {% endwith %}
+            {{ m.year }}
+          </option>
+          {% endwith %}
+          {% endwith %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Rank By</label>
+      <select name="kta_rank_by" class="filter-select" onchange="this.form.submit()">
+        {% for key, meta in ta_metrics.items %}
+          <option value="{{ key }}" {% if kta_rank_by == key %}selected{% endif %}>{{ meta.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if kta_selected_counties %}{{ kta_selected_counties|length }} selected{% else %}All Counties{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for c in kta_counties %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="kta_county" value="{{ c }}" {% if c in kta_selected_counties %}checked{% endif %} onchange="this.form.submit()"> {{ c }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if kta_selected_counties %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <div class="ms-dropdown">
+        <button type="button" class="filter-select ms-dropdown-btn" onclick="toggleMsDd(this)">
+          {% if kta_selected_sub_counties %}{{ kta_selected_sub_counties|length }} selected{% else %}All Sub-Counties{% endif %} ▾
+        </button>
+        <div class="ms-dropdown-menu">
+          {% for sc in kta_sub_counties %}
+          <label class="ms-dropdown-item">
+            <input type="checkbox" name="kta_sub_county" value="{{ sc }}" {% if sc in kta_selected_sub_counties %}checked{% endif %} onchange="this.form.submit()"> {{ sc }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if kta_selected_counties or kta_selected_sub_counties %}
+      <a href="?kta_period={{ kta_period }}{% if selected_county %}&kpi_county={{ selected_county }}{% endif %}{% if selected_subcounty %}&kpi_subcounty={{ selected_subcounty }}{% endif %}{% for ym in selected_months %}&kpi_month={{ ym }}{% endfor %}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+  </form>
+</div>
+
+{% if kta_at_top_level %}
+<div style="margin:-4px 0 12px;">
+  <span style="font-size:12px;color:var(--text-muted);margin-right:8px;">View:</span>
+  <a href="?kta_period={{ kta_period }}&kta_view=county" class="btn btn-sm {% if kta_view == 'county' %}btn-primary{% else %}btn-outline{% endif %}">Counties</a>
+  <a href="?kta_period={{ kta_period }}&kta_view=sub_county" class="btn btn-sm {% if kta_view == 'sub_county' %}btn-primary{% else %}btn-outline{% endif %}" style="margin-left:6px;">All Sub-Counties</a>
+</div>
+{% endif %}
+
+<div class="cards-grid">
+  <div class="stat-card navy">
+    <div class="stat-value">{{ kta_total_count }}</div>
+    <div class="stat-label">{{ kta_level|title }} rows shown</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-value">{{ kta_green_count }}</div>
+    <div class="stat-label">Achieving {{ kta_rank_by_label }} Target</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="stat-value">{{ kta_yellow_count }}</div>
+    <div class="stat-label">Approaching {{ kta_rank_by_label }} Target</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-value">{{ kta_red_count }}</div>
+    <div class="stat-label">Below {{ kta_rank_by_label }} Target</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h3 class="card-title">Ranked Best to Worst{% if kta_level == 'sub_county' and kta_selected_counties|length == 1 %} — {{ kta_selected_counties.0 }}{% endif %}</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Ranked by {{ kta_rank_by_label }} as a % of target.</p>
+    </div>
+    <a href="{% url 'download_kpi_target_achievement' %}?kta_period={{ kta_period }}&kta_view={{ kta_view }}&kta_rank_by={{ kta_rank_by }}{% for c in kta_selected_counties %}&kta_county={{ c }}{% endfor %}{% for sc in kta_selected_sub_counties %}&kta_sub_county={{ sc }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll table-scroll-tall">
+      {% if kta_rows %}
+      <table class="data-table ta-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{{ kta_level|title }}</th>
+            {% for key, meta in ta_metrics.items %}
+              <th class="num" title="{{ meta.label }}">{{ meta.label }}</th>
+            {% endfor %}
+            <th class="num">Achieved</th>
+            <th title="{{ kta_rank_by_label }} as a % of target">Rank Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in kta_rows %}
+          <tr>
+            <td class="zero">{{ forloop.counter }}</td>
+            <td>
+              {% if kta_level == 'county' %}{{ row.county }}
+              {% else %}{{ row.sub_county }}{% if kta_selected_counties|length != 1 %} <span style="color:var(--text-muted);font-size:11px;">({{ row.county }})</span>{% endif %}
+              {% endif %}
+            </td>
+            {% for key, meta in ta_metrics.items %}
+              {% with cell=row.scored|dict_get:key %}
+              <td class="num ta-cell ta-{{ cell.colour }}">
+                {% if cell.value is not None %}{{ cell.value }}{{ meta.unit }}{% else %}—{% endif %}
+              </td>
+              {% endwith %}
+            {% endfor %}
+            <td class="num">{{ row.achieved_count }}/{{ row.scoreable_count }}</td>
+            <td><span class="status-dot status-{{ row.overall_colour }}"></span> {{ row.overall_pct|default:"—" }}{% if row.overall_pct %}%{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="table-empty">No data for this selection.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
 {% endif %}
 
 {% endblock %}

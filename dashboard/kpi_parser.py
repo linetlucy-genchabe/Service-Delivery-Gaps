@@ -25,6 +25,17 @@ METRIC_MAP = {
     'preg_per_chp':         ('KPIs', 'Pregnancies registered per CHW'),
     'sync_pct':             ('KPIs', '% of CHWs who have synced their data per week'),
     'supervision_pct':      ('KPIs', '% of CHWs w/ supportive supervision in the last 1 month'),
+
+    # Added so the KPI Report's "HIHTs Trends" ranking table (mirrors the
+    # existing HIHT Trends page's Target Achievement tab) can score all 11
+    # TARGET_METRICS indicators straight from KPI report data.
+    'total_hihts_per_chw':    ('KPIs',  'High Impact Health Touches (HIHTs) per CHW'),
+    'non_fp_hihts_per_chw':   ('HIHTs', 'Non-FP HIHTs/CHW'),
+    'fp_cyp_per_chw':         ('KPIs',  'Couple Years of Protection (CYPs) per FP-trained per CHW'),
+    'anc_4plus_pct':          ('KPIs',  'Coverage of ANC: % 4+ ANC'),
+    'u5_pd_per_chw':          ('KPIs',  'Under-5 Positive Diagnoses for malaria, diarrhoea and ARI per CHW'),
+    'u1_pd_per_chw':          ('KPIs',  'Under-1 Positive Diagnoses for malaria, diarrhoea and ARI per CHW'),
+    'iz_fully_immunized_pct': ('KPIs',  '% of children 9-23 months assessed that are fully immunized'),
 }
 
 # Map month abbreviation in column names to month number
@@ -33,13 +44,20 @@ MONTH_ABBR = {
     'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12
 }
 
-COUNTIES = ['Kenya', 'Kisumu', 'Bungoma', 'Vihiga', 'Busia IS', 'Busia LS', 'KisumuIS2.0']
+COUNTIES = ['Kenya', 'Kisumu', 'Bungoma', 'Vihiga', 'Busia', 'Busia IS', 'Busia LS', 'KisumuIS2.0']
 
 COUNTY_SHEET_MAP = {
     'Kenya':      'Kenya',
     'Kisumu':     'Kisumu',
     'Bungoma':    'Bungoma',
     'Vihiga':     'Vihiga',
+    # Plain 'Busia' sheet, e.g. 'Busia_KPIs' — this is what current KE
+    # Monthly Report files actually use. Kept alongside the older
+    # 'Busia IS'/'Busia LS' entries below for backward compatibility with
+    # any older-format files that still split Busia into IS/LS sheets —
+    # without this entry, a current-format file produced zero Busia data
+    # (its 'Busia IS_*'/'Busia LS_*' sheets don't exist in it).
+    'Busia':      'Busia',
     'Busia IS':   'Busia IS',
     'Busia LS':   'Busia LS',
     'KisumuIS2.0':'KisumuIS2.0',
