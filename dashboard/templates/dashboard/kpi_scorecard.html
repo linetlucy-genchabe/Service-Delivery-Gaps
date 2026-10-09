@@ -171,45 +171,9 @@
   </div>
 </div>
 
-<!-- ======================= HIHTs TRENDS ======================= -->
-<div class="card" style="margin-top:22px;">
-  <div class="card-header">
-    <div>
-      <h3 class="card-title">📋 HIHTs Trends — {% if selected_subcounty %}{{ selected_subcounty }}{% elif selected_county %}{{ selected_county }}{% else %}Kenya{% endif %}</h3>
-      <p class="card-subtitle">Total HIHTs/CHW, same months as the table above &nbsp;·&nbsp; Source: KE Monthly Report uploads</p>
-    </div>
-  </div>
-  <div class="card-body no-pad">
-    <div style="overflow-x:auto;">
-    {% if hiht_trend_rows %}
-    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12px;">
-      <thead>
-        <tr style="background:#1B3A6B;">
-          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">{{ hiht_trend_level|title }}</th>
-          {% for kc in kpi_columns %}
-          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ kc.label }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in hiht_trend_rows %}
-        <tr>
-          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
-          {% for v in row.values %}
-          <td style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;{% if v is None %}color:#94A3B8;font-weight:400;{% endif %}">
-            {% if v is not None %}{{ v }}{% else %}—{% endif %}
-          </td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="table-empty">No data for this selection.</div>
-    {% endif %}
-    </div>
-  </div>
-</div>
+<p style="font-size:12px;color:var(--text-muted);margin-top:18px;">
+  Looking for HIHTs Trends from this KPI report data? It now lives on the <a href="{% url 'hiht_trends' %}?tab=kpi_hiht">HIHTs Trends page</a>, alongside the other HIHT views.
+</p>
 
 {% endif %}
 

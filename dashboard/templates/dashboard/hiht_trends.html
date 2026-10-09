@@ -13,11 +13,12 @@
 
 <div class="category-nav" style="margin-bottom:16px;">
   <button type="button" class="cat-btn {% if active_tab == 'target_achievement' %}active{% endif %}" id="ht-tab-btn-ta" onclick="showHtTab('target_achievement')">🎯 Target Achievement</button>
-  <button type="button" class="cat-btn {% if active_tab != 'target_achievement' %}active{% endif %}" id="ht-tab-btn-trend" onclick="showHtTab('trend')">📈 Trend</button>
+  <button type="button" class="cat-btn {% if active_tab == 'trend' %}active{% endif %}" id="ht-tab-btn-trend" onclick="showHtTab('trend')">📈 Trend</button>
+  <button type="button" class="cat-btn {% if active_tab == 'kpi_hiht' %}active{% endif %}" id="ht-tab-btn-kpi" onclick="showHtTab('kpi_hiht')">📊 HIHTs Trends from KPI Report</button>
 </div>
 
 <!-- ======================= TREND TAB ======================= -->
-<div id="ht-tab-trend" {% if active_tab == 'target_achievement' %}style="display:none;"{% endif %}>
+<div id="ht-tab-trend" {% if active_tab != 'trend' %}style="display:none;"{% endif %}>
 
 <div class="filter-bar">
   <form method="get" id="hiht-trends-filter-form" class="filter-form">
@@ -267,6 +268,115 @@
 {% endif %}
 </div>
 
+<!-- ======================= HIHTs TRENDS FROM KPI REPORT TAB ======================= -->
+<div id="ht-tab-kpi_hiht" {% if active_tab != 'kpi_hiht' %}style="display:none;"{% endif %}>
+
+{% if not khr_years %}
+  <div class="table-empty">No KPI report data yet — upload a KE Monthly Report file first.</div>
+{% else %}
+
+<div class="filter-bar">
+  <form method="get" id="khr-filter-form" class="filter-form">
+    <input type="hidden" name="tab" value="kpi_hiht">
+
+    <div class="filter-group">
+      <label class="filter-label">Year</label>
+      <select name="khr_year" class="filter-select" onchange="this.form.submit()">
+        {% for y in khr_years reversed %}
+          <option value="{{ y }}" {% if khr_year == y %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Period</label>
+      <select name="khr_range" class="filter-select" onchange="this.form.submit()">
+        <option value="ytd" {% if khr_range == 'ytd' %}selected{% endif %}>Jan – Latest</option>
+        <option value="3" {% if khr_range == '3' %}selected{% endif %}>Last 3 Months</option>
+        <option value="6" {% if khr_range == '6' %}selected{% endif %}>Last 6 Months</option>
+        <option value="12" {% if khr_range == '12' %}selected{% endif %}>Last 12 Months</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Or pick specific months</label>
+      <select name="khr_month" class="filter-select" multiple size="3" style="height:auto;min-width:170px;" onchange="this.form.submit()">
+        {% for m in khr_months_in_year %}
+          <option value="{{ m.num }}" {% if m.num in khr_selected_months %}selected{% endif %}>{{ m.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">County</label>
+      <select name="khr_county" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Counties</option>
+        {% for c in khr_county_options %}
+          <option value="{{ c }}" {% if khr_selected_county == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if khr_selected_county %}
+    <div class="filter-group">
+      <label class="filter-label">Sub-County</label>
+      <select name="khr_subcounty" class="filter-select" onchange="this.form.submit()">
+        <option value="">All Sub-Counties</option>
+        {% for sc in khr_subcounty_options %}
+          <option value="{{ sc }}" {% if khr_selected_subcounty == sc %}selected{% endif %}>{{ sc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    {% if khr_selected_county %}
+      <a href="?tab=kpi_hiht&khr_year={{ khr_year }}&khr_range={{ khr_range }}" class="filter-reset">✕ Clear Filters</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card" style="margin-top:8px;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">HIHTs Trends from KPI Report — {% if khr_selected_subcounty %}{{ khr_selected_subcounty }}{% elif khr_selected_county %}{{ khr_selected_county }}{% else %}Kenya{% endif %}</h3>
+      <p class="card-subtitle">🟢 ≥100% of target &nbsp;·&nbsp; 🟡 75–99% &nbsp;·&nbsp; 🔴 &lt;75% &nbsp;·&nbsp; Total HIHTs/CHW &nbsp;·&nbsp; Source: KE Monthly Report uploads</p>
+    </div>
+  </div>
+  <div class="card-body no-pad">
+    <div style="overflow-x:auto;">
+    {% if khr_rows %}
+    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#1B3A6B;">
+          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">{{ khr_level|title }}</th>
+          {% for mc in khr_month_cols %}
+          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ mc.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in khr_rows %}
+        <tr>
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.label }}</td>
+          {% for cell in row.values %}
+          <td class="ta-cell ta-{{ cell.colour }}" style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;">
+            {% if cell.value is not None %}{{ cell.value }}{% else %}—{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="table-empty">No data for this selection.</div>
+    {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endif %}
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -287,8 +397,10 @@ document.addEventListener('DOMContentLoaded', function () {
 function showHtTab(tab) {
   document.getElementById('ht-tab-trend').style.display = (tab === 'trend') ? '' : 'none';
   document.getElementById('ht-tab-target_achievement').style.display = (tab === 'target_achievement') ? '' : 'none';
+  document.getElementById('ht-tab-kpi_hiht').style.display = (tab === 'kpi_hiht') ? '' : 'none';
   document.getElementById('ht-tab-btn-trend').classList.toggle('active', tab === 'trend');
   document.getElementById('ht-tab-btn-ta').classList.toggle('active', tab === 'target_achievement');
+  document.getElementById('ht-tab-btn-kpi').classList.toggle('active', tab === 'kpi_hiht');
 }
 
 function toggleMsDd(btn) {

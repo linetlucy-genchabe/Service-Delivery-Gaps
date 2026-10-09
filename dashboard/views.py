@@ -651,6 +651,9 @@ def hiht_trends_view(request):
         ta_latest_qs.filter(community_health_unit__in=ta_chus).values_list('chw_name', flat=True).distinct().order_by('chw_name')
     ) if ta_chus else []
 
+    # --- HIHTs Trends from KPI Report tab — same page, namespaced khr_ filters ---
+    khr = _kpi_hiht_trend_filters(request)
+
     return render(request, 'dashboard/hiht_trends.html', {
         'counties':            counties,
         'sub_counties':        sub_counties,
@@ -685,6 +688,20 @@ def hiht_trends_view(request):
         'ta_red_count':    sum(1 for r in ta_rows if r['overall_colour'] == 'red'),
         'ta_total_count':  len(ta_rows),
         'is_uploader': is_uploader(request.user),
+
+        # HIHTs Trends from KPI Report tab context.
+        'khr_years':              khr['years'],
+        'khr_year':               khr['year'],
+        'khr_range':              khr['range'],
+        'khr_months_in_year':     khr['months_in_year'],
+        'khr_selected_months':    khr['months_selected'],
+        'khr_month_cols':         khr['month_cols'],
+        'khr_selected_county':    khr['selected_county'],
+        'khr_selected_subcounty': khr['selected_subcounty'],
+        'khr_county_options':     khr['county_options'],
+        'khr_subcounty_options':  khr['subcounty_options'],
+        'khr_level':              khr['level'],
+        'khr_rows':               khr['rows'],
     })
 
 
@@ -2925,22 +2942,59 @@ def compute_kpi_scorecard_metrics(county, sub_county, year, month, report_ids):
 
 
 # ===========================================================================
-# KPI Report page — "HIHTs Trends" table: Total HIHTs/CHW only, one column
-# per month (Jan-now), one row per geography — sourced from KPIDataPoint
-# (KPI report uploads). Drills county -> sub-county only (a KPI report has
-# no community health unit / CHW breakdown), and reuses the same
-# county/sub-county filter and month-column selection already on the page
-# so there's one set of filters driving both tables, not two.
+# HIHTs Trends page — "HIHTs Trends from KPI Report" tab: Total HIHTs/CHW
+# only, one column per month, one row per geography — sourced from
+# KPIDataPoint (KPI report uploads) rather than CHWRecord. Drills county ->
+# sub-county only (a KPI report has no community health unit / CHW
+# breakdown). Cells are coloured against the same per-county
+# IndicatorTarget used everywhere else, for the 'total_hihts_per_chw' key.
 # ===========================================================================
 
-def _kpi_hiht_trend_rows(selected_county, selected_subcounty, report_ids, month_cols):
+def _kpi_hiht_colour(value, target):
+    if value is None or not target:
+        return 'grey'
+    pct = value / target * 100
+    return 'green' if pct >= 100 else 'yellow' if pct >= 75 else 'red'
+
+
+def _kpi_hiht_trend_filters(request):
     """
-    One row per geography (whatever the page's own county/sub-county filter
-    currently resolves to), each with one Total HIHTs/CHW value per month
-    in `month_cols` (the same month columns the KPI Scorecard table above
-    uses, so both tables always agree on which months are shown).
+    Year + period-range + geography parsing for the "HIHTs Trends from KPI
+    Report" tab (khr_ namespaced GET params, since this shares the page/URL
+    with the Trend and Target Achievement tabs' own filters).
     """
-    from .models import KPIDataPoint
+    from .models import KPIReport, KPIDataPoint, IndicatorTarget
+
+    report_ids = list(KPIReport.objects.all().values_list('id', flat=True))
+    years = sorted(set(KPIDataPoint.objects.filter(report_id__in=report_ids).values_list('year', flat=True)))
+
+    year_param = request.GET.get('khr_year')
+    year = int(year_param) if year_param and year_param.isdigit() and int(year_param) in years else (years[-1] if years else None)
+
+    months_in_year = sorted(set(
+        KPIDataPoint.objects.filter(report_id__in=report_ids, year=year).values_list('month', flat=True)
+    )) if year else []
+
+    explicit_months = [int(m) for m in request.GET.getlist('khr_month') if m.isdigit() and int(m) in months_in_year]
+    range_choice = request.GET.get('khr_range', 'ytd')
+
+    if explicit_months:
+        months_selected = sorted(explicit_months)
+    elif months_in_year:
+        latest = months_in_year[-1]
+        if range_choice == '3':
+            months_selected = [m for m in months_in_year if m > latest - 3]
+        elif range_choice == '6':
+            months_selected = [m for m in months_in_year if m > latest - 6]
+        else:  # 'ytd' (default) and '12' both mean "everything available this year"
+            months_selected = months_in_year
+    else:
+        months_selected = []
+
+    month_cols = [{'year': year, 'month': m, 'label': f"{MONTH_NAMES.get(m, m)} {year}"} for m in months_selected]
+
+    selected_county    = request.GET.get('khr_county', '')
+    selected_subcounty = request.GET.get('khr_subcounty', '')
 
     if selected_subcounty:
         geos = [(selected_county, selected_subcounty)]
@@ -2957,17 +3011,42 @@ def _kpi_hiht_trend_rows(selected_county, selected_subcounty, report_ids, month_
         )
         geos = [(c, '') for c in counties]
 
+    targets = {t.county: t.target for t in IndicatorTarget.objects.filter(metric_key='total_hihts_per_chw')}
+
     rows = []
     for county, sub_county in geos:
-        values = [get_kpi_value(county, sub_county, 'total_hihts_per_chw', mc['year'], mc['month'], report_ids)
-                   for mc in month_cols]
-        rows.append({
-            'county':     county,
-            'sub_county': sub_county,
-            'label':      sub_county or county,
-            'values':     values,
-        })
-    return rows
+        target = targets.get(county)
+        values = []
+        for mc in month_cols:
+            v = get_kpi_value(county, sub_county, 'total_hihts_per_chw', mc['year'], mc['month'], report_ids)
+            values.append({'value': v, 'colour': _kpi_hiht_colour(v, target)})
+        rows.append({'county': county, 'sub_county': sub_county, 'label': sub_county or county, 'values': values})
+
+    county_options = list(
+        KPIDataPoint.objects.filter(report_id__in=report_ids)
+        .exclude(county='').values_list('county', flat=True).distinct().order_by('county')
+    )
+    subcounty_options = []
+    if selected_county:
+        subcounty_options = list(
+            KPIDataPoint.objects.filter(report_id__in=report_ids, county=selected_county)
+            .exclude(sub_county='').values_list('sub_county', flat=True).distinct().order_by('sub_county')
+        )
+
+    return {
+        'years':              years,
+        'year':               year,
+        'range':              range_choice,
+        'months_in_year':     [{'num': m, 'label': MONTH_NAMES.get(m, m)} for m in months_in_year],
+        'months_selected':    months_selected,
+        'month_cols':         month_cols,
+        'selected_county':    selected_county,
+        'selected_subcounty': selected_subcounty,
+        'county_options':     county_options,
+        'subcounty_options':  subcounty_options,
+        'level':              'sub_county' if selected_county else 'county',
+        'rows':               rows,
+    }
 
 
 @login_required
@@ -3155,10 +3234,6 @@ def kpi_scorecard_view(request):
         if any(cell.get('pct_target') is not None for cell in row['months'])
     ]
 
-    # HIHTs Trends table — Total HIHTs/CHW only, same months as the table
-    # above, same county/sub-county filter as the rest of the page.
-    hiht_trend_rows = _kpi_hiht_trend_rows(county_key, subcounty_key, report_ids, month_cols)
-
     return render(request, 'dashboard/kpi_scorecard.html', {
         'rows':              rows,
         'kpi_columns':       kpi_columns,
@@ -3173,10 +3248,6 @@ def kpi_scorecard_view(request):
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
         'trend_labels_json': json.dumps(trend_labels),
         'trend_series_json': json.dumps(trend_series),
-
-        # HIHTs Trends table — Total HIHTs/CHW, one column per month
-        'hiht_trend_rows':    hiht_trend_rows,
-        'hiht_trend_level':   'sub_county' if (selected_county or selected_subcounty) else 'county',
     })
 
 
