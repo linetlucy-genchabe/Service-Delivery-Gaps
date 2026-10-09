@@ -651,9 +651,6 @@ def hiht_trends_view(request):
         ta_latest_qs.filter(community_health_unit__in=ta_chus).values_list('chw_name', flat=True).distinct().order_by('chw_name')
     ) if ta_chus else []
 
-    # --- HIHTs Trends from KPI Report tab — same page, namespaced khr_ filters ---
-    khr = _kpi_hiht_trend_filters(request)
-
     return render(request, 'dashboard/hiht_trends.html', {
         'counties':            counties,
         'sub_counties':        sub_counties,
@@ -688,20 +685,6 @@ def hiht_trends_view(request):
         'ta_red_count':    sum(1 for r in ta_rows if r['overall_colour'] == 'red'),
         'ta_total_count':  len(ta_rows),
         'is_uploader': is_uploader(request.user),
-
-        # HIHTs Trends from KPI Report tab context.
-        'khr_years':              khr['years'],
-        'khr_year':               khr['year'],
-        'khr_range':              khr['range'],
-        'khr_months_in_year':     khr['months_in_year'],
-        'khr_selected_months':    khr['months_selected'],
-        'khr_month_cols':         khr['month_cols'],
-        'khr_selected_county':    khr['selected_county'],
-        'khr_selected_subcounty': khr['selected_subcounty'],
-        'khr_county_options':     khr['county_options'],
-        'khr_subcounty_options':  khr['subcounty_options'],
-        'khr_level':              khr['level'],
-        'khr_rows':               khr['rows'],
     })
 
 
@@ -2960,8 +2943,8 @@ def _kpi_hiht_colour(value, target):
 def _kpi_hiht_trend_filters(request):
     """
     Year + period-range + geography parsing for the "HIHTs Trends from KPI
-    Report" tab (khr_ namespaced GET params, since this shares the page/URL
-    with the Trend and Target Achievement tabs' own filters).
+    Report" section on the KPI Scorecard page (khr_ namespaced GET params,
+    so they don't collide with that page's own kpi_* filters).
     """
     from .models import KPIReport, KPIDataPoint, IndicatorTarget
 
@@ -3234,6 +3217,11 @@ def kpi_scorecard_view(request):
         if any(cell.get('pct_target') is not None for cell in row['months'])
     ]
 
+    # --- HIHTs Trends from KPI Report — colour-coded table with its own
+    # year/period/geography filters, namespaced khr_ so it doesn't collide
+    # with this page's own kpi_* filters above.
+    khr = _kpi_hiht_trend_filters(request)
+
     return render(request, 'dashboard/kpi_scorecard.html', {
         'rows':              rows,
         'kpi_columns':       kpi_columns,
@@ -3248,6 +3236,20 @@ def kpi_scorecard_view(request):
         'is_uploader': is_uploader(request.user) if request.user.is_authenticated else False,
         'trend_labels_json': json.dumps(trend_labels),
         'trend_series_json': json.dumps(trend_series),
+
+        # HIHTs Trends from KPI Report — colour-coded table context.
+        'khr_years':              khr['years'],
+        'khr_year':               khr['year'],
+        'khr_range':              khr['range'],
+        'khr_months_in_year':     khr['months_in_year'],
+        'khr_selected_months':    khr['months_selected'],
+        'khr_month_cols':         khr['month_cols'],
+        'khr_selected_county':    khr['selected_county'],
+        'khr_selected_subcounty': khr['selected_subcounty'],
+        'khr_county_options':     khr['county_options'],
+        'khr_subcounty_options':  khr['subcounty_options'],
+        'khr_level':              khr['level'],
+        'khr_rows':               khr['rows'],
     })
 
 
