@@ -60,8 +60,26 @@ COUNTY_SHEET_MAP = {
     'Busia':      'Busia',
     'Busia IS':   'Busia IS',
     'Busia LS':   'Busia LS',
+    # 'KisumuIS2.0' is not a separate county — it's a second reporting sheet
+    # that happens to carry two of Kisumu's own sub-counties (Muhoroni,
+    # Nyakach), with the same values already present in the main Kisumu
+    # sheet. Kept as its own sheet-lookup key (that's the sheet's real name
+    # in the file) but merged into 'Kisumu' below so it doesn't show up as
+    # an 8th pseudo-county with only 2 sub-counties.
     'KisumuIS2.0':'KisumuIS2.0',
 }
+
+# Sheet-lookup keys above whose data should be filed under a different
+# county name than the key itself.
+COUNTY_NAME_OVERRIDE = {
+    'KisumuIS2.0': 'Kisumu',
+}
+
+# Sheet-lookup keys above whose own county-level aggregate row should be
+# skipped — because, after COUNTY_NAME_OVERRIDE, it would collide with (or
+# duplicate) the real county's own aggregate row rather than represent a
+# genuine distinct geography.
+SKIP_COUNTY_AGGREGATE_FOR = {'KisumuIS2.0'}
 
 def _parse_col(col):
     """Parse column name like 'Jan26' -> (month_int, year_int) or None."""
@@ -100,7 +118,8 @@ def parse_kpi_report(report: KPIReport):
     to_create = []
 
     for county, sheet_prefix in COUNTY_SHEET_MAP.items():
-        county_name = '' if county == 'Kenya' else county
+        stored_county = COUNTY_NAME_OVERRIDE.get(county, county)
+        county_name = '' if stored_county == 'Kenya' else stored_county
 
         for metric_key, (sheet_suffix, metric_name) in METRIC_MAP.items():
             sheet_name = f"{sheet_prefix}_{sheet_suffix}"
@@ -124,12 +143,24 @@ def parse_kpi_report(report: KPIReport):
             for _, row in metric_rows.iterrows():
                 raw_subloc = str(row.get('Sublocation', '')).strip()
 
-                # Determine sub_county
-                # County-level rows have county name in caps or match county
-                if raw_subloc.upper() == raw_subloc or raw_subloc.upper() == county.upper() or county.upper() in raw_subloc.upper():
+                # Determine sub_county. County-level aggregate rows are
+                # written in full-caps "shouting" style ("KISUMU COUNTY",
+                # "BUSIA COUNTY") in every sheet seen so far — that's the
+                # only reliable signal. Matching on "does this sub-county's
+                # name equal or contain the county's name" is NOT safe:
+                # it silently swallowed real sub-counties whose name starts
+                # with the county's own name ("Kisumu Central/East/West"
+                # all contain "Kisumu") or matches it outright (Vihiga
+                # county has a sub-county also named "Vihiga") into the
+                # county aggregate instead of keeping them as their own
+                # rows — losing that sub-county's data entirely.
+                if raw_subloc.upper() == raw_subloc:
                     sub_county = ''
                 else:
                     sub_county = raw_subloc
+
+                if sub_county == '' and county in SKIP_COUNTY_AGGREGATE_FOR:
+                    continue
 
                 for col in month_cols:
                     parsed = _parse_col(col)

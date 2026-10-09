@@ -76,7 +76,11 @@
           <td><strong>{{ r }}</strong></td>
           <td class="zero">{{ r.uploaded_at|date:"d M Y H:i" }}</td>
           <td>{{ r.notes|default:"—" }}</td>
-          <td>
+          <td style="display:flex;gap:8px;">
+            <form method="post" action="{% url 'kpi_reprocess' r.pk %}" onsubmit="return confirm('Re-parse this report\'s file with the current logic? Fixes/new metrics since it was uploaded will be picked up.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm" style="background:#DBEAFE;color:#1E40AF;border:none;cursor:pointer;">↻ Reprocess</button>
+            </form>
             <form method="post" action="{% url 'kpi_delete' r.pk %}" onsubmit="return confirm('Delete this report and all its data?')">
               {% csrf_token %}
               <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:none;cursor:pointer;">🗑 Delete</button>
