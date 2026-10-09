@@ -2818,6 +2818,27 @@ def kpi_delete_view(request, pk):
     return redirect('kpi_upload')
 
 
+@login_required
+def kpi_reprocess_view(request, pk):
+    """
+    Re-runs parse_kpi_report against an already-uploaded report's stored
+    file, without re-uploading it — for when kpi_parser.py itself changes
+    (a new metric mapping, a county-name fix) and existing reports need
+    their KPIDataPoint rows regenerated to pick it up. parse_kpi_report
+    already clears the report's old data points before reparsing.
+    """
+    from .models import KPIReport
+    from .kpi_parser import parse_kpi_report
+    if request.method == 'POST':
+        report = get_object_or_404(KPIReport, pk=pk)
+        rows, errors = parse_kpi_report(report)
+        if errors:
+            messages.error(request, f"Reprocessed with warnings: {'; '.join(errors[:3])}")
+        else:
+            messages.success(request, f"Reprocessed {report} — {rows} data points.")
+    return redirect('kpi_upload')
+
+
 # ===========================================================================
 # KPI SCORECARD DATA HELPERS
 # ===========================================================================
