@@ -40,7 +40,6 @@ urlpatterns = [
     path('kpi/',                   views.kpi_scorecard_view,     name='kpi_scorecard'),
     path('kpi/upload/',            views.kpi_upload_view,        name='kpi_upload'),
     path('kpi/delete/<int:pk>/',   views.kpi_delete_view,        name='kpi_delete'),
-    path('kpi/hihts-trends/download/', views.download_kpi_target_achievement, name='download_kpi_target_achievement'),
     path('download/inactive-chps/', views.download_inactive_chps, name='download_inactive_chps'),
     path('sync/',                          views.sync_dashboard_view,    name='sync_dashboard'),
     path('sync/upload/',                   views.sync_upload_view,       name='sync_upload'),
