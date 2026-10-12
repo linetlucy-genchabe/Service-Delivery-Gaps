@@ -264,6 +264,48 @@
   </div>
 </div>
 
+<!-- ======================= CHUs WITH 0 HIHTs DRILL-DOWN ======================= -->
+<div class="card" id="ta-zero-hiht-card" style="margin-top:16px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h3 class="card-title">⚠️ CHUs with 0 HIHTs{% if ta_selected_counties|length == 1 %} — {{ ta_selected_counties.0 }}{% endif %}</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">Community Health Units that reported zero total HIHTs this month, among CHUs with at least one active CHP.</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <a href="{% url 'download_zero_hiht_chus' %}?ta_batch={{ ta_selected_batch }}{% for c in ta_selected_counties %}&ta_county={{ c }}{% endfor %}{% for sc in ta_selected_sub_counties %}&ta_sub_county={{ sc }}{% endfor %}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+      <button type="button" class="btn btn-sm btn-outline image-dl-btn" onclick="downloadChartAsImage('ta-zero-hiht-card', 'chus_with_zero_hihts.png', this)">🖼 Download Image</button>
+    </div>
+  </div>
+  <div class="card-body no-pad">
+    <div class="table-scroll">
+      {% if ta_zero_hiht_chus %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>County</th>
+            <th>Sub-County</th>
+            <th>Community Health Unit</th>
+            <th class="num">Active CHPs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in ta_zero_hiht_chus %}
+          <tr>
+            <td>{{ row.county }}</td>
+            <td>{{ row.sub_county }}</td>
+            <td>{{ row.community_health_unit }}</td>
+            <td class="num">{{ row.active_all }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="table-empty">No CHUs reported zero HIHTs this month for this selection. 🎉</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 {% endif %}
 </div>
 
@@ -271,6 +313,15 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  /* Image export is a laptop/desktop convenience (saving a PNG to attach
+     somewhere) — on a phone it's easier to just screenshot, so hide the
+     button there rather than risk a slow/awkward download on mobile data. */
+  @media (max-width: 900px) {
+    .image-dl-btn { display: none; }
+  }
+</style>
 <script>
 const COUNTY      = "{{ selected_county }}";
 const SUB_COUNTY  = "{{ selected_subcounty }}";
