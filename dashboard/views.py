@@ -1187,7 +1187,7 @@ def download_supervised_3plus(request):
 # ===========================================================================
 
 from .models import SyncUploadBatch, CHPSyncRecord
-from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q
+from .parsers import parse_sync_file, compute_sync_indicators, NEVER_SYNCED_Q, TELEMETRY_ISSUE_Q, SYNCED_Q
 
 
 def _last_report_display(record):
@@ -2006,11 +2006,18 @@ def compute_scorecard_metrics(chw_qs, sync_qs=None):
 
     sup_pct = round(supervised / total_active * 100, 1) if total_active else 0
 
-    # 7. Sync rate — from sync queryset if provided
+    # 7. Sync rate — from sync queryset if provided. Uses SYNCED_Q (a
+    # submitted form OR confirmed telemetry upload — see parsers.py) so a
+    # CHP whose report reached the server via the newer forms_recorded/
+    # latest_form_date signal counts as synced too, not just the older
+    # days_synced telemetry. For older batches that never had the
+    # forms_recorded columns populated, SYNCED_Q reduces to the same
+    # days_synced/last_sync_date check used before, so their sync rate is
+    # unaffected.
     sync_pct = None
     if sync_qs is not None:
         total_sync = sync_qs.count()
-        synced     = sync_qs.filter(days_synced__gte=1).count()
+        synced     = sync_qs.filter(SYNCED_Q).count()
         sync_pct   = round(synced / total_sync * 100, 1) if total_sync else 0
 
     # 8. Child Health Indicators
@@ -3698,11 +3705,15 @@ def compute_pa_metrics(chw_qs, sync_qs=None):
             return round(n / d * 100, 1)
         return None
 
-    # Sync rate from sync_qs if available
+    # Sync rate from sync_qs if available. SYNCED_Q (submitted form OR
+    # confirmed telemetry upload) picks up the newer forms_recorded signal
+    # as well as the older days_synced one; for batches that never had
+    # forms_recorded populated it reduces to the old days_synced check, so
+    # older reports' rates are unaffected.
     sync_rate = None
     sync_count = None
     if sync_qs is not None:
-        synced = sync_qs.filter(days_synced__gte=1).count()
+        synced = sync_qs.filter(SYNCED_Q).count()
         total_sync = sync_qs.count()
         if total_sync > 0:
             sync_rate  = round(synced / total_sync * 100, 1)
