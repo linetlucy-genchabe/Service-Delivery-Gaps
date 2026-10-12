@@ -651,11 +651,6 @@ def hiht_trends_view(request):
         ta_latest_qs.filter(community_health_unit__in=ta_chus).values_list('chw_name', flat=True).distinct().order_by('chw_name')
     ) if ta_chus else []
 
-    # CHUs with literally zero HIHTs this month — a flagged "needs
-    # attention" drill-down, scoped to whatever county/sub-county filters
-    # are active (not the CHU/CHP ones, since this list is about CHUs).
-    ta_zero_hiht_chus = _zero_hiht_chus(ta_batch_id, ta_counties, ta_sub_counties) if ta_batch_id else []
-
     return render(request, 'dashboard/hiht_trends.html', {
         'counties':            counties,
         'sub_counties':        sub_counties,
@@ -689,7 +684,6 @@ def hiht_trends_view(request):
         'ta_yellow_count': sum(1 for r in ta_rows if r['overall_colour'] == 'yellow'),
         'ta_red_count':    sum(1 for r in ta_rows if r['overall_colour'] == 'red'),
         'ta_total_count':  len(ta_rows),
-        'ta_zero_hiht_chus':  ta_zero_hiht_chus,
         'is_uploader': is_uploader(request.user),
     })
 
@@ -4259,40 +4253,6 @@ def download_target_achievement(request):
             row_out += [s['value'], s['target'], s['colour']]
         row_out += [f"{r['achieved_count']}/{r['scoreable_count']}", r['overall_pct'], r['overall_colour']]
         writer.writerow(row_out)
-    return response
-
-
-def _zero_hiht_chus(batch_id, counties, sub_counties):
-    """
-    CHUs (within whatever county/sub-county filters are active) that
-    reported literally zero total HIHTs for the selected month — a
-    flagged "needs attention" list, separate from the Ranked Best to
-    Worst table's full county/sub-county/CHU/CHP comparison. A CHU with
-    no active CHPs at all is excluded (nothing to flag — there's no data,
-    rather than zero activity from CHPs who are there).
-    """
-    qs = CHWRecord.objects.filter(batch_id=batch_id) if batch_id else CHWRecord.objects.none()
-    if counties:     qs = qs.filter(county__in=counties)
-    if sub_counties: qs = qs.filter(sub_county__in=sub_counties)
-    rows = _target_achievement_query(qs, HIHT_GEO_LEVELS['chu'])
-    zero_rows = [r for r in rows if r['active_all'] and r['metrics'].get('total_hihts_per_chw') == 0]
-    zero_rows.sort(key=lambda r: (r['county'], r['sub_county'], r['community_health_unit']))
-    return zero_rows
-
-
-@login_required
-def download_zero_hiht_chus(request):
-    batch_id = request.GET.get('ta_batch', '')
-    counties     = request.GET.getlist('ta_county')
-    sub_counties = request.GET.getlist('ta_sub_county')
-    rows = _zero_hiht_chus(batch_id, counties, sub_counties)
-
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="chus_with_zero_hihts.csv"'
-    writer = csv.writer(response)
-    writer.writerow(['County', 'Sub-County', 'Community Health Unit', 'Active CHPs'])
-    for r in rows:
-        writer.writerow([r['county'], r['sub_county'], r['community_health_unit'], r['active_all']])
     return response
 
 
