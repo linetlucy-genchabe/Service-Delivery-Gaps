@@ -798,17 +798,12 @@ def _lead_chp_heat_colour(value, target=LEAD_CHP_HIHT_TARGET):
     return f'hsl({hue:.0f}, 65%, 88%)'
 
 
-@login_required
-def lead_chps_hiht_view(request):
+def _lead_chps_hiht_data(sc_filter):
     """
-    TEMP PAGE (delete once this ad-hoc request is done with) — HIHT trend
-    for a fixed roster of Kisumu Central lead CHPs, one row per CHU/lead
-    CHP, one column per monthly batch. Mirrors the colour-coded style of
-    the "HIHTs Trends from KPI Report" table on the KPI Scorecard page,
-    but pulls from the raw CHW Detail data (per-CHP, not the KPI report)
-    so it reflects this specific named roster. Colours are a continuous
-    gradient against a fixed per-CHP target (LEAD_CHP_HIHT_TARGET), not
-    the per-county IndicatorTarget used elsewhere in the app.
+    Shared data-build for the temp Lead CHPs HIHT page: the page view, the
+    CSV download and the PDF download all call this so the three stay in
+    sync rather than drifting apart. `sc_filter` is 'all', 'Kisumu Central'
+    or 'Seme'.
     """
     monthly_batches = auto_detect_monthly_batches()
     trend = compute_hiht_trend(level='chp', batches=monthly_batches)
@@ -819,7 +814,6 @@ def lead_chps_hiht_view(request):
         chu_key = _lead_chp_norm(s['geo'].get('community_health_unit'))
         by_chu.setdefault(chu_key, []).append(s)
 
-    sc_filter = request.GET.get('sc', 'all')
     if sc_filter not in ('all', LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY, LEAD_CHPS_SEME_SUBCOUNTY):
         sc_filter = 'all'
     roster = LEAD_CHPS_ROSTER if sc_filter == 'all' else [
@@ -881,7 +875,7 @@ def lead_chps_hiht_view(request):
             sections.append(sec)
         sec['rows'].append(row)
 
-    return render(request, 'dashboard/lead_chps_hiht.html', {
+    return {
         'period_labels':  period_labels,
         'sections':       sections,
         'matched_count':  matched_count,
@@ -891,9 +885,135 @@ def lead_chps_hiht_view(request):
         'red_count':      red_count,
         'has_monthly_batches': bool(monthly_batches),
         'sc_filter':      sc_filter,
+    }
+
+
+@login_required
+def lead_chps_hiht_view(request):
+    """
+    TEMP PAGE (delete once this ad-hoc request is done with) — HIHT trend
+    for a fixed roster of Kisumu Central and Seme lead CHPs, one row per
+    CHU/lead CHP, one column per monthly batch. Mirrors the colour-coded
+    style of the "HIHTs Trends from KPI Report" table on the KPI Scorecard
+    page, but pulls from the raw CHW Detail data (per-CHP, not the KPI
+    report) so it reflects this specific named roster. Colours are a
+    continuous gradient against a fixed per-CHP target (LEAD_CHP_HIHT_TARGET),
+    not the per-county IndicatorTarget used elsewhere in the app.
+    """
+    data = _lead_chps_hiht_data(request.GET.get('sc', 'all'))
+    return render(request, 'dashboard/lead_chps_hiht.html', {
+        **data,
         'sc_kisumu_central': LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY,
         'sc_seme':           LEAD_CHPS_SEME_SUBCOUNTY,
     })
+
+
+@login_required
+def download_lead_chps_hiht_csv(request):
+    """CSV export of the temp Lead CHPs HIHT page, respecting the sc= filter."""
+    data = _lead_chps_hiht_data(request.GET.get('sc', 'all'))
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="lead_chps_hihts.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Sub-County', 'CHU', 'Lead CHP', 'Matched?', 'Note'] + data['period_labels'])
+    for section in data['sections']:
+        for row in section['rows']:
+            writer.writerow(
+                [row['sub_county'], row['chu_name'], row['lead_name'],
+                 'Yes' if row['matched'] else 'No', row['note']]
+                + [(cell['value'] if cell['value'] is not None else '') for cell in row['values']]
+            )
+    return response
+
+
+@login_required
+def download_lead_chps_hiht_pdf(request):
+    """
+    Colour-coded PDF export of the temp Lead CHPs HIHT page, respecting the
+    sc= filter — same gradient colours as the on-screen table, one table per
+    sub-county section, landscape so the monthly columns have room.
+    """
+    import colorsys
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT
+
+    data = _lead_chps_hiht_data(request.GET.get('sc', 'all'))
+
+    NAVY       = colors.HexColor('#1B3A6B')
+    NAVY_LIGHT = colors.HexColor('#EEF2F8')
+    WHITE      = colors.white
+    GREY_TEXT  = colors.HexColor('#6B7280')
+
+    def hsl_to_reportlab(value):
+        if value is None:
+            return colors.HexColor('#F0F0F0')
+        pct = min(value / LEAD_CHP_HIHT_TARGET, 1.0) if LEAD_CHP_HIHT_TARGET else 0.5
+        hue = pct / 3.0  # 0..120deg -> 0..1/3 for colorsys (which takes 0..1)
+        r, g, b = colorsys.hls_to_rgb(hue, 0.88, 0.65)  # lightness .88, saturation .65 to match the CSS hsl()
+        return colors.Color(r, g, b)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="lead_chps_hihts.pdf"'
+
+    doc = SimpleDocTemplate(
+        response, pagesize=landscape(A4),
+        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=10 * mm, rightMargin=10 * mm,
+    )
+
+    title_style = ParagraphStyle('Title', fontName='Helvetica-Bold', fontSize=16, textColor=NAVY, leading=20)
+    sub_style   = ParagraphStyle('Sub', fontName='Helvetica', fontSize=9, textColor=GREY_TEXT, leading=12)
+    section_style = ParagraphStyle('Section', fontName='Helvetica-Bold', fontSize=12, textColor=NAVY, leading=16)
+    cell_header_style = ParagraphStyle('CellHeader', fontName='Helvetica-Bold', fontSize=8, textColor=WHITE, leading=10)
+    cell_style = ParagraphStyle('Cell', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1F2937'), leading=10)
+    cell_bold_style = ParagraphStyle('CellBold', fontName='Helvetica-Bold', fontSize=8, textColor=NAVY, leading=10)
+
+    elements = [
+        Paragraph('Lead CHPs — HIHT Trend', title_style),
+        Paragraph(
+            f'Greener = closer to or past the target of {LEAD_CHP_HIHT_TARGET} HIHTs/CHP that month, redder = further below it.',
+            sub_style,
+        ),
+        Spacer(1, 6 * mm),
+    ]
+
+    for section in data['sections']:
+        elements.append(Paragraph(section['sub_county'], section_style))
+        elements.append(Spacer(1, 2 * mm))
+
+        header = (
+            [Paragraph('CHU', cell_header_style), Paragraph('Lead CHP', cell_header_style)]
+            + [Paragraph(label, cell_header_style) for label in data['period_labels']]
+        )
+        table_data = [header]
+        bg_commands = []
+        for r_idx, row in enumerate(section['rows'], start=1):
+            table_data.append(
+                [Paragraph(row['chu_name'], cell_bold_style), Paragraph(row['lead_name'], cell_style)]
+                + [Paragraph(str(cell['value']) if cell['value'] is not None else '—', cell_style) for cell in row['values']]
+            )
+            for c_idx, cell in enumerate(row['values'], start=2):
+                bg_commands.append(('BACKGROUND', (c_idx, r_idx), (c_idx, r_idx), hsl_to_reportlab(cell['value'])))
+
+        n_period_cols = len(data['period_labels'])
+        col_widths = [45 * mm, 40 * mm] + [(277 - 85) / max(n_period_cols, 1) * mm for _ in range(n_period_cols)]
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
+        style = [
+            ('BACKGROUND', (0, 0), (-1, 0), NAVY),
+            ('BACKGROUND', (0, 1), (0, -1), NAVY_LIGHT),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.white),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
+        ] + bg_commands
+        t.setStyle(TableStyle(style))
+        elements.append(t)
+        elements.append(Spacer(1, 8 * mm))
+
+    doc.build(elements)
+    return response
 
 
 def _maternal_delivery_rows(qs, view):

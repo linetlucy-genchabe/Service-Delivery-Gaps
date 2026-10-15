@@ -10,6 +10,11 @@
       Greener = closer to or past the target of 25 HIHTs/CHP that month, redder = further below it.
     </p>
   </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{% url 'download_lead_chps_hiht_csv' %}?sc={{ sc_filter|urlencode }}" class="btn btn-sm btn-outline">⬇ Download CSV</a>
+    <a href="{% url 'download_lead_chps_hiht_pdf' %}?sc={{ sc_filter|urlencode }}" class="btn btn-sm btn-outline">⬇ Download PDF</a>
+    <button type="button" class="btn btn-sm btn-outline" onclick="downloadChartAsImage('lead-chps-hiht-content','lead_chps_hihts.png',this)">🖼 Download Image</button>
+  </div>
 </div>
 
 <div style="margin:-4px 0 16px;">
@@ -38,6 +43,7 @@
   </div>
 </div>
 
+<div id="lead-chps-hiht-content">
 {% if has_monthly_batches %}
 {% for section in sections %}
 <div class="card" style="margin-top:16px;">
@@ -87,5 +93,10 @@
 {% else %}
 <div class="card" style="margin-top:16px;"><div class="card-body"><div class="table-empty">No monthly HIHT data uploaded yet.</div></div></div>
 {% endif %}
+</div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 {% endblock %}

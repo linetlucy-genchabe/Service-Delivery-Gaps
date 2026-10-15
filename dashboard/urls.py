@@ -71,6 +71,8 @@ urlpatterns = [
     path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
     path('hiht-trends/',                   views.hiht_trends_view,        name='hiht_trends'),
     path('lead-chps-hiht/',                views.lead_chps_hiht_view,     name='lead_chps_hiht'),
+    path('lead-chps-hiht/download/csv/',  views.download_lead_chps_hiht_csv, name='download_lead_chps_hiht_csv'),
+    path('lead-chps-hiht/download/pdf/',  views.download_lead_chps_hiht_pdf, name='download_lead_chps_hiht_pdf'),
     path('hiht-trends/target-achievement/download/', views.download_target_achievement, name='download_target_achievement'),
     path('hiht-trends/targets/',           views.manage_targets_view,     name='manage_targets'),
     # EDD (Expected Delivery Date) list — Ad Hoc
