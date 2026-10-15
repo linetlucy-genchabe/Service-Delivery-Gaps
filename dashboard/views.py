@@ -688,6 +688,113 @@ def hiht_trends_view(request):
     })
 
 
+LEAD_CHPS_KISUMU_CENTRAL = [
+    ("Joshua Otieno Opado", "Area A 1 Community Health Unit"),
+    ("Susan Agak", "Area A 2 Community Health Unit"),
+    ("Joyce Anyango Matindeh", "Area A 3 Community Health Unit"),
+    ("Patricia Achieng Sialo", "Area B1 Community Health Unit"),
+    ("Moses Ochieng Nyobuoro", "Area B2 Community Health Unit"),
+    ("Mary Abwao", "Area B3 Community Health Unit"),
+    ("George Omondi Aura", "Area C 1 Community Health Unit"),
+    ("Betty Akinyi Owanga", "Area C 2 Community Health Unit"),
+    ("Geofrey Magaya Okoyo", "Area C 3 Comunity Health Unit"),
+    ("Pius Okello Ojuang", "Area C Community Health Unit"),
+    ("Joyce Omina Omollo", "Got Owak Community Health Unit"),
+    ("Caroline Asienwa", "Juakali Community Health Unit"),
+    ("Zulekha Abubakar Senge", "Juakali Mosque Community Health Unit"),
+    ("Millicent Aching Gaya", "Kaloleni Shauri Moyo Community Health Unit"),
+    ("Getrude Olum", "Kanyakwar Community Health Unit"),
+    ("Edward Mito", "Kilo 1 Community Health Unit"),
+    ("Beatrice Akinyi Olang", "Kilo 2 Community Health Unit"),
+    ("Rennah Anyango Opere", "Kilo 3 Community Health Unit"),
+    ("Ruth Osare", "Lolwe Community Health Unit"),
+    ("Janet Osumba", "Manyatta A 1 Community Health Unit"),
+    ("Evelyn Achieng Ouma", "Manyatta A 2 Community Health Unit"),
+    ("Ayub Saidi Mohammed", "Manyatta A PGH Community Health Unit"),
+    ("Rose Adhiambo Rombo", "Manyatta Area A Community Health Unit"),
+    ("Peter Otieno Oinga", "Manyatta Area B Community Health Unit"),
+    ("Florence Nziza", "Migosi Community Health Unit"),
+    ("Colletar Awuor", "Nanga Dunga Community Health Unit"),
+    ("Dan William Oketch", "Nyawita Community Health Unit"),
+    ("Asha Anyango", "Obunga Community Health Unit"),
+    ("Ruth Minage Lugusas", "Polyview Community Health Unit"),
+    ("Mary Akoth Ogolla", "Southern Community Health Unit"),
+    ("Seline Wesonga", "Tom Mboya Community Health Unit"),
+    ("Caroline Atieno Ondoro", "Township Community Health Unit"),
+    ("Joseph Owenga", "Western B1 Community Health Unit"),
+    ("Elsha Adhiambo", "Western B2 Community Health Unit"),
+    ("Evaline Adhiambo Owiti", "Western B3 Community Health Unit"),
+]
+
+
+def _lead_chp_norm(s):
+    return ' '.join((s or '').strip().lower().replace('comunity', 'community').split())
+
+
+@login_required
+def lead_chps_hiht_view(request):
+    """
+    TEMP PAGE (delete once this ad-hoc request is done with) — HIHT trend
+    for a fixed roster of Kisumu Central lead CHPs, one row per CHU/lead
+    CHP, one column per monthly batch. Mirrors the colour-coded style of
+    the "HIHTs Trends from KPI Report" table on the KPI Scorecard page,
+    but pulls from the raw CHW Detail data (per-CHP, not the KPI report)
+    so it reflects this specific named roster.
+    """
+    from .models import IndicatorTarget
+
+    monthly_batches = auto_detect_monthly_batches()
+    trend = compute_hiht_trend(level='chp', batches=monthly_batches)
+    period_labels = trend['periods']
+
+    by_chu = {}
+    for s in trend['series']:
+        chu_key = _lead_chp_norm(s['geo'].get('community_health_unit'))
+        by_chu.setdefault(chu_key, []).append(s)
+
+    targets_by_county = {
+        t.county: t.target for t in IndicatorTarget.objects.filter(metric_key='total_hihts_per_chw')
+    }
+
+    rows = []
+    for lead_name, chu_name in LEAD_CHPS_KISUMU_CENTRAL:
+        candidates = by_chu.get(_lead_chp_norm(chu_name), [])
+        match = next((c for c in candidates if _lead_chp_norm(c['label']) == _lead_chp_norm(lead_name)), None)
+        note = ''
+        if match is None and len(candidates) == 1:
+            match = candidates[0]
+            note = f"Current CHP on file: {match['label']}"
+        elif match is None and len(candidates) > 1:
+            note = f"{len(candidates)} CHPs on file for this CHU — name not matched"
+        elif match is None:
+            note = "CHU not found in uploaded data"
+
+        county = match['geo'].get('county') if match else ''
+        target = targets_by_county.get(county)
+        if match:
+            values = [{'value': v, 'colour': _kpi_hiht_colour(v, target)} for v in match['values']]
+        else:
+            values = [{'value': None, 'colour': 'grey'} for _ in period_labels]
+
+        rows.append({
+            'lead_name': lead_name,
+            'chu_name':  chu_name,
+            'note':      note,
+            'matched':   match is not None,
+            'values':    values,
+        })
+
+    matched_count = sum(1 for r in rows if r['matched'])
+
+    return render(request, 'dashboard/lead_chps_hiht.html', {
+        'period_labels':  period_labels,
+        'rows':           rows,
+        'matched_count':  matched_count,
+        'total_count':    len(rows),
+        'has_monthly_batches': bool(monthly_batches),
+    })
+
+
 def _maternal_delivery_rows(qs, view):
     """
     view: 'home_deliveries' | 'pnc_48hr_missed' | 'pnc_3_7d_missed' | 'pnc_status'

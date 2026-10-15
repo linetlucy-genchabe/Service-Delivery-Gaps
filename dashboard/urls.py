@@ -70,6 +70,7 @@ urlpatterns = [
     path('download/hiht-ranked/pptx/',     views.download_hiht_ranked_pptx,  name='download_hiht_ranked_pptx'),
     path('api/hiht-trend/',                views.api_hiht_trend,          name='api_hiht_trend'),
     path('hiht-trends/',                   views.hiht_trends_view,        name='hiht_trends'),
+    path('lead-chps-hiht/',                views.lead_chps_hiht_view,     name='lead_chps_hiht'),
     path('hiht-trends/target-achievement/download/', views.download_target_achievement, name='download_target_achievement'),
     path('hiht-trends/targets/',           views.manage_targets_view,     name='manage_targets'),
     # EDD (Expected Delivery Date) list — Ad Hoc

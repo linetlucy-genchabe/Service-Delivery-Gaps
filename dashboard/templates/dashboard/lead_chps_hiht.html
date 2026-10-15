@@ -1,0 +1,64 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Lead CHPs HIHTs · Kisumu Central{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">🎯 Lead CHPs HIHTs — Kisumu Central</h1>
+    <p class="page-subtitle">
+      Total HIHTs per month for each lead CHP's CHU, across all monthly reports on file.
+      🟢 ≥100% of county target &nbsp;·&nbsp; 🟡 75–99% &nbsp;·&nbsp; 🔴 &lt;75% &nbsp;·&nbsp; ⚪ no target set
+    </p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:8px;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Lead CHPs — HIHT Trend</h3>
+      <p class="card-subtitle">{{ matched_count }} of {{ total_count }} matched by name to the latest CHW Detail upload for their CHU.</p>
+    </div>
+  </div>
+  <div class="card-body no-pad">
+    <div style="overflow-x:auto;">
+    {% if has_monthly_batches %}
+    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#1B3A6B;">
+          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">CHU</th>
+          <th style="padding:10px 10px;text-align:left;color:white;font-size:11px;font-weight:700;border:2px solid white;">Lead CHP</th>
+          {% for label in period_labels %}
+          <th style="padding:10px 8px;text-align:center;color:white;font-size:10px;font-weight:700;border:2px solid white;">{{ label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.chu_name }}</td>
+          <td style="padding:10px 10px;font-size:11px;border:2px solid white;{% if not row.matched %}color:#9CA3AF;font-style:italic;{% endif %}"
+              title="{{ row.note }}">
+            {{ row.lead_name }}{% if row.note %} <span style="color:#B45309;">⚠</span>{% endif %}
+          </td>
+          {% for cell in row.values %}
+          <td class="ta-cell ta-{{ cell.colour }}" style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;">
+            {% if cell.value is not None %}{{ cell.value }}{% else %}—{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if rows %}
+    <div style="padding:10px 14px;font-size:11px;color:#6B7280;">
+      ⚠ next to a name means the CHP on file for that CHU doesn't match the given lead name exactly — hover the name to see why (a name mismatch, more than one CHP on file, or the CHU wasn't found at all in the uploaded data).
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="table-empty">No monthly HIHT data uploaded yet.</div>
+    {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
