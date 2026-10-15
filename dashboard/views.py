@@ -819,8 +819,15 @@ def lead_chps_hiht_view(request):
         chu_key = _lead_chp_norm(s['geo'].get('community_health_unit'))
         by_chu.setdefault(chu_key, []).append(s)
 
+    sc_filter = request.GET.get('sc', 'all')
+    if sc_filter not in ('all', LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY, LEAD_CHPS_SEME_SUBCOUNTY):
+        sc_filter = 'all'
+    roster = LEAD_CHPS_ROSTER if sc_filter == 'all' else [
+        r for r in LEAD_CHPS_ROSTER if r[2] == sc_filter
+    ]
+
     rows = []
-    for lead_name, chu_name, sub_county in LEAD_CHPS_ROSTER:
+    for lead_name, chu_name, sub_county in roster:
         candidates = by_chu.get(_lead_chp_norm(chu_name), [])
         match = next((c for c in candidates if _lead_chp_norm(c['label']) == _lead_chp_norm(lead_name)), None)
         note = ''
@@ -883,6 +890,9 @@ def lead_chps_hiht_view(request):
         'yellow_count':   yellow_count,
         'red_count':      red_count,
         'has_monthly_batches': bool(monthly_batches),
+        'sc_filter':      sc_filter,
+        'sc_kisumu_central': LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY,
+        'sc_seme':           LEAD_CHPS_SEME_SUBCOUNTY,
     })
 
 

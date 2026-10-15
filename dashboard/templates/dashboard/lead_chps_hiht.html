@@ -12,6 +12,13 @@
   </div>
 </div>
 
+<div style="margin:-4px 0 16px;">
+  <span style="font-size:12px;color:var(--text-muted);margin-right:8px;">Sub-County:</span>
+  <a href="?sc=all" class="btn btn-sm {% if sc_filter == 'all' %}btn-primary{% else %}btn-outline{% endif %}">Both</a>
+  <a href="?sc={{ sc_kisumu_central|urlencode }}" class="btn btn-sm {% if sc_filter == sc_kisumu_central %}btn-primary{% else %}btn-outline{% endif %}" style="margin-left:6px;">Kisumu Central</a>
+  <a href="?sc={{ sc_seme|urlencode }}" class="btn btn-sm {% if sc_filter == sc_seme %}btn-primary{% else %}btn-outline{% endif %}" style="margin-left:6px;">Seme</a>
+</div>
+
 <div class="cards-grid">
   <div class="stat-card navy">
     <div class="stat-value">{{ total_count }}</div>
