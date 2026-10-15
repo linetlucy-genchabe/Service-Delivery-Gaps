@@ -7,7 +7,7 @@
     <h1 class="page-title">🎯 Lead CHPs HIHTs — Kisumu Central</h1>
     <p class="page-subtitle">
       Total HIHTs per month for each lead CHP's CHU, across all monthly reports on file.
-      🟢 ≥100% of county target &nbsp;·&nbsp; 🟡 75–99% &nbsp;·&nbsp; 🔴 &lt;75% &nbsp;·&nbsp; ⚪ no target set
+      Greener = closer to or past the target of 25 HIHTs/CHP that month, redder = further below it.
     </p>
   </div>
 </div>
@@ -60,7 +60,7 @@
             {{ row.lead_name }}{% if row.note %} <span style="color:#B45309;">⚠</span>{% endif %}
           </td>
           {% for cell in row.values %}
-          <td class="ta-cell ta-{{ cell.colour }}" style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;">
+          <td style="padding:8px 8px;text-align:center;font-weight:600;font-size:12px;border:2px solid white;background:{{ cell.style }};">
             {% if cell.value is not None %}{{ cell.value }}{% else %}—{% endif %}
           </td>
           {% endfor %}

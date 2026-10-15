@@ -731,6 +731,24 @@ def _lead_chp_norm(s):
     return ' '.join((s or '').strip().lower().replace('comunity', 'community').split())
 
 
+LEAD_CHP_HIHT_TARGET = 25  # fixed per-CHP monthly HIHT target for this roster
+
+
+def _lead_chp_heat_colour(value, target=LEAD_CHP_HIHT_TARGET):
+    """
+    Continuous red->yellow->green gradient the same way the HIHT Trends
+    page's own heatmap does it (see renderHihtTrend's cellColour in
+    dashboard.js), but anchored to the fixed per-CHP target instead of the
+    min/max of what's on screen, so a cell's colour means the same thing
+    on every page load.
+    """
+    if value is None:
+        return '#f0f0f0'
+    pct = min(value / target, 1.0) if target else 0.5
+    hue = pct * 120
+    return f'hsl({hue:.0f}, 65%, 88%)'
+
+
 @login_required
 def lead_chps_hiht_view(request):
     """
@@ -739,10 +757,10 @@ def lead_chps_hiht_view(request):
     CHP, one column per monthly batch. Mirrors the colour-coded style of
     the "HIHTs Trends from KPI Report" table on the KPI Scorecard page,
     but pulls from the raw CHW Detail data (per-CHP, not the KPI report)
-    so it reflects this specific named roster.
+    so it reflects this specific named roster. Colours are a continuous
+    gradient against a fixed per-CHP target (LEAD_CHP_HIHT_TARGET), not
+    the per-county IndicatorTarget used elsewhere in the app.
     """
-    from .models import IndicatorTarget
-
     monthly_batches = auto_detect_monthly_batches()
     trend = compute_hiht_trend(level='chp', batches=monthly_batches)
     period_labels = trend['periods']
@@ -751,10 +769,6 @@ def lead_chps_hiht_view(request):
     for s in trend['series']:
         chu_key = _lead_chp_norm(s['geo'].get('community_health_unit'))
         by_chu.setdefault(chu_key, []).append(s)
-
-    targets_by_county = {
-        t.county: t.target for t in IndicatorTarget.objects.filter(metric_key='total_hihts_per_chw')
-    }
 
     rows = []
     for lead_name, chu_name in LEAD_CHPS_KISUMU_CENTRAL:
@@ -769,12 +783,17 @@ def lead_chps_hiht_view(request):
         elif match is None:
             note = "CHU not found in uploaded data"
 
-        county = match['geo'].get('county') if match else ''
-        target = targets_by_county.get(county)
         if match:
-            values = [{'value': v, 'colour': _kpi_hiht_colour(v, target)} for v in match['values']]
+            values = [
+                {
+                    'value':  v,
+                    'style':  _lead_chp_heat_colour(v),
+                    'colour': _kpi_hiht_colour(v, LEAD_CHP_HIHT_TARGET),
+                }
+                for v in match['values']
+            ]
         else:
-            values = [{'value': None, 'colour': 'grey'} for _ in period_labels]
+            values = [{'value': None, 'style': '#f0f0f0', 'colour': 'grey'} for _ in period_labels]
 
         latest_colour = values[-1]['colour'] if values else 'grey'
 
