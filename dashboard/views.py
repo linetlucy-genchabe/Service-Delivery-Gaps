@@ -703,7 +703,7 @@ LEAD_CHPS_KISUMU_CENTRAL = [
     ("Caroline Asienwa", "Juakali Community Health Unit"),
     ("Zulekha Abubakar Senge", "Juakali Mosque Community Health Unit"),
     ("Millicent Aching Gaya", "Kaloleni Shauri Moyo Community Health Unit"),
-    ("Getrude Olum", "Kanyakwar Community Health Unit"),
+    ("Getrude Achieng Olum", "Kanyakwar Community Health Unit"),
     ("Edward Mito", "Kilo 1 Community Health Unit"),
     ("Beatrice Akinyi Olang", "Kilo 2 Community Health Unit"),
     ("Rennah Anyango Opere", "Kilo 3 Community Health Unit"),
@@ -719,7 +719,7 @@ LEAD_CHPS_KISUMU_CENTRAL = [
     ("Asha Anyango", "Obunga Community Health Unit"),
     ("Ruth Minage Lugusas", "Polyview Community Health Unit"),
     ("Mary Akoth Ogolla", "Southern Community Health Unit"),
-    ("Seline Wesonga", "Tom Mboya Community Health Unit"),
+    ("Seline Wasonga", "Tom Mboya Community Health Unit"),
     ("Caroline Atieno Ondoro", "Township Community Health Unit"),
     ("Joseph Owenga", "Western B1 Community Health Unit"),
     ("Elsha Adhiambo", "Western B2 Community Health Unit"),
@@ -776,21 +776,30 @@ def lead_chps_hiht_view(request):
         else:
             values = [{'value': None, 'colour': 'grey'} for _ in period_labels]
 
+        latest_colour = values[-1]['colour'] if values else 'grey'
+
         rows.append({
-            'lead_name': lead_name,
-            'chu_name':  chu_name,
-            'note':      note,
-            'matched':   match is not None,
-            'values':    values,
+            'lead_name':     lead_name,
+            'chu_name':      chu_name,
+            'note':          note,
+            'matched':       match is not None,
+            'values':        values,
+            'latest_colour': latest_colour,
         })
 
     matched_count = sum(1 for r in rows if r['matched'])
+    green_count  = sum(1 for r in rows if r['latest_colour'] == 'green')
+    yellow_count = sum(1 for r in rows if r['latest_colour'] == 'yellow')
+    red_count    = sum(1 for r in rows if r['latest_colour'] == 'red')
 
     return render(request, 'dashboard/lead_chps_hiht.html', {
         'period_labels':  period_labels,
         'rows':           rows,
         'matched_count':  matched_count,
         'total_count':    len(rows),
+        'green_count':    green_count,
+        'yellow_count':   yellow_count,
+        'red_count':      red_count,
         'has_monthly_batches': bool(monthly_batches),
     })
 

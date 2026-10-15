@@ -12,7 +12,26 @@
   </div>
 </div>
 
-<div class="card" style="margin-top:8px;">
+<div class="cards-grid">
+  <div class="stat-card navy">
+    <div class="stat-value">{{ total_count }}</div>
+    <div class="stat-label">Lead CHPs tracked</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-value">{{ green_count }}</div>
+    <div class="stat-label">Achieving Target (latest month)</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="stat-value">{{ yellow_count }}</div>
+    <div class="stat-label">Approaching Target (latest month)</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-value">{{ red_count }}</div>
+    <div class="stat-label">Below Target (latest month)</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px;">
   <div class="card-header">
     <div>
       <h3 class="card-title">Lead CHPs — HIHT Trend</h3>
