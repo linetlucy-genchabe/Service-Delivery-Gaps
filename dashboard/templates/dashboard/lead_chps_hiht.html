@@ -1,10 +1,10 @@
 {% extends 'dashboard/base.html' %}
-{% block title %}Lead CHPs HIHTs · Kisumu Central{% endblock %}
+{% block title %}Lead CHPs HIHTs{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-title">🎯 Lead CHPs HIHTs — Kisumu Central</h1>
+    <h1 class="page-title">🎯 Lead CHPs HIHTs</h1>
     <p class="page-subtitle">
       Total HIHTs per month for each lead CHP's CHU, across all monthly reports on file.
       Greener = closer to or past the target of 25 HIHTs/CHP that month, redder = further below it.
@@ -31,16 +31,17 @@
   </div>
 </div>
 
+{% if has_monthly_batches %}
+{% for section in sections %}
 <div class="card" style="margin-top:16px;">
   <div class="card-header">
     <div>
-      <h3 class="card-title">Lead CHPs — HIHT Trend</h3>
-      <p class="card-subtitle">{{ matched_count }} of {{ total_count }} matched by name to the latest CHW Detail upload for their CHU.</p>
+      <h3 class="card-title">Lead CHPs — HIHT Trend — {{ section.sub_county }}</h3>
+      <p class="card-subtitle">{{ section.rows|length }} CHUs.</p>
     </div>
   </div>
   <div class="card-body no-pad">
     <div style="overflow-x:auto;">
-    {% if has_monthly_batches %}
     <table class="data-table" style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead>
         <tr style="background:#1B3A6B;">
@@ -52,7 +53,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for row in rows %}
+        {% for row in section.rows %}
         <tr>
           <td style="padding:10px 10px;font-weight:600;color:#1B3A6B;background:#EEF2F8;font-size:11px;border:2px solid white;">{{ row.chu_name }}</td>
           <td style="padding:10px 10px;font-size:11px;border:2px solid white;{% if not row.matched %}color:#9CA3AF;font-style:italic;{% endif %}"
@@ -68,16 +69,16 @@
         {% endfor %}
       </tbody>
     </table>
-    {% if rows %}
-    <div style="padding:10px 14px;font-size:11px;color:#6B7280;">
-      ⚠ next to a name means the CHP on file for that CHU doesn't match the given lead name exactly — hover the name to see why (a name mismatch, more than one CHP on file, or the CHU wasn't found at all in the uploaded data).
-    </div>
-    {% endif %}
-    {% else %}
-    <div class="table-empty">No monthly HIHT data uploaded yet.</div>
-    {% endif %}
     </div>
   </div>
 </div>
+{% endfor %}
+<div style="padding:10px 2px;font-size:11px;color:#6B7280;">
+  {{ matched_count }} of {{ total_count }} matched by name to the latest CHW Detail upload for their CHU.
+  ⚠ next to a name means the CHP on file for that CHU doesn't match the given lead name exactly — hover the name to see why (a name mismatch, more than one CHP on file, or the CHU wasn't found at all in the uploaded data).
+</div>
+{% else %}
+<div class="card" style="margin-top:16px;"><div class="card-body"><div class="table-empty">No monthly HIHT data uploaded yet.</div></div></div>
+{% endif %}
 
 {% endblock %}

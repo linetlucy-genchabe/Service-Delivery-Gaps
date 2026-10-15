@@ -688,6 +688,9 @@ def hiht_trends_view(request):
     })
 
 
+LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY = 'Kisumu Central'
+LEAD_CHPS_SEME_SUBCOUNTY = 'Seme'
+
 LEAD_CHPS_KISUMU_CENTRAL = [
     ("Joshua Otieno Opado", "Area A 1 Community Health Unit"),
     ("Susan Agak", "Area A 2 Community Health Unit"),
@@ -725,6 +728,52 @@ LEAD_CHPS_KISUMU_CENTRAL = [
     ("Elsha Adhiambo", "Western B2 Community Health Unit"),
     ("Evaline Adhiambo Owiti", "Western B3 Community Health Unit"),
 ]
+
+LEAD_CHPS_SEME = [
+    ("Margaret Akoth Otieno", "Alwala Community Health Unit"),
+    ("Benard Okello Mbuye", "Ang'oga Community Health Unit"),
+    ("Chrispus Ongoje", "East Kadinga Community Health Unit"),
+    ("Seline Akoth Odhiambo", "East Kanyadwera Community Health Unit"),
+    ("Mary Omil Ghor", "East Katieno Community Health Unit"),
+    ("George Odindo Ouma", "East Kolunje Community Health Unit"),
+    ("Roseline Achieng Okinyi", "East Ngere Community Health Unit"),
+    ("Rose Aluoch Nyawara", "East Othany Community Health Unit"),
+    ("Everlyne Atieno Ng'onga", "East Reru B Community Health Unit"),
+    ("Jacob Agutu Odiwa", "East Reru Community Health Unit"),
+    ("Judith Achieng Odeny", "Kadero Community Health Unit"),
+    ("Grace Akinyi Jaoko", "Kajulu Community Health Unit"),
+    ("Julius Agingu Moyi", "Kitmikayi Community Health Unit"),
+    ("Rose Achieng Ochieng", "Koker Community Health Unit"),
+    ("Pamela Akinyi Ojil", "Kuoyo Kaila Community Health Unit"),
+    ("Beatrice Adhiambo Mendwa", "Lower Kit Mikayi Community Health Unit"),
+    ("Isaiah Ng'ong'a Sunga", "Lower Kombewa Community Health Unit"),
+    ("Mary Atieno Oluoch", "Mariwa Community Health Unit"),
+    ("Christine Okello", "North Alungo Community Health Unit"),
+    ("Dorcas Adhiambo Odipo", "North Kowe Community Health Unit"),
+    ("Mary Auma Obondo", "North Ratta Community Health Unit"),
+    ("Benard Onyango", "South Alungo Community Health Unit"),
+    ("Rosemary Akoth Otieno", "South Kowe Community Health Unit"),
+    ("Florence Gumba", "South Ratta Community Health Unit"),
+    ("Peres Okach Ayieko", "Upper Kombewa East Community Health Unit"),
+    ("George Otieno Oluoch", "Upper Kombewa West Community Health Unit"),
+    ("Tabitha Aketch", "West Kadinga Community Health Unit"),
+    ("Millicent Okuto", "West Kanyadwera Community Health Unit"),
+    ("Lilian Gawo", "West Katieno Community Health Unit"),
+    ("Peterlis Ouya Wagaya", "West Kolunje B Community Health Unit"),
+    ("Rose Atieno Owiti", "West Kolunje Community Health Unit"),
+    ("Janet Omondi", "West Ngere Community Health Unit"),
+    ("Laban Ade Obudho", "West Othany B Community Health Unit"),
+    ("Penina Akinyi Ototo", "West Othany Community Health Unit"),
+    ("Beatrice Adhiambo Achienga", "West Reru B Community Health Unit"),
+    ("Dorine Anyango Nyakito", "West Reru Community Health Unit"),
+]
+
+# One combined roster, each entry tagged with its sub-county so the page can
+# group/section by sub-county instead of needing a separate page per one.
+LEAD_CHPS_ROSTER = (
+    [(name, chu, LEAD_CHPS_KISUMU_CENTRAL_SUBCOUNTY) for name, chu in LEAD_CHPS_KISUMU_CENTRAL]
+    + [(name, chu, LEAD_CHPS_SEME_SUBCOUNTY) for name, chu in LEAD_CHPS_SEME]
+)
 
 
 def _lead_chp_norm(s):
@@ -771,7 +820,7 @@ def lead_chps_hiht_view(request):
         by_chu.setdefault(chu_key, []).append(s)
 
     rows = []
-    for lead_name, chu_name in LEAD_CHPS_KISUMU_CENTRAL:
+    for lead_name, chu_name, sub_county in LEAD_CHPS_ROSTER:
         candidates = by_chu.get(_lead_chp_norm(chu_name), [])
         match = next((c for c in candidates if _lead_chp_norm(c['label']) == _lead_chp_norm(lead_name)), None)
         note = ''
@@ -800,6 +849,7 @@ def lead_chps_hiht_view(request):
         rows.append({
             'lead_name':     lead_name,
             'chu_name':      chu_name,
+            'sub_county':    sub_county,
             'note':          note,
             'matched':       match is not None,
             'values':        values,
@@ -811,9 +861,22 @@ def lead_chps_hiht_view(request):
     yellow_count = sum(1 for r in rows if r['latest_colour'] == 'yellow')
     red_count    = sum(1 for r in rows if r['latest_colour'] == 'red')
 
+    # Group into one section per sub-county, in the order each sub-county
+    # first appears in the roster, so Kisumu Central and Seme show as two
+    # separate tables on the same page rather than one long flat list.
+    sections = []
+    sections_by_name = {}
+    for row in rows:
+        sec = sections_by_name.get(row['sub_county'])
+        if sec is None:
+            sec = {'sub_county': row['sub_county'], 'rows': []}
+            sections_by_name[row['sub_county']] = sec
+            sections.append(sec)
+        sec['rows'].append(row)
+
     return render(request, 'dashboard/lead_chps_hiht.html', {
         'period_labels':  period_labels,
-        'rows':           rows,
+        'sections':       sections,
         'matched_count':  matched_count,
         'total_count':    len(rows),
         'green_count':    green_count,
