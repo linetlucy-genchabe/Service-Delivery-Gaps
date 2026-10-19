@@ -159,6 +159,15 @@ def parse_chw_file(batch, file_obj):
     has_pneumonia_combined = 'Pneumonia Treated/Referred' in df.columns
     has_diarrhea_combined  = 'Diarrhea Treated/Referred' in df.columns
 
+    # "Sick-Child Referrals (iCCM, agreed denom)" is a new column that only
+    # started appearing in the CHW Detail export from October 2026 onward —
+    # older monthly/weekly exports don't have it at all. Where it exists,
+    # it's the more accurate denominator for "% Sick Child Referrals
+    # Completed" and replaces "Referrals Total (iCCM)"; where it doesn't
+    # (every batch uploaded before it existed), we keep using the old
+    # column so historical numbers don't go blank or drop to zero.
+    has_agreed_denom_referrals = 'Sick-Child Referrals (iCCM, agreed denom)' in df.columns
+
     for i, row in df.iterrows():
         # Skip CHPs with no county attached
         if not _str(row.get('County')):
@@ -215,7 +224,10 @@ def parse_chw_file(batch, file_obj):
                 danger_sign_referred=_int(row.get('Danger Sign Referred', 0)),
                 fever_cases=_int(row.get('Fever Cases', 0)),
                 fever_tested_rdt=_int(row.get('Fever Tested (RDT)', 0)),
-                iccm_referrals_total=_int(row.get('iCCM Referrals Total') or row.get('Referrals Total (iCCM)', 0)),
+                iccm_referrals_total=(
+                    _int(row.get('Sick-Child Referrals (iCCM, agreed denom)', 0)) if has_agreed_denom_referrals
+                    else _int(row.get('iCCM Referrals Total') or row.get('Referrals Total (iCCM)', 0))
+                ),
                 iccm_referral_followup=_int(row.get('iCCM Referral Follow-up Completed') or row.get('Referral Follow-up Completed', 0)),
                 iccm_referrals_u2mo=_int(row.get('iCCM Referrals U2mo', row.get('Referrals U2mo', 0))),
                 iccm_completed_referrals_u2mo=_int(row.get('iCCM Completed Referrals U2mo', row.get('Completed Referrals U2mo', 0))),
