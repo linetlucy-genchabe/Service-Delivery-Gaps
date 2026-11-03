@@ -888,6 +888,238 @@ def _lead_chps_hiht_data(sc_filter):
     }
 
 
+# ---------------------------------------------------------------------------
+# HIHT share image — pick geography (multi-select) + level, get a WhatsApp-
+# ready image per block (one per CHU at CHP level). The image itself is drawn
+# in the browser from this JSON (html2canvas), same as the other downloads.
+# ---------------------------------------------------------------------------
+
+# (column header, CHWRecord fields summed into it). Together these cover every
+# HIHT component, so the row total equals the dashboard's Total HIHTs.
+HIHT_SHARE_COLS = [
+    ('Preg. registered',   ['pregnancies_registered']),
+    ('Preg. visits',       ['pregnancy_visits']),
+    ('Facility deliveries', ['facility_deliveries']),
+    ('PNC 48hr',           ['pnc_48hr_ontime']),
+    ('PNC 3-7d',           ['pnc_3_7d_ontime']),
+    ('U5 positive diagnoses', ['malaria_managed', 'malaria_referred',
+                               'pneumonia_managed', 'pneumonia_referred',
+                               'diarrhea_managed', 'diarrhea_referred']),
+    ('U2-month referrals', ['iccm_completed_referrals_u2mo']),
+    ('MAM/SAM referrals',  ['mam_sam_referral_completed']),
+    ('Immuniz. referrals', ['iz_defaulters_completed']),
+    ('FP unique WRAs',     ['fp_unique_new_users']),
+]
+HIHT_SHARE_TARGET = 25
+HIHT_SHARE_MAX_ROWS = 26      # rows per image before splitting into parts
+HIHT_SHARE_MAX_BLOCKS = 50    # safety cap on CHP-level images per request
+HIHT_SHARE_LEVELS = {
+    'county':     ('county',),
+    'sub_county': ('county', 'sub_county'),
+    'chu':        ('county', 'sub_county', 'community_health_unit'),
+}
+
+
+def _hiht_share_batch(request):
+    bid = request.GET.get('batch')
+    if bid and bid.isdigit():
+        return UploadBatch.objects.filter(pk=int(bid)).first()
+    return UploadBatch.objects.order_by('-year', '-month', '-week_start_date', '-uploaded_at').first()
+
+
+def _hiht_share_qs(request, batch, active_only=True):
+    qs = CHWRecord.objects.filter(batch=batch)
+    if active_only:
+        qs = qs.filter(is_active=True)
+    counties = [c for c in request.GET.getlist('county') if c]
+    subs     = [s for s in request.GET.getlist('sub_county') if s]
+    chus     = [c for c in request.GET.getlist('chu') if c]
+    if counties: qs = qs.filter(county__in=counties)
+    if subs:     qs = qs.filter(sub_county__in=subs)
+    if chus:     qs = qs.filter(community_health_unit__in=chus)
+    return qs, counties, subs, chus
+
+
+@login_required
+def hiht_share_view(request):
+    batches = UploadBatch.objects.order_by('-year', '-month', '-week_start_date', '-uploaded_at')
+    return render(request, 'dashboard/hiht_share.html', {
+        'batches': batches,
+        'default_batch': batches.first(),
+        'target': HIHT_SHARE_TARGET,
+    })
+
+
+@login_required
+@require_GET
+def api_hiht_share_options(request):
+    """Cascading option lists for the multi-select pickers."""
+    batch = _hiht_share_batch(request)
+    if batch is None:
+        return JsonResponse({'counties': [], 'sub_counties': [], 'chus': []})
+    base = CHWRecord.objects.filter(batch=batch)
+    counties = [c for c in request.GET.getlist('county') if c]
+    subs     = [s for s in request.GET.getlist('sub_county') if s]
+
+    all_counties = list(base.values_list('county', flat=True).distinct().order_by('county'))
+    sc_qs = base.filter(county__in=counties) if counties else base
+    sub_counties = list(sc_qs.values_list('sub_county', flat=True).distinct().order_by('sub_county'))
+    chu_qs = sc_qs.filter(sub_county__in=subs) if subs else sc_qs
+    chus = list(chu_qs.values_list('community_health_unit', flat=True).distinct().order_by('community_health_unit'))
+    return JsonResponse({
+        'counties': [c for c in all_counties if c],
+        'sub_counties': [s for s in sub_counties if s],
+        'chus': [c for c in chus if c],
+    })
+
+
+def _hiht_share_band(total, target):
+    pct = total / target * 100 if target else 0
+    return 'green' if pct >= 100 else 'yellow' if pct >= 75 else 'red'
+
+
+@login_required
+@require_GET
+def api_hiht_share_data(request):
+    """
+    JSON for the share images. Level = what each row is (county, sub-county,
+    CHU or CHP); the picked counties/sub-counties/CHUs narrow what's included.
+    Rows at county/sub-county/CHU level show the average per active CHP; rows
+    at CHP level show that CHP's own counts. HIHTs shading uses the same
+    green >=100% / yellow >=75% / red bands as the rest of the app.
+    """
+    batch = _hiht_share_batch(request)
+    if batch is None:
+        return JsonResponse({'error': 'No reporting period found.'}, status=400)
+
+    level = request.GET.get('level', 'sub_county')
+    if level not in HIHT_SHARE_LEVELS and level != 'chp':
+        level = 'sub_county'
+
+    qs, counties, subs, chus = _hiht_share_qs(request, batch)
+
+    target = HIHT_SHARE_TARGET
+    target_note = ''
+    if batch.period_type == 'weekly':
+        target = round(HIHT_SHARE_TARGET / 4.3, 1)
+        target_note = f' (weekly, prorated from {HIHT_SHARE_TARGET})'
+
+    if batch.period_type == 'weekly' and batch.week_end_date:
+        as_at = 'as at ' + batch.week_end_date.strftime('%d %b %Y').lstrip('0')
+    else:
+        as_at = 'for ' + batch.get_month_display() + ' ' + str(batch.year)
+
+    fields = []
+    for _hdr, flds in HIHT_SHARE_COLS:
+        for f in flds:
+            if f not in fields:
+                fields.append(f)
+    headers = [h for h, _ in HIHT_SHARE_COLS]
+
+    def combine(d, divisor=1):
+        vals = [sum((d.get(f) or 0) for f in flds) for _h, flds in HIHT_SHARE_COLS]
+        if divisor != 1:
+            vals = [round(v / divisor, 1) for v in vals]
+        return vals
+
+    def make_row(label, sub, vals, total, n=None):
+        return {
+            'label': label, 'sub': sub, 'values': vals,
+            'total': total, 'band': _hiht_share_band(total, target), 'n': n,
+        }
+
+    blocks = []
+
+    if level == 'chp':
+        if not (subs or chus):
+            return JsonResponse({
+                'error': 'For CHP level, pick at least one sub-county or CHU first.'
+            }, status=400)
+        groups = {}
+        for rec in qs.values('county', 'sub_county', 'community_health_unit', 'chw_name', *fields):
+            key = (rec['county'], rec['sub_county'], rec['community_health_unit'])
+            groups.setdefault(key, []).append(rec)
+        if len(groups) > HIHT_SHARE_MAX_BLOCKS:
+            return JsonResponse({
+                'error': f'That is {len(groups)} CHUs. Pick fewer (up to {HIHT_SHARE_MAX_BLOCKS}) so the images stay readable.'
+            }, status=400)
+        for (county, sc, chu), recs in sorted(groups.items(), key=lambda kv: (kv[0][1], kv[0][2])):
+            rows = []
+            col_sums = [0] * len(HIHT_SHARE_COLS)
+            grand = 0
+            for r in recs:
+                vals = combine(r)
+                total = sum(vals)
+                grand += total
+                col_sums = [a + b for a, b in zip(col_sums, vals)]
+                rows.append(make_row(r['chw_name'] or '(unnamed)', '', vals, total))
+            rows.sort(key=lambda x: -x['total'])
+            n = len(recs)
+            avg = round(grand / n, 1) if n else 0
+            blocks.append({
+                'title': f'HIHTs per indicator – {chu}, {sc}',
+                'headline': avg,
+                'pct': round(avg / target * 100) if target else None,
+                'n': n, 'n_label': 'CHPs',
+                'rows': rows,
+                'footer': [
+                    {'label': 'CU total', 'values': col_sums, 'total': grand},
+                    {'label': 'Avg per CHP', 'values': [round(v / n, 1) for v in col_sums], 'total': avg},
+                ],
+            })
+    else:
+        group_fields = HIHT_SHARE_LEVELS[level]
+        aggs = {f: Sum(f) for f in fields}
+        grouped = list(qs.values(*group_fields).annotate(_n=Count('id'), **aggs).order_by(*group_fields))
+        if not grouped:
+            return JsonResponse({'error': 'No active CHPs match that selection for this period.'}, status=400)
+        rows = []
+        tot_n = 0
+        tot_vals = [0] * len(HIHT_SHARE_COLS)
+        for g in grouped:
+            n = g['_n']
+            raw = combine(g)
+            tot_n += n
+            tot_vals = [a + b for a, b in zip(tot_vals, raw)]
+            avg_vals = [round(v / n, 1) for v in raw]
+            total = round(sum(raw) / n, 1)
+            if level == 'county':
+                label, sub = g['county'], ''
+            elif level == 'sub_county':
+                label, sub = g['sub_county'], g['county']
+            else:
+                label, sub = g['community_health_unit'], f"{g['sub_county']}, {g['county']}"
+            rows.append(make_row(label, sub, avg_vals, total, n))
+        rows.sort(key=lambda x: -x['total'])
+        overall = round(sum(tot_vals) / tot_n, 1) if tot_n else 0
+        names = {'county': 'county', 'sub_county': 'sub-county', 'chu': 'CHU'}
+        scope = ', '.join((subs or counties)[:3]) + (' and more' if len(subs or counties) > 3 else '') if (subs or counties) else 'All counties'
+        if chus and level == 'chu':
+            scope = f'{len(chus)} selected CHUs'
+        parts = [rows[i:i + HIHT_SHARE_MAX_ROWS] for i in range(0, len(rows), HIHT_SHARE_MAX_ROWS)]
+        for i, part in enumerate(parts, 1):
+            suffix = f' (part {i} of {len(parts)})' if len(parts) > 1 else ''
+            last = i == len(parts)
+            blocks.append({
+                'title': f'HIHTs per CHP by {names[level]} – {scope}{suffix}',
+                'headline': overall,
+                'pct': round(overall / target * 100) if target else None,
+                'n': tot_n, 'n_label': 'active CHPs', 'show_n': True,
+                'rows': part,
+                'footer': ([{'label': 'Avg per CHP (all)', 'values': [round(v / tot_n, 1) for v in tot_vals], 'total': overall}] if last else []),
+            })
+
+    return JsonResponse({
+        'batch_label': batch.label,
+        'as_at': as_at,
+        'target': target,
+        'target_note': target_note,
+        'level': level,
+        'headers': headers,
+        'blocks': blocks,
+    })
+
+
 @login_required
 def lead_chps_hiht_view(request):
     """

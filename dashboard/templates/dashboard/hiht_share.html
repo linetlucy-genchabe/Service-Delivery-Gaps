@@ -1,0 +1,249 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}HIHT Share Image{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hs-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:14px; margin-bottom:14px; }
+  .hs-box { background:#fff; border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; }
+  .hs-box h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; }
+  .hs-box h4 a { font-size:11px; text-transform:none; letter-spacing:0; color:var(--navy); cursor:pointer; text-decoration:underline; }
+  .hs-search { width:100%; box-sizing:border-box; padding:6px 8px; font-size:13px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; }
+  .hs-list { max-height:170px; overflow:auto; font-size:13px; }
+  .hs-list label { display:flex; gap:6px; align-items:center; padding:2px 0; cursor:pointer; }
+  .hs-empty { color:var(--text-muted); font-size:12px; padding:4px 0; }
+  .hs-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:16px; }
+  .hs-bar label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:3px; }
+  .hs-bar select { padding:7px 10px; font-size:13px; border:1.5px solid var(--border); border-radius:8px; background:#fff; }
+  .hs-msg { margin:10px 0; padding:10px 12px; border-radius:8px; font-size:13px; }
+  .hs-msg.err { background:#FDECEC; color:#9B1C1C; }
+  .hs-msg.info { background:var(--navy-light); color:var(--navy); }
+
+  /* The shareable image card (drawn to PNG) */
+  .hs-wrap { margin-bottom:22px; overflow-x:auto; }
+  .hs-actions { display:flex; gap:8px; margin:0 0 8px; flex-wrap:wrap; }
+  .hs-card { background:#fff; width:1040px; padding:26px 28px 22px; font-family:'Inter','Segoe UI',Arial,sans-serif; color:#111827; box-sizing:border-box; }
+  .hs-card h2 { margin:0 0 14px; font-size:24px; font-weight:700; }
+  .hs-head { display:flex; align-items:center; gap:22px; margin-bottom:16px; }
+  .hs-big { font-size:56px; font-weight:700; color:#2E6FBF; line-height:1; }
+  .hs-meta { font-size:15px; color:#374151; line-height:1.5; }
+  .hs-table { border-collapse:collapse; width:100%; font-size:14px; }
+  .hs-table th { background:#1F4E79; color:#fff; padding:9px 6px; font-weight:600; font-size:13px; border:1px solid #fff; text-align:center; }
+  .hs-table th.l { text-align:left; padding-left:14px; }
+  .hs-table td { border:1px solid #D1D5DB; padding:8px 6px; text-align:center; }
+  .hs-table td.l { text-align:left; padding-left:14px; }
+  .hs-table td.l small { color:#6B7280; display:block; font-size:11px; }
+  .hs-table td.z { color:#C4C8CE; }
+  .hs-table td.tot { font-weight:700; }
+  .hs-table td.green  { background:#CDE8D4; }
+  .hs-table td.yellow { background:#FDE8A8; }
+  .hs-table td.red    { background:#F4C7C3; }
+  .hs-table tr.foot td { background:#EAF0F7; font-weight:700; }
+  .hs-note { font-size:11px; color:#6B7280; margin-top:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">📲 HIHT Share Image</h1>
+    <p class="page-subtitle">
+      Pick a period, a level and the places you want. Get a clean image per block that you can
+      share straight to WhatsApp. Shading: green at or above target ({{ target }} HIHTs/CHP),
+      yellow from 75%, red below.
+    </p>
+  </div>
+</div>
+
+<div class="hs-bar">
+  <div>
+    <label>Reporting period</label>
+    <select id="hs-batch">
+      {% for b in batches %}<option value="{{ b.pk }}" {% if b == default_batch %}selected{% endif %}>{{ b.label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Each row is a</label>
+    <select id="hs-level">
+      <option value="county">County</option>
+      <option value="sub_county" selected>Sub-county</option>
+      <option value="chu">CHU</option>
+      <option value="chp">CHP (one image per CHU)</option>
+    </select>
+  </div>
+  <button type="button" class="btn btn-primary" id="hs-go">Generate image</button>
+</div>
+
+<div class="hs-grid">
+  <div class="hs-box">
+    <h4>Counties <a data-clear="county">clear</a></h4>
+    <div class="hs-list" id="hs-list-county"><div class="hs-empty">Loading…</div></div>
+  </div>
+  <div class="hs-box">
+    <h4>Sub-counties <a data-clear="sub_county">clear</a></h4>
+    <input class="hs-search" id="hs-search-sub_county" placeholder="Search sub-counties">
+    <div class="hs-list" id="hs-list-sub_county"></div>
+  </div>
+  <div class="hs-box">
+    <h4>CHUs <a data-clear="chu">clear</a></h4>
+    <input class="hs-search" id="hs-search-chu" placeholder="Search CHUs">
+    <div class="hs-list" id="hs-list-chu"></div>
+  </div>
+</div>
+
+<div id="hs-msg"></div>
+<div id="hs-out"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(function () {
+  const OPT_URL = "{% url 'api_hiht_share_options' %}";
+  const DATA_URL = "{% url 'api_hiht_share_data' %}";
+  const KEYS = ['county', 'sub_county', 'chu'];
+  const picked = { county: new Set(), sub_county: new Set(), chu: new Set() };
+  let options = { county: [], sub_county: [], chu: [] };
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function qs(extra) {
+    const p = new URLSearchParams();
+    p.set('batch', $('hs-batch').value);
+    KEYS.forEach(k => picked[k].forEach(v => p.append(k, v)));
+    Object.keys(extra || {}).forEach(k => p.set(k, extra[k]));
+    return p.toString();
+  }
+
+  function renderList(key) {
+    const box = $('hs-list-' + key);
+    const search = $('hs-search-' + key);
+    const term = search ? search.value.trim().toLowerCase() : '';
+    const items = options[key].filter(v => !term || v.toLowerCase().includes(term));
+    if (!items.length) { box.innerHTML = '<div class="hs-empty">Nothing to show</div>'; return; }
+    box.innerHTML = items.map(v =>
+      '<label><input type="checkbox" data-key="' + key + '" value="' + esc(v) + '"' +
+      (picked[key].has(v) ? ' checked' : '') + '> ' + esc(v) + '</label>').join('');
+  }
+
+  function loadOptions() {
+    return fetch(OPT_URL + '?' + qs()).then(r => r.json()).then(d => {
+      options = { county: d.counties, sub_county: d.sub_counties, chu: d.chus };
+      // drop picks that are no longer available after a cascade change
+      ['sub_county', 'chu'].forEach(k => picked[k].forEach(v => { if (!options[k].includes(v)) picked[k].delete(v); }));
+      KEYS.forEach(renderList);
+    });
+  }
+
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.matches && t.matches('.hs-list input[type=checkbox]')) {
+      const k = t.dataset.key;
+      t.checked ? picked[k].add(t.value) : picked[k].delete(t.value);
+      if (k !== 'chu') loadOptions();
+    }
+  });
+  ['sub_county', 'chu'].forEach(k => $('hs-search-' + k).addEventListener('input', () => renderList(k)));
+  document.querySelectorAll('[data-clear]').forEach(a => a.addEventListener('click', () => {
+    const k = a.dataset.clear; picked[k].clear();
+    if (k !== 'chu') loadOptions(); else renderList(k);
+  }));
+  $('hs-batch').addEventListener('change', () => { KEYS.forEach(k => picked[k].clear()); loadOptions(); });
+
+  function cell(v, cls) {
+    const z = (v === 0 || v === '0' || v === '0.0');
+    return '<td class="' + (cls || '') + (z ? ' z' : '') + '">' + (z ? '0' : esc(fmt(v))) + '</td>';
+  }
+  function fmt(v) { return (typeof v === 'number' && !Number.isInteger(v)) ? v.toFixed(1) : v; }
+
+  function cardHtml(b, d, level) {
+    const showSub = level !== 'chp';
+    const head = '<tr><th class="l">' + (level === 'chp' ? 'CHP' : level === 'chu' ? 'CHU' : level === 'county' ? 'County' : 'Sub-county') + '</th>' +
+      (showSub && b.show_n ? '<th>CHPs</th>' : '') +
+      d.headers.map(h => '<th>' + esc(h) + '</th>').join('') + '<th>HIHTs</th></tr>';
+    const rows = b.rows.map(r =>
+      '<tr><td class="l">' + esc(r.label) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' +
+      (showSub && b.show_n ? cell(r.n) : '') +
+      r.values.map(v => cell(v)).join('') +
+      '<td class="tot ' + r.band + '">' + esc(fmt(r.total)) + '</td></tr>').join('');
+    const foot = b.footer.map(f =>
+      '<tr class="foot"><td class="l">' + esc(f.label) + '</td>' +
+      (showSub && b.show_n ? '<td></td>' : '') +
+      f.values.map(v => cell(v)).join('') + '<td>' + esc(fmt(f.total)) + '</td></tr>').join('');
+    const perWhat = level === 'chp' ? 'average HIHTs per CHP' : 'average HIHTs per CHP across the selection';
+    return '<div class="hs-head"><div class="hs-big">' + esc(fmt(b.headline)) + '</div>' +
+      '<div class="hs-meta">' + perWhat + ' (' + esc(b.pct) + '% of ' + esc(d.target) + ') · ' + esc(b.n) + ' ' + esc(b.n_label) + ' · ' + esc(d.as_at) + '<br>' +
+      'Shading = HIHT band (green / yellow / red)' + esc(d.target_note) + '</div></div>' +
+      '<table class="hs-table"><thead>' + head + '</thead><tbody>' + rows + foot + '</tbody></table>';
+  }
+
+  function toPng(el, name, btn) {
+    const old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+    return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(canvas =>
+      new Promise(res => canvas.toBlob(blob => res(blob), 'image/png'))
+    ).then(blob => {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      return new File([blob], name, { type: 'image/png' });
+    }).catch(err => { if (btn) { btn.disabled = false; btn.textContent = old; } throw err; });
+  }
+  function save(file) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  const slug = s => String(s).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'hihts';
+
+  function show(msg, cls) { $('hs-msg').innerHTML = msg ? '<div class="hs-msg ' + cls + '">' + esc(msg) + '</div>' : ''; }
+
+  function generate() {
+    show('Building…', 'info'); $('hs-out').innerHTML = '';
+    const level = $('hs-level').value;
+    fetch(DATA_URL + '?' + qs({ level: level })).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+      if (!ok) { show(j.error || 'Something went wrong.', 'err'); return; }
+      show('', '');
+      const out = $('hs-out');
+      if (j.blocks.length > 1) {
+        const all = document.createElement('div');
+        all.className = 'hs-actions';
+        all.innerHTML = '<button type="button" class="btn btn-sm btn-primary" id="hs-all">⬇ Download all ' + j.blocks.length + ' images</button>';
+        out.appendChild(all);
+      }
+      const cards = [];
+      j.blocks.forEach((b, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'hs-wrap';
+        const name = 'hihts_' + slug(b.title) + '.png';
+        wrap.innerHTML = '<div class="hs-actions">' +
+          '<button type="button" class="btn btn-sm btn-outline" data-act="dl">⬇ Download PNG</button>' +
+          '<button type="button" class="btn btn-sm btn-outline" data-act="share">📲 Share (WhatsApp)</button></div>' +
+          '<div class="hs-card"><h2>' + esc(b.title) + '</h2>' + cardHtml(b, j, level) + '</div>';
+        out.appendChild(wrap);
+        const card = wrap.querySelector('.hs-card');
+        cards.push({ card, name });
+        wrap.querySelector('[data-act=dl]').addEventListener('click', function () {
+          toPng(card, name, this).then(save);
+        });
+        wrap.querySelector('[data-act=share]').addEventListener('click', function () {
+          toPng(card, name, this).then(file => {
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              return navigator.share({ files: [file], title: b.title }).catch(() => {});
+            }
+            save(file);
+            show('Image downloaded. Attach it in WhatsApp (sharing straight from this browser is not supported).', 'info');
+          });
+        });
+      });
+      const allBtn = $('hs-all');
+      if (allBtn) allBtn.addEventListener('click', async function () {
+        for (const c of cards) { save(await toPng(c.card, c.name, null)); await new Promise(r => setTimeout(r, 400)); }
+      });
+    }).catch(() => show('Could not build the image. Please try again.', 'err'));
+  }
+
+  $('hs-go').addEventListener('click', generate);
+  loadOptions();
+})();
+</script>
+{% endblock %}
