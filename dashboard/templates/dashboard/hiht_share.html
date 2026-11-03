@@ -3,95 +3,100 @@
 
 {% block extra_css %}
 <style>
-  .hs-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:14px; margin-bottom:14px; }
-  .hs-box { background:#fff; border:1.5px solid var(--border); border-radius:10px; padding:10px 12px; }
-  .hs-box h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; }
-  .hs-box h4 a { font-size:11px; text-transform:none; letter-spacing:0; color:var(--navy); cursor:pointer; text-decoration:underline; }
-  .hs-search { width:100%; box-sizing:border-box; padding:6px 8px; font-size:13px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; }
-  .hs-list { max-height:170px; overflow:auto; font-size:13px; }
-  .hs-list label { display:flex; gap:6px; align-items:center; padding:2px 0; cursor:pointer; }
-  .hs-empty { color:var(--text-muted); font-size:12px; padding:4px 0; }
-  .hs-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:16px; }
-  .hs-bar label { display:block; font-size:12px; color:var(--text-muted); margin-bottom:3px; }
-  .hs-bar select { padding:7px 10px; font-size:13px; border:1.5px solid var(--border); border-radius:8px; background:#fff; }
-  .hs-msg { margin:10px 0; padding:10px 12px; border-radius:8px; font-size:13px; }
+  .hs-top { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; background:#fff; border:1.5px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .hs-field { display:flex; flex-direction:column; gap:4px; min-width:0; position:relative; }
+  .hs-field > span { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }
+  .hs-select, .hs-dd-btn { height:38px; min-width:170px; padding:0 12px; font-size:13px; border:1.5px solid var(--border); border-radius:8px; background:#fff; color:#111827; text-align:left; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; font-family:inherit; }
+  .hs-dd-btn:hover, .hs-select:hover { border-color:#9CA3AF; }
+  .hs-dd-btn.on { border-color:var(--navy); background:var(--navy-light); font-weight:600; color:var(--navy); }
+  .hs-dd-btn::after { content:'\25BE'; font-size:11px; color:#6B7280; }
+  .hs-pop { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:50; width:280px; background:#fff; border:1.5px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.14); padding:8px; }
+  .hs-pop.open { display:block; }
+  .hs-pop input[type=search] { width:100%; box-sizing:border-box; height:34px; padding:0 10px; font-size:13px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; }
+  .hs-pop .list { max-height:240px; overflow:auto; }
+  .hs-pop label { display:flex; gap:8px; align-items:center; padding:5px 6px; font-size:13px; border-radius:6px; cursor:pointer; }
+  .hs-pop label:hover { background:#F3F4F6; }
+  .hs-pop .foot { display:flex; justify-content:space-between; padding:6px 4px 0; font-size:12px; }
+  .hs-pop .foot a { color:var(--navy); cursor:pointer; text-decoration:underline; }
+  .hs-empty { color:var(--text-muted); font-size:12px; padding:8px 6px; }
+
+  .hs-chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 12px; min-height:28px; }
+  .hs-chip { background:var(--navy-light); color:var(--navy); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px; font-weight:600; display:inline-flex; gap:6px; align-items:center; }
+  .hs-chip button { border:0; background:rgba(27,58,107,.15); color:var(--navy); width:18px; height:18px; border-radius:50%; line-height:16px; cursor:pointer; padding:0; font-size:13px; }
+  .hs-showing { font-size:13px; color:#374151; margin-right:6px; }
+  .hs-clearall { font-size:12px; color:var(--navy); text-decoration:underline; cursor:pointer; margin-left:auto; }
+
+  .hs-msg { margin:10px 0; padding:12px 14px; border-radius:8px; font-size:13px; }
   .hs-msg.err { background:#FDECEC; color:#9B1C1C; }
   .hs-msg.info { background:var(--navy-light); color:var(--navy); }
+  .hs-loading { padding:40px; text-align:center; color:var(--text-muted); font-size:14px; }
 
-  /* The shareable image card (drawn to PNG) */
-  .hs-wrap { margin-bottom:22px; overflow-x:auto; }
-  .hs-actions { display:flex; gap:8px; margin:0 0 8px; flex-wrap:wrap; }
+  .hs-block { margin-bottom:26px; }
+  .hs-bar { display:flex; gap:8px; margin:0 0 8px; flex-wrap:wrap; align-items:center; }
+  .hs-bar .title { font-size:13px; font-weight:600; color:#374151; margin-right:auto; }
+  .hs-frame { background:#F9FAFB; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; }
+  .hs-scale { transform-origin:top left; width:1040px; }
+  .hs-scale .hs-card { box-shadow:0 1px 6px rgba(0,0,0,.08); }
+
+  /* The shareable image */
   .hs-card { background:#fff; width:1040px; padding:26px 28px 22px; font-family:'Inter','Segoe UI',Arial,sans-serif; color:#111827; box-sizing:border-box; }
   .hs-card h2 { margin:0 0 14px; font-size:24px; font-weight:700; }
   .hs-head { display:flex; align-items:center; gap:22px; margin-bottom:16px; }
   .hs-big { font-size:56px; font-weight:700; color:#2E6FBF; line-height:1; }
   .hs-meta { font-size:15px; color:#374151; line-height:1.5; }
-  .hs-table { border-collapse:collapse; width:100%; font-size:14px; }
-  .hs-table th { background:#1F4E79; color:#fff; padding:9px 6px; font-weight:600; font-size:13px; border:1px solid #fff; text-align:center; }
-  .hs-table th.l { text-align:left; padding-left:14px; }
-  .hs-table td { border:1px solid #D1D5DB; padding:8px 6px; text-align:center; }
-  .hs-table td.l { text-align:left; padding-left:14px; }
-  .hs-table td.l small { color:#6B7280; display:block; font-size:11px; }
+  .hs-table { border-collapse:collapse; width:100%; table-layout:fixed; font-size:14px; }
+  .hs-table th { background:#1F4E79; color:#fff; padding:9px 2px; font-weight:600; font-size:11px; letter-spacing:-.1px; overflow-wrap:normal; border:1px solid #fff; text-align:center; }
+  .hs-table th.l { text-align:left; padding-left:14px; width:220px; }
+  .hs-table td { border:1px solid #D1D5DB; padding:7px 4px; text-align:center; }
+  .hs-table td.l { text-align:left; padding-left:14px; font-weight:500; }
+  .hs-table td.l small { color:#6B7280; display:block; font-size:11px; font-weight:400; }
   .hs-table td.z { color:#C4C8CE; }
   .hs-table td.tot { font-weight:700; }
   .hs-table td.green  { background:#CDE8D4; }
   .hs-table td.yellow { background:#FDE8A8; }
   .hs-table td.red    { background:#F4C7C3; }
   .hs-table tr.foot td { background:#EAF0F7; font-weight:700; }
-  .hs-note { font-size:11px; color:#6B7280; margin-top:8px; }
+  @media (max-width: 700px) { .hs-select, .hs-dd-btn { min-width:140px; } .hs-top { gap:8px; } }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="page-title">📲 HIHT Share Image</h1>
+    <h1 class="page-title">HIHT Share Image</h1>
     <p class="page-subtitle">
-      Pick a period, a level and the places you want. Get a clean image per block that you can
-      share straight to WhatsApp. Shading: green at or above target ({{ target }} HIHTs/CHP),
-      yellow from 75%, red below.
+      Pick a period and narrow by county, sub-county or CHU. The image updates as you pick.
+      Shading: green at or above the target of {{ target }} HIHTs per CHP, yellow from 75% of it, red below.
     </p>
   </div>
 </div>
 
-<div class="hs-bar">
-  <div>
-    <label>Reporting period</label>
-    <select id="hs-batch">
+<div class="hs-top">
+  <label class="hs-field"><span>Period</span>
+    <select id="hs-batch" class="hs-select">
       {% for b in batches %}<option value="{{ b.pk }}" {% if b == default_batch %}selected{% endif %}>{{ b.label }}</option>{% endfor %}
     </select>
-  </div>
-  <div>
-    <label>Each row is a</label>
-    <select id="hs-level">
-      <option value="county">County</option>
-      <option value="sub_county" selected>Sub-county</option>
-      <option value="chu">CHU</option>
-      <option value="chp">CHP (one image per CHU)</option>
+  </label>
+  <div class="hs-field" data-dd="county"><span>County</span><button type="button" class="hs-dd-btn"></button>
+    <div class="hs-pop"><div class="list"></div><div class="foot"><a data-none>Clear</a></div></div></div>
+  <div class="hs-field" data-dd="sub_county"><span>Sub-county</span><button type="button" class="hs-dd-btn"></button>
+    <div class="hs-pop"><input type="search" placeholder="Search"><div class="list"></div><div class="foot"><a data-none>Clear</a></div></div></div>
+  <div class="hs-field" data-dd="chu"><span>CHU</span><button type="button" class="hs-dd-btn"></button>
+    <div class="hs-pop"><input type="search" placeholder="Search"><div class="list"></div><div class="foot"><a data-none>Clear</a></div></div></div>
+  <label class="hs-field"><span>Rows</span>
+    <select id="hs-level" class="hs-select" style="min-width:150px">
+      <option value="auto" selected>Automatic</option>
+      <option value="county">Counties</option>
+      <option value="sub_county">Sub-counties</option>
+      <option value="chu">CHUs</option>
+      <option value="chp">CHPs</option>
     </select>
-  </div>
-  <button type="button" class="btn btn-primary" id="hs-go">Generate image</button>
+  </label>
 </div>
 
-<div class="hs-grid">
-  <div class="hs-box">
-    <h4>Counties <a data-clear="county">clear</a></h4>
-    <div class="hs-list" id="hs-list-county"><div class="hs-empty">Loading…</div></div>
-  </div>
-  <div class="hs-box">
-    <h4>Sub-counties <a data-clear="sub_county">clear</a></h4>
-    <input class="hs-search" id="hs-search-sub_county" placeholder="Search sub-counties">
-    <div class="hs-list" id="hs-list-sub_county"></div>
-  </div>
-  <div class="hs-box">
-    <h4>CHUs <a data-clear="chu">clear</a></h4>
-    <input class="hs-search" id="hs-search-chu" placeholder="Search CHUs">
-    <div class="hs-list" id="hs-list-chu"></div>
-  </div>
-</div>
-
+<div class="hs-chips" id="hs-chips"></div>
 <div id="hs-msg"></div>
-<div id="hs-out"></div>
+<div id="hs-out"><div class="hs-loading">Loading…</div></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -101,11 +106,15 @@
   const OPT_URL = "{% url 'api_hiht_share_options' %}";
   const DATA_URL = "{% url 'api_hiht_share_data' %}";
   const KEYS = ['county', 'sub_county', 'chu'];
+  const LABEL = { county: 'County', sub_county: 'Sub-county', chu: 'CHU' };
+  const CARD_W = 1040;
   const picked = { county: new Set(), sub_county: new Set(), chu: new Set() };
   let options = { county: [], sub_county: [], chu: [] };
+  let timer = null, reqId = 0;
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = v => (typeof v === 'number' && !Number.isInteger(v)) ? v.toFixed(1) : v;
 
   function qs(extra) {
     const p = new URLSearchParams();
@@ -115,77 +124,112 @@
     return p.toString();
   }
 
-  function renderList(key) {
-    const box = $('hs-list-' + key);
-    const search = $('hs-search-' + key);
+  /* ---------- pickers ---------- */
+  function ddEl(k) { return document.querySelector('[data-dd="' + k + '"]'); }
+  function renderDd(k) {
+    const root = ddEl(k), btn = root.querySelector('.hs-dd-btn'), list = root.querySelector('.list');
+    const search = root.querySelector('input[type=search]');
     const term = search ? search.value.trim().toLowerCase() : '';
-    const items = options[key].filter(v => !term || v.toLowerCase().includes(term));
-    if (!items.length) { box.innerHTML = '<div class="hs-empty">Nothing to show</div>'; return; }
-    box.innerHTML = items.map(v =>
-      '<label><input type="checkbox" data-key="' + key + '" value="' + esc(v) + '"' +
-      (picked[key].has(v) ? ' checked' : '') + '> ' + esc(v) + '</label>').join('');
+    const n = picked[k].size;
+    btn.textContent = n === 0 ? 'All' : n === 1 ? [...picked[k]][0] : n + ' selected';
+    btn.classList.toggle('on', n > 0);
+    const items = options[k].filter(v => !term || v.toLowerCase().includes(term));
+    list.innerHTML = items.length ? items.map(v =>
+      '<label><input type="checkbox" value="' + esc(v) + '"' + (picked[k].has(v) ? ' checked' : '') + '> ' + esc(v) + '</label>').join('')
+      : '<div class="hs-empty">Nothing to show</div>';
   }
-
+  function renderChips() {
+    let html = '';
+    KEYS.forEach(k => picked[k].forEach(v => {
+      html += '<span class="hs-chip">' + esc(v) + '<button type="button" data-k="' + k + '" data-v="' + esc(v) + '" aria-label="Remove">×</button></span>';
+    }));
+    const any = KEYS.some(k => picked[k].size);
+    $('hs-chips').innerHTML = '<span class="hs-showing" id="hs-showing"></span>' + html +
+      (any ? '<a class="hs-clearall" id="hs-clearall">Clear all</a>' : '');
+  }
   function loadOptions() {
     return fetch(OPT_URL + '?' + qs()).then(r => r.json()).then(d => {
       options = { county: d.counties, sub_county: d.sub_counties, chu: d.chus };
-      // drop picks that are no longer available after a cascade change
       ['sub_county', 'chu'].forEach(k => picked[k].forEach(v => { if (!options[k].includes(v)) picked[k].delete(v); }));
-      KEYS.forEach(renderList);
+      KEYS.forEach(renderDd); renderChips();
     });
   }
+  function changed(k) {
+    renderDd(k); renderChips();
+    if (k !== 'chu') loadOptions();
+    schedule();
+  }
 
-  document.addEventListener('change', e => {
-    const t = e.target;
-    if (t.matches && t.matches('.hs-list input[type=checkbox]')) {
-      const k = t.dataset.key;
-      t.checked ? picked[k].add(t.value) : picked[k].delete(t.value);
-      if (k !== 'chu') loadOptions();
-    }
+  document.querySelectorAll('[data-dd]').forEach(root => {
+    const k = root.dataset.dd, pop = root.querySelector('.hs-pop');
+    root.querySelector('.hs-dd-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const open = pop.classList.contains('open');
+      document.querySelectorAll('.hs-pop.open').forEach(p => p.classList.remove('open'));
+      if (!open) { pop.classList.add('open'); const s = pop.querySelector('input[type=search]'); if (s) s.focus(); }
+    });
+    pop.addEventListener('click', e => e.stopPropagation());
+    pop.addEventListener('change', e => {
+      const t = e.target;
+      if (t.type === 'checkbox') { t.checked ? picked[k].add(t.value) : picked[k].delete(t.value); changed(k); }
+    });
+    const s = pop.querySelector('input[type=search]');
+    if (s) s.addEventListener('input', () => renderDd(k));
+    pop.querySelector('[data-none]').addEventListener('click', () => { picked[k].clear(); changed(k); });
   });
-  ['sub_county', 'chu'].forEach(k => $('hs-search-' + k).addEventListener('input', () => renderList(k)));
-  document.querySelectorAll('[data-clear]').forEach(a => a.addEventListener('click', () => {
-    const k = a.dataset.clear; picked[k].clear();
-    if (k !== 'chu') loadOptions(); else renderList(k);
-  }));
-  $('hs-batch').addEventListener('change', () => { KEYS.forEach(k => picked[k].clear()); loadOptions(); });
+  document.addEventListener('click', () => document.querySelectorAll('.hs-pop.open').forEach(p => p.classList.remove('open')));
+  $('hs-chips').addEventListener('click', e => {
+    const b = e.target.closest('button[data-k]');
+    if (b) { picked[b.dataset.k].delete(b.dataset.v); changed(b.dataset.k); return; }
+    if (e.target.id === 'hs-clearall') { KEYS.forEach(k => picked[k].clear()); loadOptions(); schedule(); }
+  });
+  $('hs-batch').addEventListener('change', () => { KEYS.forEach(k => picked[k].clear()); loadOptions(); schedule(); });
+  $('hs-level').addEventListener('change', schedule);
 
+  /* ---------- image ---------- */
   function cell(v, cls) {
-    const z = (v === 0 || v === '0' || v === '0.0');
+    const z = (v === 0 || v === '0');
     return '<td class="' + (cls || '') + (z ? ' z' : '') + '">' + (z ? '0' : esc(fmt(v))) + '</td>';
   }
-  function fmt(v) { return (typeof v === 'number' && !Number.isInteger(v)) ? v.toFixed(1) : v; }
-
   function cardHtml(b, d, level) {
-    const showSub = level !== 'chp';
-    const head = '<tr><th class="l">' + (level === 'chp' ? 'CHP' : level === 'chu' ? 'CHU' : level === 'county' ? 'County' : 'Sub-county') + '</th>' +
-      (showSub && b.show_n ? '<th>CHPs</th>' : '') +
-      d.headers.map(h => '<th>' + esc(h) + '</th>').join('') + '<th>HIHTs</th></tr>';
+    const showN = level !== 'chp' && b.show_n;
+    const first = level === 'chp' ? 'CHP' : level === 'chu' ? 'CHU' : level === 'county' ? 'County' : 'Sub-county';
+    const head = '<tr><th class="l">' + first + '</th>' + (showN ? '<th style="width:52px">CHPs</th>' : '') +
+      d.headers.map(h => '<th>' + esc(h) + '</th>').join('') + '<th style="width:72px">HIHTs</th></tr>';
     const rows = b.rows.map(r =>
       '<tr><td class="l">' + esc(r.label) + (r.sub ? '<small>' + esc(r.sub) + '</small>' : '') + '</td>' +
-      (showSub && b.show_n ? cell(r.n) : '') +
-      r.values.map(v => cell(v)).join('') +
-      '<td class="tot ' + r.band + '">' + esc(fmt(r.total)) + '</td></tr>').join('');
+      (showN ? cell(r.n) : '') + r.values.map(v => cell(v)).join('') +
+      '<td class="tot ' + r.band + '">' + esc(level === 'chp' ? fmt(r.total) : Number(r.total).toFixed(1)) + '</td></tr>').join('');
     const foot = b.footer.map(f =>
-      '<tr class="foot"><td class="l">' + esc(f.label) + '</td>' +
-      (showSub && b.show_n ? '<td></td>' : '') +
-      f.values.map(v => cell(v)).join('') + '<td>' + esc(fmt(f.total)) + '</td></tr>').join('');
-    const perWhat = level === 'chp' ? 'average HIHTs per CHP' : 'average HIHTs per CHP across the selection';
-    return '<div class="hs-head"><div class="hs-big">' + esc(fmt(b.headline)) + '</div>' +
-      '<div class="hs-meta">' + perWhat + ' (' + esc(b.pct) + '% of ' + esc(d.target) + ') · ' + esc(b.n) + ' ' + esc(b.n_label) + ' · ' + esc(d.as_at) + '<br>' +
+      '<tr class="foot"><td class="l">' + esc(f.label) + '</td>' + (showN ? '<td></td>' : '') +
+      f.values.map(v => cell(v)).join('') + '<td>' + esc(level === 'chp' && f.label === 'CU total' ? fmt(f.total) : Number(f.total).toFixed(1)) + '</td></tr>').join('');
+    const what = level === 'chp' ? 'average HIHTs per CHP' : 'average HIHTs per CHP across the selection';
+    return '<h2>' + esc(b.title) + '</h2><div class="hs-head"><div class="hs-big">' + esc(Number(b.headline).toFixed(1)) + '</div>' +
+      '<div class="hs-meta">' + what + ' (' + esc(b.pct) + '% of ' + esc(d.target) + ') · ' + esc(b.n) + ' ' + esc(b.n_label) + ' · ' + esc(d.as_at) + '<br>' +
       'Shading = HIHT band (green / yellow / red)' + esc(d.target_note) + '</div></div>' +
       '<table class="hs-table"><thead>' + head + '</thead><tbody>' + rows + foot + '</tbody></table>';
   }
 
-  function toPng(el, name, btn) {
-    const old = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
-    return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(canvas =>
-      new Promise(res => canvas.toBlob(blob => res(blob), 'image/png'))
-    ).then(blob => {
-      if (btn) { btn.disabled = false; btn.textContent = old; }
-      return new File([blob], name, { type: 'image/png' });
-    }).catch(err => { if (btn) { btn.disabled = false; btn.textContent = old; } throw err; });
+  function fit() {
+    document.querySelectorAll('.hs-frame').forEach(frame => {
+      const inner = frame.firstElementChild;
+      const s = Math.min(1, frame.clientWidth / CARD_W);
+      inner.style.transform = 'scale(' + s + ')';
+      inner.style.marginLeft = Math.max(0, (frame.clientWidth - CARD_W * s) / 2) + 'px';
+      frame.style.height = Math.ceil(inner.offsetHeight * s) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit);
+
+  function toFile(card, name) {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + CARD_W + 'px;';
+    const clone = card.cloneNode(true);
+    clone.style.transform = 'none';
+    host.appendChild(clone); document.body.appendChild(host);
+    return html2canvas(clone, { scale: 2, backgroundColor: '#ffffff', width: CARD_W, windowWidth: CARD_W })
+      .then(c => new Promise(res => c.toBlob(b => res(new File([b], name, { type: 'image/png' })), 'image/png')))
+      .finally(() => host.remove());
   }
   function save(file) {
     const a = document.createElement('a');
@@ -193,57 +237,61 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
+  function busy(btn, text, fn) {
+    const old = btn.textContent; btn.disabled = true; btn.textContent = text;
+    return Promise.resolve().then(fn).finally(() => { btn.disabled = false; btn.textContent = old; });
+  }
   const slug = s => String(s).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'hihts';
-
   function show(msg, cls) { $('hs-msg').innerHTML = msg ? '<div class="hs-msg ' + cls + '">' + esc(msg) + '</div>' : ''; }
 
   function generate() {
-    show('Building…', 'info'); $('hs-out').innerHTML = '';
-    const level = $('hs-level').value;
-    fetch(DATA_URL + '?' + qs({ level: level })).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
-      if (!ok) { show(j.error || 'Something went wrong.', 'err'); return; }
-      show('', '');
-      const out = $('hs-out');
+    const my = ++reqId;
+    $('hs-out').innerHTML = '<div class="hs-loading">Loading…</div>'; show('', '');
+    fetch(DATA_URL + '?' + qs({ level: $('hs-level').value })).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+      if (my !== reqId) return;
+      if (!ok) { $('hs-out').innerHTML = ''; show(j.error || 'Something went wrong.', 'err'); return; }
+      const nm = { county: 'counties', sub_county: 'sub-counties', chu: 'CHUs', chp: 'CHPs' }[j.level];
+      const rows = j.blocks.reduce((a, b) => a + b.rows.length, 0);
+      const sh = $('hs-showing');
+      if (sh) sh.textContent = 'Showing ' + rows + ' ' + nm + (j.blocks.length > 1 && j.level === 'chp' ? ' across ' + j.blocks.length + ' CHUs' : '');
+      const out = $('hs-out'); out.innerHTML = '';
+      const cards = [];
       if (j.blocks.length > 1) {
-        const all = document.createElement('div');
-        all.className = 'hs-actions';
-        all.innerHTML = '<button type="button" class="btn btn-sm btn-primary" id="hs-all">⬇ Download all ' + j.blocks.length + ' images</button>';
+        const all = document.createElement('div'); all.className = 'hs-bar';
+        all.innerHTML = '<button type="button" class="btn btn-sm btn-primary" id="hs-all">Download all ' + j.blocks.length + ' images</button>';
         out.appendChild(all);
       }
-      const cards = [];
-      j.blocks.forEach((b, i) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'hs-wrap';
+      j.blocks.forEach(b => {
         const name = 'hihts_' + slug(b.title) + '.png';
-        wrap.innerHTML = '<div class="hs-actions">' +
-          '<button type="button" class="btn btn-sm btn-outline" data-act="dl">⬇ Download PNG</button>' +
-          '<button type="button" class="btn btn-sm btn-outline" data-act="share">📲 Share (WhatsApp)</button></div>' +
-          '<div class="hs-card"><h2>' + esc(b.title) + '</h2>' + cardHtml(b, j, level) + '</div>';
+        const wrap = document.createElement('div'); wrap.className = 'hs-block';
+        wrap.innerHTML = '<div class="hs-bar"><span class="title">' + esc(b.title) + '</span>' +
+          '<button type="button" class="btn btn-sm btn-outline" data-act="dl">Download PNG</button>' +
+          '<button type="button" class="btn btn-sm btn-primary" data-act="share">Share to WhatsApp</button></div>' +
+          '<div class="hs-frame"><div class="hs-scale"><div class="hs-card">' + cardHtml(b, j, j.level) + '</div></div></div>';
         out.appendChild(wrap);
         const card = wrap.querySelector('.hs-card');
         cards.push({ card, name });
         wrap.querySelector('[data-act=dl]').addEventListener('click', function () {
-          toPng(card, name, this).then(save);
+          busy(this, 'Building…', () => toFile(card, name).then(save));
         });
         wrap.querySelector('[data-act=share]').addEventListener('click', function () {
-          toPng(card, name, this).then(file => {
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-              return navigator.share({ files: [file], title: b.title }).catch(() => {});
-            }
-            save(file);
-            show('Image downloaded. Attach it in WhatsApp (sharing straight from this browser is not supported).', 'info');
-          });
+          busy(this, 'Building…', () => toFile(card, name).then(file => {
+            if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: b.title }).catch(() => {});
+            save(file); show('Image downloaded. Attach it in WhatsApp (sharing straight from this browser is not supported).', 'info');
+          }));
         });
       });
       const allBtn = $('hs-all');
-      if (allBtn) allBtn.addEventListener('click', async function () {
-        for (const c of cards) { save(await toPng(c.card, c.name, null)); await new Promise(r => setTimeout(r, 400)); }
+      if (allBtn) allBtn.addEventListener('click', function () {
+        busy(this, 'Building…', async () => { for (const c of cards) { save(await toFile(c.card, c.name)); await new Promise(r => setTimeout(r, 400)); } });
       });
-    }).catch(() => show('Could not build the image. Please try again.', 'err'));
+      fit();
+    }).catch(() => { if (my === reqId) { $('hs-out').innerHTML = ''; show('Could not build the image. Please try again.', 'err'); } });
   }
+  function schedule() { clearTimeout(timer); timer = setTimeout(generate, 250); }
 
-  $('hs-go').addEventListener('click', generate);
-  loadOptions();
+  renderChips();
+  loadOptions().then(generate);
 })();
 </script>
 {% endblock %}

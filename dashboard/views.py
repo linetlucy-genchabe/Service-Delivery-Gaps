@@ -992,17 +992,19 @@ def api_hiht_share_data(request):
     if batch is None:
         return JsonResponse({'error': 'No reporting period found.'}, status=400)
 
-    level = request.GET.get('level', 'sub_county')
-    if level not in HIHT_SHARE_LEVELS and level != 'chp':
-        level = 'sub_county'
-
     qs, counties, subs, chus = _hiht_share_qs(request, batch)
 
+    # 'auto' follows what was picked: nothing -> counties, county -> its
+    # sub-counties, sub-county -> its CHUs, CHU -> its CHPs.
+    level = request.GET.get('level', 'auto')
+    if level not in HIHT_SHARE_LEVELS and level != 'chp':
+        level = 'auto'
+    if level == 'auto':
+        level = 'chp' if chus else 'chu' if subs else 'sub_county' if counties else 'county'
+
+    # Weekly uploads are month-to-date, so the full monthly target applies.
     target = HIHT_SHARE_TARGET
     target_note = ''
-    if batch.period_type == 'weekly':
-        target = round(HIHT_SHARE_TARGET / 4.3, 1)
-        target_note = f' (weekly, prorated from {HIHT_SHARE_TARGET})'
 
     if batch.period_type == 'weekly' and batch.week_end_date:
         as_at = 'as at ' + batch.week_end_date.strftime('%d %b %Y').lstrip('0')
