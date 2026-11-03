@@ -1871,6 +1871,7 @@ def sync_dashboard_view(request):
     selected_batch = None
     indicators     = None
     filter_options = {}
+    chp_rows       = []
 
     if selected_batch_id:
         selected_batch = get_object_or_404(SyncUploadBatch, pk=selected_batch_id)
@@ -1892,6 +1893,26 @@ def sync_dashboard_view(request):
 
         indicators = compute_sync_indicators(qs)
 
+        # One CHU picked: show its CHPs one by one instead of a one-bar
+        # "CHU ranking" (the ranking only makes sense across several CHUs).
+        if selected_chu:
+            for r in qs.order_by('-reports_synced', '-forms_recorded', '-days_synced', 'chp_name'):
+                if r.is_unsynced():
+                    status, tone = 'Not synced', 'red'
+                elif r.has_telemetry_issue():
+                    status, tone = 'Synced (telemetry lagging)', 'yellow'
+                elif r.is_telemetry_only():
+                    status, tone = 'Uploaded (no form recorded)', 'yellow'
+                else:
+                    status, tone = 'Synced', 'green'
+                chp_rows.append({
+                    'name': r.chp_name, 'username': r.username,
+                    'days': r.days_synced, 'reports': r.reports_synced,
+                    'forms': r.forms_recorded,
+                    'last_upload': r.last_sync_date, 'last_form': r.latest_form_date,
+                    'status': status, 'tone': tone,
+                })
+
     import json
     chu_data_json    = json.dumps(indicators['chus_sorted'] if indicators else [])
     county_data_json = json.dumps(indicators['counties']    if indicators else [])
@@ -1911,7 +1932,9 @@ def sync_dashboard_view(request):
         'sc_data_json':       sc_data_json,
         'show_county_table':  not selected_county,
         'show_sc_table':      bool(selected_county and not selected_subcounty),
-        'show_chu_chart':     bool(selected_subcounty),
+        'show_chu_chart':     bool(selected_subcounty and not selected_chu),
+        'show_chp_table':     bool(selected_chu),
+        'chp_rows':           chp_rows,
         'is_uploader':        is_uploader(request.user) if request.user.is_authenticated else False,
         # The drill-down text ("no form or upload this week") should say
         # "month" for a monthly batch instead of always saying "week".

@@ -292,6 +292,45 @@
 </div>
 {% endif %}
 
+<!-- ===== CHP VIEW — one CHU selected ===== -->
+{% if show_chp_table %}
+<div class="section-label">👥 {{ selected_chu }} — CHP Breakdown</div>
+<div class="card">
+  <div class="card-header">
+    <div><h3 class="card-title">{{ selected_chu }}, {{ selected_subcounty }}</h3><p class="card-subtitle">Every CHP in this CHU, most reports synced first · {{ chp_rows|length }} CHP(s)</p></div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn btn-sm btn-outline" onclick="downloadChartAsImage('chp-table-body','{{ selected_chu|slugify }}_chp_sync.png',this)">🖼 Download Image</button>
+    </div>
+  </div>
+  <div class="card-body no-pad" id="chp-table-body">
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>CHP</th><th>Username</th><th>Status</th>
+          <th class="num">Days Synced</th><th class="num">Reports Synced</th><th class="num">Forms Recorded</th>
+          <th>Last Upload</th><th>Last Form</th>
+        </tr></thead>
+        <tbody>
+          {% for c in chp_rows %}
+          <tr>
+            <td class="zero">{{ forloop.counter }}</td>
+            <td><strong>{{ c.name }}</strong></td>
+            <td class="zero">{{ c.username }}</td>
+            <td><span class="sync-rate-pill {% if c.tone == 'green' %}pill-green{% elif c.tone == 'yellow' %}pill-yellow{% else %}pill-red{% endif %}">{{ c.status }}</span></td>
+            <td class="num {% if c.days == 0 %}bad{% endif %}">{{ c.days }}</td>
+            <td class="num {% if c.reports == 0 %}bad{% endif %}">{{ c.reports }}</td>
+            <td class="num">{{ c.forms }}</td>
+            <td class="{% if not c.last_upload %}zero{% endif %}">{{ c.last_upload|date:"j M Y"|default:"Never" }}</td>
+            <td class="{% if not c.last_form %}zero{% endif %}">{{ c.last_form|date:"j M Y"|default:"None" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- NOT SYNCED COMPLETELY — always shown -->
 <div class="section-label">🔴 Not Synced Completely — {{ indicators.never_synced }} CHP(s) with no form and no upload this {{ period_word }}</div>
 <div class="card">
