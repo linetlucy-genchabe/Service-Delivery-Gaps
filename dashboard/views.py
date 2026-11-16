@@ -920,11 +920,27 @@ HIHT_SHARE_LEVELS = {
 }
 
 
+def _hiht_share_mtd_batch():
+    """
+    Current month to date = the newest upload of the newest month. Weekly
+    files are cumulative (each one already holds the whole month so far), so
+    the latest weekly file IS the month to date and nothing is added together.
+    """
+    latest = UploadBatch.objects.order_by('-year', '-month').first()
+    if latest is None:
+        return None
+    month_qs = UploadBatch.objects.filter(year=latest.year, month=latest.month)
+    weekly = (month_qs.filter(period_type='weekly', week_start_date__isnull=False)
+              .order_by('-week_start_date', '-uploaded_at').first())
+    return weekly or month_qs.order_by('-uploaded_at').first()
+
+
 def _hiht_share_batch(request):
+    """A specific upload when its id is given; otherwise current month to date."""
     bid = request.GET.get('batch')
     if bid and bid.isdigit():
         return UploadBatch.objects.filter(pk=int(bid)).first()
-    return UploadBatch.objects.order_by('-year', '-month', '-week_start_date', '-uploaded_at').first()
+    return _hiht_share_mtd_batch()
 
 
 def _hiht_share_qs(request, batch, active_only=True):
@@ -945,7 +961,7 @@ def hiht_share_view(request):
     batches = UploadBatch.objects.order_by('-year', '-month', '-week_start_date', '-uploaded_at')
     return render(request, 'dashboard/hiht_share.html', {
         'batches': batches,
-        'default_batch': batches.first(),
+        'mtd_batch': _hiht_share_mtd_batch(),
         'target': HIHT_SHARE_TARGET,
     })
 
@@ -1007,7 +1023,8 @@ def api_hiht_share_data(request):
     target_note = ''
 
     if batch.period_type == 'weekly' and batch.week_end_date:
-        as_at = 'as at ' + batch.week_end_date.strftime('%d %b %Y').lstrip('0')
+        as_at = (batch.get_month_display() + ' month to date, as at '
+                 + batch.week_end_date.strftime('%d %b %Y').lstrip('0'))
     else:
         as_at = 'for ' + batch.get_month_display() + ' ' + str(batch.year)
 

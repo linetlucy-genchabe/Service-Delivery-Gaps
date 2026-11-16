@@ -74,7 +74,8 @@
 <div class="hs-top">
   <label class="hs-field"><span>Period</span>
     <select id="hs-batch" class="hs-select">
-      {% for b in batches %}<option value="{{ b.pk }}" {% if b == default_batch %}selected{% endif %}>{{ b.label }}</option>{% endfor %}
+      <option value="mtd" selected>Current month to date{% if mtd_batch %} (latest file: {{ mtd_batch.label }}){% endif %}</option>
+      {% for b in batches %}<option value="{{ b.pk }}">{{ b.label }}</option>{% endfor %}
     </select>
   </label>
   <div class="hs-field" data-dd="county"><span>County</span><button type="button" class="hs-dd-btn"></button>
