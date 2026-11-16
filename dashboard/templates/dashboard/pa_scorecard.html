@@ -16,6 +16,14 @@
 .multi-select-footer button{flex:1;padding:5px 0;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;border:none}
 .ms-apply{background:#1B3A6B;color:white}.ms-clear{background:#F3F4F6;color:#374151}
 .pa-cell-lines{text-align:left;font-size:11px;line-height:1.7}
+/* Page actions: one row, two button styles (outlined = secondary, solid = main) */
+.pa-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.pa-actions .btn{padding:7px 14px;font-size:13px;gap:7px}
+.pa-actions .btn svg{width:15px;height:15px;flex-shrink:0}
+.pa-actions .btn-primary{background:#D93B15}
+.pa-actions .btn-primary:hover{background:#B8310F}
+.pa-actions .btn:focus-visible{outline:2px solid #1B3A6B;outline-offset:2px}
+@media(max-width:768px){.pa-actions{justify-content:flex-start}}
 </style>
 {% endblock %}
 
@@ -29,10 +37,22 @@
       {% if selected_subcounties %} · {{ selected_subcounties|join:", " }}{% endif %}
     </p>
   </div>
-  {% if is_uploader %}
-  <a href="{% url 'dash_util_upload' %}" class="btn btn-sm btn-outline">⬆ Upload Dashboard Util</a>
-  {% endif %}
-  <a href="{% url 'pa_scorecard_pptx' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-primary">⬇ Download PPTX</a>
+  <div class="pa-actions">
+    {% if is_uploader %}
+    <a href="{% url 'dash_util_upload' %}" class="btn btn-outline">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>
+      Upload dashboard utilization
+    </a>
+    {% endif %}
+    <button type="button" class="btn btn-outline" onclick="window.print()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>
+      Print
+    </button>
+    <a href="{% url 'pa_scorecard_pptx' %}?{{ request.GET.urlencode }}" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+      Download PPTX
+    </a>
+  </div>
 </div>
 
 <!-- FILTERS -->
@@ -130,7 +150,6 @@
       <h3 class="card-title">Performance Acceleration Scorecard</h3>
       <p class="card-subtitle">🟢 ≥90% of target &nbsp;·&nbsp; 🟡 50–89% &nbsp;·&nbsp; 🔴 &lt;50% &nbsp;·&nbsp; % Target = Most Recent Week ÷ Monthly Target × 100</p>
     </div>
-    <button class="btn btn-sm btn-outline" onclick="window.print()">🖨️ Print</button>
   </div>
   <div class="card-body no-pad">
     <div style="overflow-x:auto;">
