@@ -902,9 +902,8 @@ HIHT_SHARE_COLS = [
     ('Facility deliveries', ['facility_deliveries']),
     ('PNC 48hr',           ['pnc_48hr_ontime']),
     ('PNC 3-7d',           ['pnc_3_7d_ontime']),
-    ('U5 positive diagnoses', ['malaria_managed', 'malaria_referred',
-                               'pneumonia_managed', 'pneumonia_referred',
-                               'diarrhea_managed', 'diarrhea_referred']),
+    ('U5 positive diagnoses', ['malaria_diagnosed', 'pneumonia_diagnosed',
+                               'diarrhea_diagnosed']),
     ('U2-month referrals', ['iccm_completed_referrals_u2mo']),
     ('MAM/SAM referrals',  ['mam_sam_referral_completed']),
     ('Immuniz. referrals', ['iz_defaulters_completed']),
@@ -4383,12 +4382,14 @@ HIHT_NON_FP_COMPONENTS = [
     ('mam_sam_referral_completed',   'mam_sam_completed_referrals'),
     ('iz_defaulters_completed',      'iz_completed_referrals'),
 ]
-# Malaria/pneumonia/diarrhea "treated and/or referred" are each a sum of two
-# raw fields rather than a single column — handled separately below.
+# Malaria/pneumonia/diarrhea HIHTs count U5 positive diagnoses (the
+# "<Disease> Diagnosed" columns), as on the main dashboard: recorded
+# diagnoses, not confirmed treatments. The second slot of each tuple is
+# unused (None); the key names are kept so existing templates/exports work.
 HIHT_DISEASE_PAIRS = [
-    ('malaria_managed',   'malaria_referred',   'malaria_treated_or_referred'),
-    ('pneumonia_managed', 'pneumonia_referred', 'pneumonia_treated_or_referred'),
-    ('diarrhea_managed',  'diarrhea_referred',  'diarrhea_treated_or_referred'),
+    ('malaria_diagnosed',   None, 'malaria_treated_or_referred'),
+    ('pneumonia_diagnosed', None, 'pneumonia_treated_or_referred'),
+    ('diarrhea_diagnosed',  None, 'diarrhea_treated_or_referred'),
 ]
 HIHT_FP_COMPONENT = ('fp_unique_new_users', 'fp_unique_users_method')
 
@@ -4406,7 +4407,8 @@ def compute_hiht_for_queryset(chw_qs):
         agg_fields[field] = Sum(field)
     for f1, f2, _key in HIHT_DISEASE_PAIRS:
         agg_fields[f1] = Sum(f1)
-        agg_fields[f2] = Sum(f2)
+        if f2:
+            agg_fields[f2] = Sum(f2)
     agg_fields[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
     agg = active_qs.aggregate(**agg_fields)
 
@@ -4417,7 +4419,7 @@ def compute_hiht_for_queryset(chw_qs):
         components[key] = val
         non_fp_total += val
     for f1, f2, key in HIHT_DISEASE_PAIRS:
-        val = (agg.get(f1) or 0) + (agg.get(f2) or 0)
+        val = (agg.get(f1) or 0) + ((agg.get(f2) or 0) if f2 else 0)
         components[key] = val
         non_fp_total += val
 
@@ -4467,9 +4469,9 @@ HIHT_COMPONENT_LABELS = {
     'u2_completed_referrals':      {'label': 'U2 iCCM Referrals Completed',   'abbr': 'U2 Ref Comp'},
     'mam_sam_completed_referrals': {'label': 'MAM/SAM Referrals Completed',   'abbr': 'MAM/SAM Ref'},
     'iz_completed_referrals':      {'label': 'IZ Defaulter Referrals Completed', 'abbr': 'IZ Ref Comp'},
-    'malaria_treated_or_referred': {'label': 'Malaria Treated/Referred',      'abbr': 'Malaria Tx'},
-    'pneumonia_treated_or_referred': {'label': 'Pneumonia Treated/Referred',  'abbr': 'Pneumonia Tx'},
-    'diarrhea_treated_or_referred': {'label': 'Diarrhea Treated/Referred',    'abbr': 'Diarrhea Tx'},
+    'malaria_treated_or_referred': {'label': 'Malaria Positive Diagnoses',    'abbr': 'Malaria Dx'},
+    'pneumonia_treated_or_referred': {'label': 'Pneumonia Positive Diagnoses',  'abbr': 'Pneumonia Dx'},
+    'diarrhea_treated_or_referred': {'label': 'Diarrhea Positive Diagnoses',    'abbr': 'Diarrhea Dx'},
     'fp_unique_users_method':      {'label': 'FP Unique Users (Method Uptake)', 'abbr': 'FP Uptake'},
 }
 # Order the 12 components should display in (matches how they're computed).
@@ -4496,7 +4498,8 @@ def _hiht_breakdown_query(chw_qs, group_fields):
         agg_kwargs[field] = Sum(field)
     for f1, f2, _key in HIHT_DISEASE_PAIRS:
         agg_kwargs[f1] = Sum(f1)
-        agg_kwargs[f2] = Sum(f2)
+        if f2:
+            agg_kwargs[f2] = Sum(f2)
     agg_kwargs[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
     agg_kwargs['active_all'] = Count('id')
     agg_kwargs['active_fp']  = Count('id', filter=Q(fp_assessments__gt=0))
@@ -4518,7 +4521,7 @@ def _hiht_breakdown_query(chw_qs, group_fields):
             components[key] = val
             non_fp_total += val
         for f1, f2, key in HIHT_DISEASE_PAIRS:
-            val = (combo.get(f1) or 0) + (combo.get(f2) or 0)
+            val = (combo.get(f1) or 0) + ((combo.get(f2) or 0) if f2 else 0)
             components[key] = val
             non_fp_total += val
         fp_total = combo.get(HIHT_FP_COMPONENT[0]) or 0
@@ -4655,7 +4658,8 @@ def _target_achievement_query(chw_qs, group_fields):
         agg_kwargs[field] = Sum(field)
     for f1, f2, _key in HIHT_DISEASE_PAIRS:
         agg_kwargs[f1] = Sum(f1)
-        agg_kwargs[f2] = Sum(f2)
+        if f2:
+            agg_kwargs[f2] = Sum(f2)
     agg_kwargs[HIHT_FP_COMPONENT[0]] = Sum(HIHT_FP_COMPONENT[0])
 
     grouped = (active_qs.values(*group_fields)
@@ -4678,7 +4682,7 @@ def _target_achievement_query(chw_qs, group_fields):
         for field, _key in HIHT_NON_FP_COMPONENTS:
             non_fp_total += combo.get(field) or 0
         for f1, f2, _key in HIHT_DISEASE_PAIRS:
-            non_fp_total += (combo.get(f1) or 0) + (combo.get(f2) or 0)
+            non_fp_total += (combo.get(f1) or 0) + ((combo.get(f2) or 0) if f2 else 0)
         fp_total = combo.get(HIHT_FP_COMPONENT[0]) or 0
         total_hihts = non_fp_total + fp_total
 
